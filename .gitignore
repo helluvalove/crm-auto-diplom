@@ -1,0 +1,18 @@
+# Конфигурационные файлы
+config.py
+.env
+
+# Python кэш
+__pycache__/
+*.py[cod]
+
+# БД
+*.db
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store

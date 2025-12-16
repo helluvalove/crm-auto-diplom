@@ -1,0 +1,36 @@
+/* frontend/style.css */
+.status-created { color: #6c757d; }
+.status-в-работе { color: #0d6efd; }
+.status-готов-к-выдаче { color: #ffc107; }
+.status-выполнен { color: #198754; }
+
+.card {
+    transition: transform 0.2s;
+    border: none;
+    border-radius: 10px;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+}
+
+.list-group-item {
+    border-left: none;
+    border-right: none;
+}
+
+.list-group-item:first-child {
+    border-top: none;
+}
+
+.nav-tabs .nav-link {
+    border: none;
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.nav-tabs .nav-link.active {
+    color: #0d6efd;
+    border-bottom: 3px solid #0d6efd;
+    background: transparent;
+}
