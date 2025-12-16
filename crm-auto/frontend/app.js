@@ -491,6 +491,7 @@ async function createClient() {
     const phoneInput = document.getElementById('newClientPhone');
     const carModelInput = document.getElementById('newClientCarModel');
     const carVinInput = document.getElementById('newClientCarVin');
+    const carGosNumberInput = document.getElementById('newClientCarGosNumber');
     const carYearInput = document.getElementById('newClientCarYear');
     const carMileageInput = document.getElementById('newClientCarMileage');
     
@@ -506,10 +507,11 @@ async function createClient() {
     
     const carModel = carModelInput.value.trim();
     const carVin = carVinInput.value.trim();
+    const carGosNumber = carGosNumberInput.value.trim();
     const carYear = carYearInput.value ? parseInt(carYearInput.value.trim()) : null;
     const carMileage = carMileageInput.value ? parseInt(carMileageInput.value.trim()) : null;
     
-    const hasCar = carModel || carVin;
+    const hasCar = carModel || carVin || carGosNumber;
     
     const clientData = { 
         name: validation.name, 
@@ -539,6 +541,7 @@ async function createClient() {
                 client_id: newClientId,
                 model: carModel || 'Не указана',
                 vin: carVin || null,
+                gos_number: carGosNumber || null,
                 year: carYear,
                 mileage: carMileage
             };
@@ -577,6 +580,7 @@ async function createClient() {
         phoneInput.value = '';
         carModelInput.value = '';
         carVinInput.value = '';
+        if (carGosNumberInput) carGosNumberInput.value = '';
         carYearInput.value = '';
         carMileageInput.value = '';
         
@@ -592,7 +596,206 @@ async function createClient() {
     }
 }
 
-// ==================== АВТОМОБИЛИ ====================
+// ==================== АВТОМОБИЛИ (ИСПРАВЛЕННАЯ ВЕРСИЯ) ====================
+async function loadAllCarsInService() {
+    try {
+        const carsList = document.getElementById('carsList');
+        carsList.innerHTML = `
+            <div class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Загрузка...</span>
+                </div>
+                <p class="text-muted mt-2">Загрузка автомобилей в сервисе...</p>
+            </div>
+        `;
+        
+        // 1. Загружаем все активные заказы
+        const ordersResponse = await fetch(`${API_URL}/orders`);
+        if (!ordersResponse.ok) {
+            throw new Error(`HTTP error ${ordersResponse.status}`);
+        }
+        
+        const allOrders = await ordersResponse.json();
+        const activeOrders = allOrders.filter(order => 
+            order.status !== 'Выполнен' && order.status !== 'Отменен'
+        );
+        
+        if (!activeOrders || activeOrders.length === 0) {
+            carsList.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> Сейчас нет автомобилей в сервисе
+                </div>
+            `;
+            return;
+        }
+        
+        // 2. Собираем уникальные car_id из активных заказов
+        const carIds = [...new Set(activeOrders.map(order => order.car_id))];
+        
+        // 3. Загружаем информацию об автомобилях
+        const carsWithOwners = await Promise.all(
+            carIds.map(async (carId) => {
+                try {
+                    // Загружаем информацию об автомобиле
+                    const carResponse = await fetch(`${API_URL}/cars/${carId}`);
+                    if (!carResponse.ok) {
+                        console.error(`Ошибка загрузки автомобиля ${carId}`);
+                        return null;
+                    }
+                    
+                    const car = await carResponse.json();
+                    
+                    // Загружаем информацию о владельце
+                    const clientResponse = await fetch(`${API_URL}/clients/${car.client_id}`);
+                    if (!clientResponse.ok) {
+                        console.error(`Ошибка загрузки клиента ${car.client_id}`);
+                        return null;
+                    }
+                    
+                    const client = await clientResponse.json();
+                    
+                    // Находим все активные заказы для этого автомобиля
+                    const carOrders = activeOrders.filter(order => order.car_id === carId);
+                    
+                    return {
+                        car: car,
+                        client: client,
+                        orders: carOrders,
+                        active_orders_count: carOrders.length
+                    };
+                } catch (error) {
+                    console.error(`Ошибка загрузки данных для автомобиля ${carId}:`, error);
+                    return null;
+                }
+            })
+        );
+        
+        // 4. Фильтруем null значения и проверяем, есть ли данные
+        const validCars = carsWithOwners.filter(item => item !== null);
+        
+        if (validCars.length === 0) {
+            carsList.innerHTML = `
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> Не удалось загрузить данные об автомобилях в сервисе
+                </div>
+            `;
+            return;
+        }
+        
+        // 5. Отображаем список автомобилей
+        let html = '<div class="list-group">';
+        
+        validCars.forEach(item => {
+            const car = item.car;
+            const client = item.client;
+            const orders = item.orders;
+            
+            // Определяем статус автомобиля на основе статусов заказов
+            let carStatus = 'Создан';
+            let statusBadge = '';
+            
+            if (orders.some(o => o.status === 'В работе')) {
+                carStatus = 'В работе';
+                statusBadge = '<span class="badge bg-warning">В работе</span>';
+            } else if (orders.some(o => o.status === 'Готов к выдаче')) {
+                carStatus = 'Готов к выдаче';
+                statusBadge = '<span class="badge bg-success">Готов</span>';
+            } else if (orders.some(o => o.status === 'Создан' || o.status === 'На диагностике')) {
+                carStatus = 'На диагностике';
+                statusBadge = '<span class="badge bg-info">Диагностика</span>';
+            } else {
+                carStatus = 'В сервисе';
+                statusBadge = '<span class="badge bg-secondary">В сервисе</span>';
+            }
+            
+            // Информация о заказах
+            let ordersInfo = '';
+            if (orders.length > 0) {
+                ordersInfo = '<div class="small mt-2"><strong>Заказы:</strong><br>';
+                orders.forEach(order => {
+                    const orderDate = new Date(order.created_date).toLocaleDateString();
+                    ordersInfo += `• #${order.order_id}: ${order.status} (${orderDate})<br>`;
+                });
+                ordersInfo += '</div>';
+            }
+            
+            html += `
+                <div class="list-group-item" id="car-service-${car.car_id}">
+                    <div class="d-flex w-100 justify-content-between">
+                        <h6 class="mb-1">${car.model || 'Модель не указана'}</h6>
+                        <div>
+                            ${statusBadge}
+                            <button class="btn btn-sm btn-outline-warning ms-1" onclick="editCar(${car.car_id})" title="Редактировать">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger ms-1" onclick="deleteCar(${car.car_id})" title="Удалить">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="mb-1">
+                        <strong>Владелец:</strong> ${client.name} (тел: ${client.phone})<br>
+                        ${car.vin ? `<i class="bi bi-upc"></i> VIN: ${car.vin}<br>` : ''}
+                        ${car.gos_number ? `<i class="bi bi-123"></i> Госномер: ${car.gos_number}<br>` : ''}
+                        ${car.year ? `<i class="bi bi-calendar"></i> Год: ${car.year}<br>` : ''}
+                        ${car.mileage ? `<i class="bi bi-speedometer2"></i> Пробег: ${car.mileage} км<br>` : ''}
+                        <strong>Статус:</strong> ${carStatus}<br>
+                        <strong>Активных заказов:</strong> ${item.active_orders_count}
+                    </p>
+                    ${ordersInfo}
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-outline-primary" onclick="loadClientCars(${client.client_id})" title="Показать все авто клиента">
+                            <i class="bi bi-person"></i> Все авто клиента
+                        </button>
+                        <button class="btn btn-sm btn-outline-success" onclick="createOrderForCar(${car.car_id}, ${client.client_id})" title="Создать заказ">
+                            <i class="bi bi-plus-circle"></i> Новый заказ
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        
+        carsList.innerHTML = html;
+        
+        // Если мы уже на вкладке автомобилей, обновляем выпадающий список клиентов
+        if (document.getElementById('carsTab').style.display === 'block') {
+            const clientsResponse = await fetch(`${API_URL}/clients`);
+            if (clientsResponse.ok) {
+                const clients = await clientsResponse.json();
+                updateClientSelectsForCars(clients);
+            }
+        }
+        
+    } catch (error) {
+        console.error('Ошибка загрузки автомобилей в сервисе:', error);
+        showError('Ошибка загрузки автомобилей в сервисе: ' + error.message);
+        
+        // Показываем альтернативный интерфейс в случае ошибки
+        document.getElementById('carsList').innerHTML = `
+            <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle"></i> Не удалось загрузить список автомобилей в сервисе.
+                <button class="btn btn-sm btn-outline-primary mt-2" onclick="loadAllCarsInService()">
+                    <i class="bi bi-arrow-clockwise"></i> Попробовать снова
+                </button>
+            </div>
+        `;
+    }
+}
+
+// Новая функция для обновления выпадающего списка клиентов на вкладке автомобилей
+function updateClientSelectsForCars(clients) {
+    const carClientSelect = document.getElementById('carClientSelect');
+    
+    if (carClientSelect) {
+        carClientSelect.innerHTML = '<option value="">Выберите клиента</option>';
+        clients.forEach(client => {
+            carClientSelect.innerHTML += `<option value="${client.client_id}">${client.name} (${client.phone})</option>`;
+        });
+    }
+}
+
+// Оставляем старую функцию loadClientCars для использования из других мест
 async function loadClientCars(clientId) {
     try {
         const carsList = document.getElementById('carsList');
@@ -601,7 +804,7 @@ async function loadClientCars(clientId) {
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Загрузка...</span>
                 </div>
-                <p class="text-muted mt-2">Загрузка автомобилей...</p>
+                <p class="text-muted mt-2">Загрузка автомобилей клиента...</p>
             </div>
         `;
         
@@ -622,14 +825,56 @@ async function loadClientCars(clientId) {
             return;
         }
         
-        let html = '<div class="list-group">';
+        // Получаем информацию о клиенте
+        const clientResponse = await fetch(`${API_URL}/clients/${clientId}`);
+        const client = clientResponse.ok ? await clientResponse.json() : { name: 'Неизвестный клиент', phone: 'N/A' };
+        
+        // Загружаем активные заказы для определения статуса автомобилей
+        const ordersResponse = await fetch(`${API_URL}/orders`);
+        const allOrders = ordersResponse.ok ? await ordersResponse.json() : [];
+        const activeOrders = allOrders.filter(order => 
+            order.status !== 'Выполнен' && order.status !== 'Отменен'
+        );
+        
+        let html = `
+            <div class="mb-3">
+                <div class="alert alert-primary">
+                    <i class="bi bi-person"></i> Клиент: <strong>${client.name}</strong> (тел: ${client.phone})
+                    <button class="btn btn-sm btn-outline-primary float-end" onclick="loadAllCarsInService()">
+                        <i class="bi bi-arrow-left"></i> Все авто в сервисе
+                    </button>
+                </div>
+            </div>
+            <div class="list-group">
+        `;
+        
         cars.forEach(car => {
+            // Находим активные заказы для этого автомобиля
+            const carOrders = activeOrders.filter(order => order.car_id === car.car_id);
+            const hasActiveOrders = carOrders.length > 0;
+            const hasOrderInWork = carOrders.some(o => o.status === 'В работе');
+            
+            // Определяем статус автомобиля
+            let carStatus = 'Нет активных заказов';
+            let statusBadge = '';
+            
+            if (hasOrderInWork) {
+                carStatus = 'В работе';
+                statusBadge = '<span class="badge bg-warning ms-1">В работе</span>';
+            } else if (hasActiveOrders) {
+                carStatus = 'В сервисе';
+                statusBadge = '<span class="badge bg-secondary ms-1">В сервисе</span>';
+            }
+            
             html += `
                 <div class="list-group-item" id="car-${car.car_id}">
                     <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1">${car.model || 'Модель не указана'}</h6>
+                        <h6 class="mb-1">${car.model || 'Модель не указана'} ${statusBadge}</h6>
                         <div>
                             <small class="text-muted me-2">ID: ${car.car_id}</small>
+                            <button class="btn btn-sm btn-outline-warning" onclick="editCar(${car.car_id})" title="Редактировать">
+                                <i class="bi bi-pencil"></i>
+                            </button>
                             <button class="btn btn-sm btn-outline-danger" onclick="deleteCar(${car.car_id})" title="Удалить">
                                 <i class="bi bi-trash"></i>
                             </button>
@@ -639,12 +884,16 @@ async function loadClientCars(clientId) {
                         ${car.vin ? `<i class="bi bi-upc"></i> VIN: ${car.vin}<br>` : ''}
                         ${car.gos_number ? `<i class="bi bi-123"></i> Госномер: ${car.gos_number}<br>` : ''}
                         ${car.year ? `<i class="bi bi-calendar"></i> Год: ${car.year}<br>` : ''}
-                        ${car.mileage ? `<i class="bi bi-speedometer2"></i> Пробег: ${car.mileage} км` : ''}
+                        ${car.mileage ? `<i class="bi bi-speedometer2"></i> Пробег: ${car.mileage} км<br>` : ''}
+                        <strong>Статус:</strong> ${carStatus}<br>
+                        <strong>Активных заказов:</strong> ${carOrders.length}
                     </p>
                     <div class="mt-2">
-                        <button class="btn btn-sm btn-outline-success" onclick="createOrderForCar(${car.car_id}, ${car.client_id})" title="Создать заказ">
-                            <i class="bi bi-plus-circle"></i> Создать заказ
+                        <button class="btn btn-sm btn-outline-success" onclick="createOrderForCar(${car.car_id}, ${car.client_id})" 
+                                title="Создать заказ" ${hasOrderInWork ? 'disabled' : ''}>
+                            <i class="bi bi-plus-circle"></i> Новый заказ
                         </button>
+                        ${hasOrderInWork ? '<small class="text-danger ms-2">Автомобиль уже в работе!</small>' : ''}
                     </div>
                 </div>
             `;
@@ -653,8 +902,8 @@ async function loadClientCars(clientId) {
         
         carsList.innerHTML = html;
         
-        // Показываем вкладку с автомобилями - без передачи event
-        showTab('cars');
+        // Переключаемся на вкладку автомобилей
+        showTab('cars', null);
         
     } catch (error) {
         console.error('Ошибка загрузки автомобилей:', error);
@@ -674,7 +923,8 @@ async function deleteCar(carId) {
         
         if (response.ok) {
             showSuccess('Автомобиль удален');
-            document.getElementById(`car-${carId}`).remove();
+            // Обновляем список автомобилей в сервисе
+            loadAllCarsInService();
         } else {
             const errorData = await response.json();
             if (errorData.active_orders) {
@@ -717,17 +967,149 @@ async function createCar() {
             const data = await response.json();
             showSuccess(`Автомобиль "${model}" добавлен!`);
             
+            // Очищаем форму
             document.getElementById('newCarModel').value = '';
             document.getElementById('newCarVin').value = '';
             document.getElementById('newCarGosNumber').value = '';
             document.getElementById('newCarYear').value = '';
             document.getElementById('newCarMileage').value = '';
             
+            // Показываем автомобили этого клиента
             loadClientCars(clientId);
             
         } else {
             const errorData = await response.json();
             showError(errorData.error || 'Ошибка добавления автомобиля');
+        }
+    } catch (error) {
+        showError('Ошибка подключения к серверу: ' + error.message);
+    }
+}
+
+// Функция редактирования автомобиля
+async function editCar(carId) {
+    try {
+        // Загружаем информацию об автомобиле
+        const response = await fetch(`${API_URL}/cars/${carId}`);
+        if (!response.ok) {
+            throw new Error(`Ошибка загрузки автомобиля: ${response.status}`);
+        }
+        
+        const car = await response.json();
+        
+        // Загружаем клиентов для выпадающего списка
+        const clientsResponse = await fetch(`${API_URL}/clients`);
+        const clients = clientsResponse.ok ? await clientsResponse.json() : [];
+        
+        // Создаем модальное окно для редактирования
+        const modalHtml = `
+            <div class="modal fade" id="editCarModal" tabindex="-1" aria-labelledby="editCarModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="editCarModalLabel">Редактировать автомобиль</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label">Клиент</label>
+                                <select class="form-select" id="editCarClientSelect">
+                                    ${clients.map(client => 
+                                        `<option value="${client.client_id}" ${client.client_id === car.client_id ? 'selected' : ''}>${client.name} (${client.phone})</option>`
+                                    ).join('')}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Модель *</label>
+                                <input type="text" class="form-control" id="editCarModel" value="${car.model || ''}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">VIN номер</label>
+                                <input type="text" class="form-control" id="editCarVin" value="${car.vin || ''}">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Госномер</label>
+                                <input type="text" class="form-control" id="editCarGosNumber" value="${car.gos_number || ''}">
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Год выпуска</label>
+                                        <input type="number" class="form-control" id="editCarYear" value="${car.year || ''}" min="1900" max="2030">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Пробег (км)</label>
+                                        <input type="number" class="form-control" id="editCarMileage" value="${car.mileage || ''}" min="0" max="1000000">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <button type="button" class="btn btn-primary" onclick="updateCar(${carId})">Сохранить</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Удаляем старые модальные окна если есть
+        const oldModal = document.getElementById('editCarModal');
+        if (oldModal) oldModal.remove();
+        
+        // Добавляем модальное окно в DOM
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Показываем модальное окно
+        const modal = new bootstrap.Modal(document.getElementById('editCarModal'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Ошибка загрузки данных автомобиля:', error);
+        showError('Ошибка загрузки данных автомобиля: ' + error.message);
+    }
+}
+
+async function updateCar(carId) {
+    const model = document.getElementById('editCarModel').value.trim();
+    const clientId = document.getElementById('editCarClientSelect').value;
+    
+    if (!model || !clientId) {
+        showError('Заполните обязательные поля: клиент и модель');
+        return;
+    }
+    
+    const carData = {
+        client_id: parseInt(clientId),
+        model: model,
+        vin: document.getElementById('editCarVin').value.trim() || null,
+        gos_number: document.getElementById('editCarGosNumber').value.trim() || null,
+        year: document.getElementById('editCarYear').value || null,
+        mileage: document.getElementById('editCarMileage').value || null
+    };
+    
+    try {
+        const response = await fetch(`${API_URL}/cars/${carId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(carData)
+        });
+        
+        if (response.ok) {
+            showSuccess('Автомобиль обновлен!');
+            
+            // Закрываем модальное окно
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editCarModal'));
+            modal.hide();
+            
+            // Обновляем список автомобилей
+            loadAllCarsInService();
+            
+        } else {
+            const errorData = await response.json();
+            showError(errorData.error || 'Ошибка обновления автомобиля');
         }
     } catch (error) {
         showError('Ошибка подключения к серверу: ' + error.message);
@@ -783,12 +1165,15 @@ async function loadOrders(filter = 'active') {
             const price = order.total_price ? `${parseFloat(order.total_price).toFixed(2)} ₽` : '—';
             
             html += `
-                <div class="list-group-item list-group-item-action" onclick="viewOrder(${order.order_id})" id="order-${order.order_id}">
+                <div class="list-group-item list-group-item-action" id="order-${order.order_id}">
                     <div class="d-flex w-100 justify-content-between">
                         <h6 class="mb-1">Заказ-наряд #${order.order_id}</h6>
                         <div>
-                            <span class="badge bg-primary rounded-pill me-2">${price}</span>
-                            <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); deleteOrder(${order.order_id})" title="Удалить">
+                            <span class="badge bg-primary rounded-pill me-1">${price}</span>
+                            <button class="btn btn-sm btn-outline-warning" onclick="editOrder(${order.order_id})" title="Редактировать">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteOrder(${order.order_id})" title="Удалить">
                                 <i class="bi bi-trash"></i>
                             </button>
                         </div>
@@ -806,7 +1191,7 @@ async function loadOrders(filter = 'active') {
                     </small>
                     <div class="mt-2">
                         ${order.status === 'Готов к выдаче' ? `
-                        <button class="btn btn-sm btn-outline-success" onclick="event.stopPropagation(); completeOrder(${order.order_id})">
+                        <button class="btn btn-sm btn-outline-success" onclick="completeOrder(${order.order_id})">
                             <i class="bi bi-check-lg"></i> Завершить
                         </button>
                         ` : ''}
@@ -838,6 +1223,173 @@ function getStatusClass(status) {
     }
 }
 
+// Функция редактирования заказа
+async function editOrder(orderId) {
+    try {
+        // Загружаем информацию о заказе
+        const response = await fetch(`${API_URL}/orders/${orderId}`);
+        if (!response.ok) {
+            throw new Error(`Ошибка загрузки заказа: ${response.status}`);
+        }
+        
+        const order = await response.json();
+        
+        // Загружаем клиентов
+        const clientsResponse = await fetch(`${API_URL}/clients`);
+        const clients = clientsResponse.ok ? await clientsResponse.json() : [];
+        
+        // Загружаем механиков
+        const mechanicsResponse = await fetch(`${API_URL}/mechanics`);
+        const mechanics = mechanicsResponse.ok ? await mechanicsResponse.json() : [];
+        
+        // Создаем модальное окно для редактирования
+        const modalHtml = `
+            <div class="modal fade" id="editOrderModal" tabindex="-1" aria-labelledby="editOrderModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="editOrderModalLabel">Редактировать заказ-наряд #${order.order_id}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Клиент</label>
+                                        <select class="form-select" id="editOrderClientSelect">
+                                            ${clients.map(client => 
+                                                `<option value="${client.client_id}" ${client.client_id === order.client_id ? 'selected' : ''}>${client.name} (${client.phone})</option>`
+                                            ).join('')}
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Статус</label>
+                                        <select class="form-select" id="editOrderStatus">
+                                            <option value="Создан" ${order.status === 'Создан' ? 'selected' : ''}>Создан</option>
+                                            <option value="На диагностике" ${order.status === 'На диагностике' ? 'selected' : ''}>На диагностике</option>
+                                            <option value="В работе" ${order.status === 'В работе' ? 'selected' : ''}>В работе</option>
+                                            <option value="Готов к выдаче" ${order.status === 'Готов к выдаче' ? 'selected' : ''}>Готов к выдаче</option>
+                                            <option value="Отменен" ${order.status === 'Отменен' ? 'selected' : ''}>Отменен</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Механик</label>
+                                        <select class="form-select" id="editOrderMechanicSelect">
+                                            <option value="">Не назначен</option>
+                                            ${mechanics.map(mechanic => 
+                                                `<option value="${mechanic.user_id}" ${mechanic.user_id === order.mechanic_id ? 'selected' : ''}>${mechanic.full_name}</option>`
+                                            ).join('')}
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Стоимость (руб)</label>
+                                        <input type="number" class="form-control" id="editOrderPrice" value="${order.total_price || ''}" step="0.01" min="0">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Описание проблемы</label>
+                                <textarea class="form-control" id="editOrderProblem" rows="3">${order.problem_description || ''}</textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Описание работ</label>
+                                <textarea class="form-control" id="editOrderWork" rows="3">${order.work_description || ''}</textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            ${order.status === 'Готов к выдаче' ? `
+                            <button type="button" class="btn btn-success" onclick="completeOrder(${order.order_id})">
+                                <i class="bi bi-check-lg"></i> Завершить и отправить в архив
+                            </button>
+                            ` : ''}
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <button type="button" class="btn btn-primary" onclick="updateOrder(${order.order_id})">Сохранить</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Удаляем старые модальные окна если есть
+        const oldModal = document.getElementById('editOrderModal');
+        if (oldModal) oldModal.remove();
+        
+        // Добавляем модальное окно в DOM
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Показываем модальное окно
+        const modal = new bootstrap.Modal(document.getElementById('editOrderModal'));
+        modal.show();
+        
+        // Загружаем автомобили выбранного клиента
+        document.getElementById('editOrderClientSelect').addEventListener('change', async function() {
+            const clientId = this.value;
+            if (!clientId) return;
+            
+            try {
+                const carsResponse = await fetch(`${API_URL}/cars/client/${clientId}`);
+                if (carsResponse.ok) {
+                    const cars = await carsResponse.json();
+                    // Можно добавить выпадающий список автомобилей если нужно
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки автомобилей:', error);
+            }
+        });
+        
+    } catch (error) {
+        console.error('Ошибка загрузки данных заказа:', error);
+        showError('Ошибка загрузки данных заказа: ' + error.message);
+    }
+}
+
+async function updateOrder(orderId) {
+    const clientId = document.getElementById('editOrderClientSelect').value;
+    const status = document.getElementById('editOrderStatus').value;
+    const problem = document.getElementById('editOrderProblem').value.trim();
+    
+    if (!clientId || !problem) {
+        showError('Заполните обязательные поля');
+        return;
+    }
+    
+    const orderData = {
+        client_id: parseInt(clientId),
+        status: status,
+        problem_description: problem,
+        work_description: document.getElementById('editOrderWork').value.trim() || null,
+        mechanic_id: document.getElementById('editOrderMechanicSelect').value || null,
+        total_price: document.getElementById('editOrderPrice').value || null
+    };
+    
+    try {
+        const response = await fetch(`${API_URL}/orders/${orderId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(orderData)
+        });
+        
+        if (response.ok) {
+            showSuccess('Заказ-наряд обновлен!');
+            
+            // Закрываем модальное окно
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editOrderModal'));
+            modal.hide();
+            
+            // Обновляем список заказов
+            loadOrders('active');
+            
+        } else {
+            const errorData = await response.json();
+            showError(errorData.error || 'Ошибка обновления заказа');
+        }
+    } catch (error) {
+        showError('Ошибка подключения к серверу: ' + error.message);
+    }
+}
+
 async function deleteOrder(orderId) {
     if (!confirm('Вы уверены, что хотите удалить заказ-наряд?')) {
         return;
@@ -852,6 +1404,7 @@ async function deleteOrder(orderId) {
             showSuccess('Заказ-наряд удален');
             document.getElementById(`order-${orderId}`).remove();
             loadOrders('active');
+            loadAllCarsInService(); // Обновляем список автомобилей в сервисе
         } else {
             const errorData = await response.json();
             showError(errorData.error || 'Ошибка удаления заказа');
@@ -875,6 +1428,14 @@ async function completeOrder(orderId) {
             showSuccess('Заказ-наряд завершен и перемещен в архив');
             loadOrders('active');
             loadArchive();
+            loadAllCarsInService(); // Обновляем список автомобилей в сервисе
+            
+            // Закрываем модальное окно если оно открыто
+            const modal = document.getElementById('editOrderModal');
+            if (modal) {
+                const bsModal = bootstrap.Modal.getInstance(modal);
+                if (bsModal) bsModal.hide();
+            }
         } else {
             const errorData = await response.json();
             showError(errorData.error || 'Ошибка завершения заказа');
@@ -892,6 +1453,28 @@ async function createOrder() {
     if (!clientId || !carId || !problem) {
         showError('Заполните все обязательные поля');
         return;
+    }
+    
+    // Проверяем, есть ли у автомобиля активные заказы
+    try {
+        const ordersResponse = await fetch(`${API_URL}/orders`);
+        if (ordersResponse.ok) {
+            const allOrders = await ordersResponse.json();
+            const carActiveOrders = allOrders.filter(order => 
+                order.car_id == carId && 
+                order.status !== 'Выполнен' && 
+                order.status !== 'Отменен'
+            );
+            
+            const hasOrderInWork = carActiveOrders.some(o => o.status === 'В работе');
+            
+            if (hasOrderInWork) {
+                showError('Нельзя создать заказ для автомобиля, который уже находится в работе!');
+                return;
+            }
+        }
+    } catch (error) {
+        console.error('Ошибка проверки заказов:', error);
     }
     
     const orderData = {
@@ -918,6 +1501,7 @@ async function createOrder() {
             document.getElementById('orderPrice').value = '';
             
             loadOrders('active');
+            loadAllCarsInService(); // Обновляем список автомобилей в сервисе
             showTab('orders');
             
         } else {
@@ -942,7 +1526,29 @@ function createOrderForClient(clientId, clientName) {
     showInfo(`Создание заказа для клиента: ${clientName}`);
 }
 
-function createOrderForCar(carId, clientId) {
+async function createOrderForCar(carId, clientId) {
+    // Проверяем, есть ли у автомобиля активные заказы
+    try {
+        const ordersResponse = await fetch(`${API_URL}/orders`);
+        if (ordersResponse.ok) {
+            const allOrders = await ordersResponse.json();
+            const carActiveOrders = allOrders.filter(order => 
+                order.car_id == carId && 
+                order.status !== 'Выполнен' && 
+                order.status !== 'Отменен'
+            );
+            
+            const hasOrderInWork = carActiveOrders.some(o => o.status === 'В работе');
+            
+            if (hasOrderInWork) {
+                showError('Нельзя создать заказ для автомобиля, который уже находится в работе!');
+                return;
+            }
+        }
+    } catch (error) {
+        console.error('Ошибка проверки заказов:', error);
+    }
+    
     document.getElementById('orderClientSelect').value = clientId;
     
     if (document.getElementById('orderClientSelect').dispatchEvent) {
@@ -1007,11 +1613,14 @@ async function loadArchive() {
             const price = order.total_price ? `${parseFloat(order.total_price).toFixed(2)} ₽` : '—';
             
             html += `
-                <div class="list-group-item">
+                <div class="list-group-item" id="archive-order-${order.order_id}">
                     <div class="d-flex w-100 justify-content-between">
                         <h6 class="mb-1">Архивный заказ #${order.order_id}</h6>
                         <div>
-                            <span class="badge bg-secondary rounded-pill">${price}</span>
+                            <span class="badge bg-secondary rounded-pill me-1">${price}</span>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteArchiveOrder(${order.order_id})" title="Удалить из архива">
+                                <i class="bi bi-trash"></i>
+                            </button>
                         </div>
                     </div>
                     <p class="mb-1">
@@ -1034,6 +1643,30 @@ async function loadArchive() {
     } catch (error) {
         console.error('Ошибка загрузки архива:', error);
         showError('Ошибка загрузки архива: ' + error.message);
+    }
+}
+
+// Функция удаления заказа из архива
+async function deleteArchiveOrder(orderId) {
+    if (!confirm('Вы уверены, что хотите удалить этот заказ из архива?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/orders/${orderId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            showSuccess('Заказ удален из архива');
+            document.getElementById(`archive-order-${orderId}`).remove();
+            loadArchive();
+        } else {
+            const errorData = await response.json();
+            showError(errorData.error || 'Ошибка удаления заказа из архива');
+        }
+    } catch (error) {
+        showError('Ошибка подключения к серверу: ' + error.message);
     }
 }
 
@@ -1118,10 +1751,12 @@ function renderMechanicsList(mechanics) {
 
 function updateMechanicSelect(mechanics) {
     const mechanicSelect = document.getElementById('orderMechanicSelect');
-    mechanicSelect.innerHTML = '<option value="">Не назначен</option>';
-    mechanics.forEach(mech => {
-        mechanicSelect.innerHTML += `<option value="${mech.user_id}">${mech.full_name}</option>`;
-    });
+    if (mechanicSelect) {
+        mechanicSelect.innerHTML = '<option value="">Не назначен</option>';
+        mechanics.forEach(mech => {
+            mechanicSelect.innerHTML += `<option value="${mech.user_id}">${mech.full_name}</option>`;
+        });
+    }
 }
 
 async function createMechanic() {
@@ -1307,6 +1942,9 @@ function showTab(tabName, event = null) {
     
     // Загружаем данные для определенных вкладок
     switch(tabName) {
+        case 'cars':
+            loadAllCarsInService(); // Загружаем автомобили в сервисе
+            break;
         case 'requests':
             loadRequests();
             break;
@@ -1321,6 +1959,20 @@ function showTab(tabName, event = null) {
             break;
         case 'orders':
             loadOrders('active');
+            break;
+        case 'clients':
+            loadClients();
+            break;
+        case 'newOrder':
+            // Загружаем клиентов для выпадающих списков
+            fetch(`${API_URL}/clients`)
+                .then(response => response.ok ? response.json() : [])
+                .then(clients => {
+                    if (clients && clients.length > 0) {
+                        updateClientSelects(clients);
+                    }
+                })
+                .catch(error => console.error('Ошибка загрузки клиентов:', error));
             break;
     }
 }
@@ -1344,37 +1996,45 @@ function updateClientSelects(clients) {
     const orderClientSelect = document.getElementById('orderClientSelect');
     
     [carClientSelect, orderClientSelect].forEach(select => {
-        select.innerHTML = '<option value="">Выберите клиента</option>';
-        clients.forEach(client => {
-            select.innerHTML += `<option value="${client.client_id}">${client.name} (${client.phone})</option>`;
-        });
-    });
-    
-    orderClientSelect.addEventListener('change', async function() {
-        const clientId = this.value;
-        if (!clientId) return;
-        
-        try {
-            const response = await fetch(`${API_URL}/cars/client/${clientId}`);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error ${response.status}`);
-            }
-            
-            const cars = await response.json();
-            const carSelect = document.getElementById('orderCarSelect');
-            
-            carSelect.innerHTML = '<option value="">Выберите автомобиль</option>';
-            cars.forEach(car => {
-                const displayText = `${car.model} ${car.vin ? '(VIN: ' + car.vin + ')' : ''} ${car.gos_number ? '(' + car.gos_number + ')' : ''}`;
-                carSelect.innerHTML += `<option value="${car.car_id}">${displayText}</option>`;
+        if (select) {
+            select.innerHTML = '<option value="">Выберите клиента</option>';
+            clients.forEach(client => {
+                select.innerHTML += `<option value="${client.client_id}">${client.name} (${client.phone})</option>`;
             });
-        } catch (error) {
-            console.error('Ошибка загрузки автомобилей:', error);
-            const carSelect = document.getElementById('orderCarSelect');
-            carSelect.innerHTML = '<option value="">Ошибка загрузки автомобилей</option>';
         }
     });
+    
+    if (orderClientSelect) {
+        orderClientSelect.addEventListener('change', async function() {
+            const clientId = this.value;
+            if (!clientId) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/cars/client/${clientId}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error ${response.status}`);
+                }
+                
+                const cars = await response.json();
+                const carSelect = document.getElementById('orderCarSelect');
+                
+                if (carSelect) {
+                    carSelect.innerHTML = '<option value="">Выберите автомобиль</option>';
+                    cars.forEach(car => {
+                        const displayText = `${car.model} ${car.vin ? '(VIN: ' + car.vin + ')' : ''} ${car.gos_number ? '(' + car.gos_number + ')' : ''}`;
+                        carSelect.innerHTML += `<option value="${car.car_id}">${displayText}</option>`;
+                    });
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки автомобилей:', error);
+                const carSelect = document.getElementById('orderCarSelect');
+                if (carSelect) {
+                    carSelect.innerHTML = '<option value="">Ошибка загрузки автомобилей</option>';
+                }
+            }
+        });
+    }
 }
 
 // ==================== УТИЛИТЫ ====================
@@ -1445,27 +2105,28 @@ async function loadMechanics() {
             ];
             
             const select = document.getElementById('orderMechanicSelect');
-            mechanics.forEach(mech => {
-                select.innerHTML += `<option value="${mech.user_id}">${mech.full_name}</option>`;
-            });
+            if (select) {
+                mechanics.forEach(mech => {
+                    select.innerHTML += `<option value="${mech.user_id}">${mech.full_name}</option>`;
+                });
+            }
             return;
         }
         
         const mechanics = await response.json();
         const select = document.getElementById('orderMechanicSelect');
-        select.innerHTML = '<option value="">Не назначен</option>';
-        mechanics.forEach(mech => {
-            select.innerHTML += `<option value="${mech.user_id}">${mech.full_name}</option>`;
-        });
+        if (select) {
+            select.innerHTML = '<option value="">Не назначен</option>';
+            mechanics.forEach(mech => {
+                select.innerHTML += `<option value="${mech.user_id}">${mech.full_name}</option>`;
+            });
+        }
     } catch (error) {
         console.error('Ошибка загрузки механиков:', error);
     }
 }
 
-// Заглушки для нереализованных функций
-function editMechanic(id) { 
-    showInfo('Функция редактирования механика в разработке. Используйте удаление и создание нового.'); 
-}
-function viewOrder(id) { 
-    showInfo('Функция детального просмотра заказа в разработке'); 
+// Функция редактирования механика
+async function editMechanic(id) { 
+    showInfo('Функция редактирования механика в разработке'); 
 }

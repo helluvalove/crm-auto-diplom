@@ -1,3 +1,5 @@
+# orders.py - исправленная версия
+
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 from models import db, WorkOrder, Client, Car, User
@@ -135,14 +137,17 @@ def get_order(order_id):
                 'mileage': order.car.mileage
             }
         
-        if order.mechanic:
-            order_data['mechanic'] = {
-                'user_id': order.mechanic.user_id,
-                'full_name': order.mechanic.full_name,
-                'phone': order.mechanic.phone,
-                'specialization': order.mechanic.specialization,
-                'employee_number': order.mechanic.employee_number
-            }
+        # Получаем информацию о механике через запрос к User
+        if order.mechanic_id:
+            mechanic = User.query.get(order.mechanic_id)
+            if mechanic:
+                order_data['mechanic'] = {
+                    'user_id': mechanic.user_id,
+                    'full_name': mechanic.full_name,
+                    'phone': mechanic.phone,
+                    'specialization': mechanic.specialization,
+                    'employee_number': mechanic.employee_number
+                }
         
         return jsonify(order_data)
     except Exception as e:
@@ -267,4 +272,28 @@ def delete_order(order_id):
     except Exception as e:
         db.session.rollback()
         print(f"❌ Ошибка в delete_order: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@orders_bp.route('/<int:order_id>/complete', methods=['POST'])
+def complete_order(order_id):
+    """Завершить заказ и отправить в архив"""
+    try:
+        order = WorkOrder.query.get_or_404(order_id)
+        
+        order.status = 'Выполнен'
+        order.completed_date = datetime.now()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Заказ завершен и перемещен в архив',
+            'order': {
+                'order_id': order.order_id,
+                'status': order.status,
+                'completed_date': order.completed_date.isoformat() if order.completed_date else None
+            }
+        })
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Ошибка в complete_order: {e}")
         return jsonify({'error': str(e)}), 500
