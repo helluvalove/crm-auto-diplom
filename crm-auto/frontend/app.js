@@ -4,10 +4,286 @@ let token = null;
 let currentUser = null;
 let ordersData = [];
 
+
+// ==================== ВАЛИДАЦИЯ ====================
+
+// Валидация российского телефона
+function validateRussianPhone(phone) {
+    if (!phone) {
+        return { isValid: false, message: 'Введите номер телефона' };
+    }
+    
+    // Очищаем от пробелов, дефисов, скобок для проверки
+    const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+    
+    // Проверяем формат
+    if (!/^[\+\d]+$/.test(cleanPhone)) {
+        return { isValid: false, message: 'Телефон может содержать только цифры и знак + в начале' };
+    }
+    
+    if (cleanPhone.startsWith('+7') && cleanPhone.length === 12) {
+        return { isValid: true, phone: cleanPhone };
+    } else if (cleanPhone.startsWith('8') && cleanPhone.length === 11) {
+        return { isValid: true, phone: '+7' + cleanPhone.slice(1) };
+    } else if (cleanPhone.startsWith('7') && cleanPhone.length === 11) {
+        return { isValid: true, phone: '+' + cleanPhone };
+    } else {
+        let message = '';
+        if (!cleanPhone.startsWith('+7') && !cleanPhone.startsWith('8') && !cleanPhone.startsWith('7')) {
+            message = 'Телефон должен начинаться с +7, 8 или 7';
+        } else if (cleanPhone.length < 11) {
+            const enteredDigits = cleanPhone.length - (cleanPhone.startsWith('+7') ? 2 : 
+                            cleanPhone.startsWith('+') ? 1 : 0);
+            const neededDigits = 11 - enteredDigits;
+            message = `Введите еще ${neededDigits} цифр`;
+        } else if (cleanPhone.length > 12) {
+            message = 'Слишком много цифр. Должно быть 11 цифр после +7';
+        } else {
+            message = 'Неверный формат. Используйте +7XXX XXX-XX-XX, 8XXX XXX-XX-XX или 7XXX XXX-XX-XX';
+        }
+        return { isValid: false, message: message };
+    }
+}
+
+// Валидация имени
+function validateName(name) {
+    if (!name) {
+        return { isValid: false, message: 'Введите имя клиента' };
+    }
+    
+    const trimmedName = name.trim();
+    
+    if (trimmedName.length < 2) {
+        return { isValid: false, message: 'Имя должно содержать минимум 2 символа' };
+    }
+    
+    if (trimmedName.length > 100) {
+        return { isValid: false, message: 'Имя не должно превышать 100 символов' };
+    }
+    
+    if (!/^[a-zA-Zа-яА-ЯёЁ\s\-]+$/.test(trimmedName)) {
+        return { isValid: false, message: 'Имя может содержать только буквы, пробелы и дефисы' };
+    }
+    
+    return { isValid: true, name: trimmedName };
+}
+
+// Форматирование телефона при вводе
+function formatPhoneInput(input) {
+    let value = input.value;
+    
+    // Удаляем все нецифровые символы кроме плюса в начале
+    let cleaned = value.replace(/\D/g, '');
+    
+    // Сохраняем плюс если он был в начале
+    if (value.startsWith('+')) {
+        cleaned = '+' + cleaned;
+    }
+    
+    // Если начинается с 8 или 7, заменяем на +7
+    if (cleaned.startsWith('8') || cleaned.startsWith('7')) {
+        cleaned = '+7' + cleaned.slice(1);
+    }
+    
+    // Ограничиваем длину (максимум 12 символов: +7XXXXXXXXXX)
+    if (cleaned.length > 12) {
+        cleaned = cleaned.slice(0, 12);
+    }
+    
+    // Форматируем только если есть хотя бы +7
+    if (cleaned.startsWith('+7') && cleaned.length > 2) {
+        let formatted = cleaned;
+        const digits = cleaned.slice(2); // Берем только цифры после +7
+        
+        // Форматируем как +7 (XXX) XXX-XX-XX
+        if (digits.length > 0) {
+            formatted = '+7';
+            if (digits.length > 0) formatted += ' (' + digits.slice(0, 3);
+            if (digits.length > 3) formatted += ') ' + digits.slice(3, 6);
+            if (digits.length > 6) formatted += '-' + digits.slice(6, 8);
+            if (digits.length > 8) formatted += '-' + digits.slice(8, 10);
+        }
+        
+        input.value = formatted;
+    } else {
+        input.value = cleaned;
+    }
+    
+    // Валидируем после форматирования
+    setTimeout(() => {
+        const validation = validateRussianPhone(input.value);
+        showFieldError(input.id, validation.isValid ? null : validation.message);
+    }, 10);
+}
+
+// Показать ошибку под полем ввода
+function showFieldError(inputId, message) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    
+    const errorId = inputId + 'Error';
+    
+    // Удаляем старую ошибку если есть
+    const oldError = document.getElementById(errorId);
+    if (oldError) {
+        oldError.remove();
+    }
+    
+    // Убираем классы валидации
+    input.classList.remove('is-valid', 'is-invalid');
+    
+    if (message) {
+        // Добавляем класс ошибки
+        input.classList.add('is-invalid');
+        
+        // Создаем элемент с ошибкой
+        const errorDiv = document.createElement('div');
+        errorDiv.id = errorId;
+        errorDiv.className = 'invalid-feedback';
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+        
+        // Добавляем после поля ввода
+        input.parentNode.appendChild(errorDiv);
+    } else if (input.value.trim()) {
+        // Если сообщения нет и поле не пустое, показываем успех
+        input.classList.add('is-valid');
+    }
+}
+
+// Валидация всего клиента на клиенте
+function validateClientOnClient(name, phone) {
+    const nameValidation = validateName(name);
+    const phoneValidation = validateRussianPhone(phone);
+    
+    let isValid = true;
+    
+    // Показываем ошибки
+    showFieldError('newClientName', nameValidation.isValid ? null : nameValidation.message);
+    showFieldError('newClientPhone', phoneValidation.isValid ? null : phoneValidation.message);
+    
+    if (!nameValidation.isValid || !phoneValidation.isValid) {
+        isValid = false;
+    }
+    
+    return {
+        isValid,
+        name: nameValidation.name,
+        phone: phoneValidation.phone
+    };
+}
+
+function initializeValidation() {
+    // Валидация телефона при вводе
+    const phoneInput = document.getElementById('newClientPhone');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function(e) {
+            // Разрешаем ввод любых символов, но форматируем
+            formatPhoneInput(this);
+        });
+        
+        phoneInput.addEventListener('keydown', function(e) {
+            // Разрешаем: цифры, Backspace, Delete, Tab, стрелки
+            const allowedKeys = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+            
+            // Разрешаем Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X
+            if (e.ctrlKey && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) {
+                return;
+            }
+            
+            // Разрешаем цифры
+            if (e.key >= '0' && e.key <= '9') {
+                return;
+            }
+            
+            // Разрешаем + только в начале
+            if (e.key === '+' && (this.selectionStart === 0 || this.value === '')) {
+                return;
+            }
+            
+            // Разрешаем специальные клавиши
+            if (allowedKeys.includes(e.key)) {
+                return;
+            }
+            
+            // Блокируем все остальное
+            e.preventDefault();
+        });
+        
+        phoneInput.addEventListener('blur', function() {
+            const validation = validateRussianPhone(this.value);
+            showFieldError('newClientPhone', validation.isValid ? null : validation.message);
+            
+            // Если поле пустое, сбрасываем форматирование
+            if (!this.value) {
+                showFieldError('newClientPhone', null);
+            }
+        });
+        
+        phoneInput.addEventListener('focus', function() {
+            // При фокусе, если поле пустое, ставим +7
+            if (!this.value) {
+                this.value = '+7 ';
+            }
+        });
+    }
+    
+    // Валидация имени при вводе
+    const nameInput = document.getElementById('newClientName');
+    if (nameInput) {
+        nameInput.addEventListener('input', function() {
+            const validation = validateName(this.value);
+            showFieldError('newClientName', validation.isValid ? null : validation.message);
+        });
+        
+        nameInput.addEventListener('blur', function() {
+            const validation = validateName(this.value);
+            showFieldError('newClientName', validation.isValid ? null : validation.message);
+        });
+    }
+    
+    // Добавляем валидацию для телефона механика
+    const mechanicPhoneInput = document.getElementById('newMechanicPhone');
+    if (mechanicPhoneInput) {
+        mechanicPhoneInput.addEventListener('input', function(e) {
+            formatPhoneInput(this);
+        });
+        
+        mechanicPhoneInput.addEventListener('keydown', function(e) {
+            const allowedKeys = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+            
+            if (e.ctrlKey && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) {
+                return;
+            }
+            
+            if (e.key >= '0' && e.key <= '9') {
+                return;
+            }
+            
+            if (e.key === '+' && (this.selectionStart === 0 || this.value === '')) {
+                return;
+            }
+            
+            if (allowedKeys.includes(e.key)) {
+                return;
+            }
+            
+            e.preventDefault();
+        });
+        
+        mechanicPhoneInput.addEventListener('focus', function() {
+            if (!this.value) {
+                this.value = '+7 ';
+            }
+        });
+    }
+}
+
 // ==================== ИНИЦИАЛИЗАЦИЯ ====================
 document.addEventListener('DOMContentLoaded', function() {
     checkAPIStatus();
     loadMechanics();
+    initializeValidation();
 });
 
 // ==================== ПРОВЕРКА СТАТУСА API ====================
@@ -211,22 +487,34 @@ async function deleteClient(clientId) {
 }
 
 async function createClient() {
-    const name = document.getElementById('newClientName').value.trim();
-    const phone = document.getElementById('newClientPhone').value.trim();
+    const nameInput = document.getElementById('newClientName');
+    const phoneInput = document.getElementById('newClientPhone');
+    const carModelInput = document.getElementById('newClientCarModel');
+    const carVinInput = document.getElementById('newClientCarVin');
+    const carYearInput = document.getElementById('newClientCarYear');
+    const carMileageInput = document.getElementById('newClientCarMileage');
     
-    if (!name || !phone) {
-        showError('Заполните все обязательные поля');
+    const name = nameInput.value.trim();
+    const phone = phoneInput.value.trim();
+    
+    // Клиентская валидация
+    const validation = validateClientOnClient(name, phone);
+    if (!validation.isValid) {
+        showError('Исправьте ошибки в форме');
         return;
     }
     
-    const carModel = document.getElementById('newClientCarModel').value.trim();
-    const carVin = document.getElementById('newClientCarVin').value.trim();
-    const carYear = document.getElementById('newClientCarYear').value.trim();
-    const carMileage = document.getElementById('newClientCarMileage').value.trim();
+    const carModel = carModelInput.value.trim();
+    const carVin = carVinInput.value.trim();
+    const carYear = carYearInput.value.trim();
+    const carMileage = carMileageInput.value.trim();
     
     const hasCar = carModel || carVin;
     
-    const clientData = { name, phone };
+    const clientData = { 
+        name: validation.name, 
+        phone: validation.phone 
+    };
     
     try {
         const response = await fetch(`${API_URL}/clients`, {
@@ -235,9 +523,10 @@ async function createClient() {
             body: JSON.stringify(clientData)
         });
         
+        const responseData = await response.json();
+        
         if (response.ok) {
-            const data = await response.json();
-            const newClientId = data.client.client_id;
+            const newClientId = responseData.client.client_id;
             
             if (hasCar && newClientId) {
                 const carData = {
@@ -255,26 +544,61 @@ async function createClient() {
                         body: JSON.stringify(carData)
                     });
                     
-                    showSuccess(`Клиент "${name}" и его автомобиль созданы!`);
+                    showSuccess(`Клиент "${validation.name}" и его автомобиль созданы!`);
                 } catch (carError) {
-                    showSuccess(`Клиент "${name}" создан, но произошла ошибка при добавлении автомобиля`);
+                    showSuccess(`Клиент "${validation.name}" создан, но произошла ошибка при добавлении автомобиля`);
                 }
             } else {
-                showSuccess(`Клиент "${name}" создан!`);
+                showSuccess(`Клиент "${validation.name}" создан!`);
             }
             
-            document.getElementById('newClientName').value = '';
-            document.getElementById('newClientPhone').value = '';
-            document.getElementById('newClientCarModel').value = '';
-            document.getElementById('newClientCarVin').value = '';
-            document.getElementById('newClientCarYear').value = '';
-            document.getElementById('newClientCarMileage').value = '';
+            // Очищаем форму
+            nameInput.value = '';
+            phoneInput.value = '';
+            carModelInput.value = '';
+            carVinInput.value = '';
+            carYearInput.value = '';
+            carMileageInput.value = '';
+            
+            // Очищаем ошибки
+            showFieldError('newClientName', null);
+            showFieldError('newClientPhone', null);
             
             loadClients();
             
         } else {
-            const errorData = await response.json();
-            showError(errorData.error || 'Ошибка создания клиента');
+            // Серверная валидация вернула ошибки
+            if (responseData.details) {
+                // Показываем ошибки серверной валидации под полями
+                let serverErrorMessage = '';
+                
+                Object.entries(responseData.details).forEach(([field, errorMessage]) => {
+                    if (field === 'name') {
+                        showFieldError('newClientName', errorMessage);
+                        serverErrorMessage += `Имя: ${errorMessage}\n`;
+                    } else if (field === 'phone') {
+                        showFieldError('newClientPhone', errorMessage);
+                        serverErrorMessage += `Телефон: ${errorMessage}\n`;
+                    } else if (field === 'telegram_chat_id') {
+                        serverErrorMessage += `Telegram: ${errorMessage}\n`;
+                    }
+                });
+                
+                // Если есть конкретное сообщение о дублировании телефона, показываем его
+                if (responseData.details.phone && responseData.details.phone.includes('уже существует')) {
+                    showError(responseData.details.phone);
+                } else if (serverErrorMessage) {
+                    showError('Исправьте ошибки в форме:\n' + serverErrorMessage.trim());
+                } else {
+                    showError(responseData.message || 'Ошибка создания клиента');
+                }
+                
+            } else if (responseData.error && responseData.error.includes('уже существует')) {
+                // Прямая проверка на наличие фразы "уже существует" в сообщении об ошибке
+                showError(responseData.error);
+            } else {
+                showError(responseData.error || 'Ошибка создания клиента');
+            }
         }
     } catch (error) {
         showError('Ошибка подключения к серверу: ' + error.message);
@@ -1080,20 +1404,45 @@ function showInfo(message) {
 }
 
 function showAlert(message, type) {
+    // Удаляем старые уведомления
+    const oldAlerts = document.querySelectorAll('.alert-notification');
+    oldAlerts.forEach(alert => {
+        if (alert.parentNode) {
+            alert.remove();
+        }
+    });
+    
     const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    alertDiv.className = `alert alert-${type} alert-notification alert-dismissible fade show`;
     alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
+    
+    const icon = type === 'success' ? 'check-circle-fill' : 
+                type === 'danger' ? 'exclamation-triangle-fill' : 
+                'info-circle-fill';
+    
     alertDiv.innerHTML = `
-        <i class="bi bi-${type === 'success' ? 'check-circle' : type === 'danger' ? 'exclamation-circle' : 'info-circle'}"></i>
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        <div class="d-flex align-items-center">
+            <i class="bi bi-${icon} me-2 fs-5"></i>
+            <div class="flex-grow-1">
+                <strong>${type === 'success' ? 'Успех!' : type === 'danger' ? 'Ошибка!' : 'Информация!'}</strong><br>
+                <span class="small">${message}</span>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+        </div>
     `;
     
     document.body.appendChild(alertDiv);
     
+    // Автоматически скрываем через 5 секунд
     setTimeout(() => {
         if (alertDiv.parentNode) {
-            alertDiv.remove();
+            alertDiv.classList.remove('show');
+            alertDiv.classList.add('fade');
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 300);
         }
     }, 5000);
 }
