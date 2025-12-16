@@ -37,11 +37,11 @@ def validate_car_data(data, is_update=False, car_id=None):
                 # Проверяем уникальность VIN
                 query = Car.query.filter_by(vin=vin)
                 if car_id:
-                    query = query.filter(Car.id != car_id)
+                    query = query.filter(Car.car_id != car_id)
                 
                 existing_car = query.first()
                 if existing_car:
-                    errors['vin'] = f'Автомобиль с VIN {vin} уже существует (ID: {existing_car.id})'
+                    errors['vin'] = f'Автомобиль с VIN {vin} уже существует'
     
     # Валидация года выпуска
     if 'year' in data and data['year']:
@@ -73,11 +73,11 @@ def validate_car_data(data, is_update=False, car_id=None):
                 # Проверяем уникальность госномера
                 query = Car.query.filter_by(gos_number=gos_number)
                 if car_id:
-                    query = query.filter(Car.id != car_id)
+                    query = query.filter(Car.car_id != car_id)
                 
                 existing_car = query.first()
                 if existing_car:
-                    errors['gos_number'] = f'Автомобиль с госномером {gos_number} уже существует (ID: {existing_car.id})'
+                    errors['gos_number'] = f'Автомобиль с госномером {gos_number} уже существует'
     
     return errors
 
@@ -102,7 +102,9 @@ def get_client_cars(client_id):
     """Получить все автомобили клиента"""
     try:
         # Проверяем существование клиента
-        client = Client.query.get_or_404(client_id)
+        client = Client.query.filter_by(client_id=client_id).first()
+        if not client:
+            return jsonify({'error': f'Клиент с ID {client_id} не найден'}), 404
         
         cars = Car.query.filter_by(client_id=client_id).all()
         cars_list = [car.to_dict() for car in cars]
@@ -123,13 +125,13 @@ def get_cars():
 def get_car(car_id):
     """Получить автомобиль по ID"""
     try:
-        car = Car.query.get_or_404(car_id)
+        car = Car.query.filter_by(car_id=car_id).first_or_404()
         
         # Получаем информацию о клиенте
         client_data = None
         if car.client:
             client_data = {
-                'id': car.client.id,
+                'client_id': car.client.client_id,
                 'name': car.client.name,
                 'phone': car.client.phone
             }
@@ -160,7 +162,7 @@ def create_car():
         
         # Проверяем существование клиента
         client_id = data.get('client_id')
-        client = Client.query.get(client_id)
+        client = Client.query.filter_by(client_id=client_id).first()
         if not client:
             return jsonify({'error': f'Клиент с ID {client_id} не найден'}), 404
         
@@ -188,7 +190,7 @@ def create_car():
 def update_car(car_id):
     """Обновить информацию об автомобиле"""
     try:
-        car = Car.query.get_or_404(car_id)
+        car = Car.query.filter_by(car_id=car_id).first_or_404()
         data = request.get_json()
         
         if not data:
@@ -207,7 +209,7 @@ def update_car(car_id):
         if 'client_id' in data:
             # Проверяем существование нового клиента
             new_client_id = data['client_id']
-            client = Client.query.get(new_client_id)
+            client = Client.query.filter_by(client_id=new_client_id).first()
             if not client:
                 return jsonify({'error': f'Клиент с ID {new_client_id} не найден'}), 404
             car.client_id = new_client_id
@@ -240,7 +242,7 @@ def update_car(car_id):
 def delete_car(car_id):
     """Удалить автомобиль"""
     try:
-        car = Car.query.get_or_404(car_id)
+        car = Car.query.filter_by(car_id=car_id).first_or_404()
         
         # Проверяем, есть ли активные заказы для этого автомобиля
         active_orders = WorkOrder.query.filter_by(car_id=car_id).filter(

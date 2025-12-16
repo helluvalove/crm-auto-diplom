@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from models import db, Client, WorkOrder
+from models import db, Client, WorkOrder, Car
 import re
 
 clients_bp = Blueprint('clients', __name__, url_prefix='/api/clients')
@@ -241,6 +241,7 @@ def delete_client(client_id):
     try:
         client = Client.query.filter_by(client_id=client_id).first_or_404()
         
+        # Проверяем, есть ли активные заказы
         active_orders = WorkOrder.query.filter_by(client_id=client_id).filter(
             WorkOrder.status.notin_(['Выполнен', 'Отменен'])
         ).first()
@@ -251,10 +252,16 @@ def delete_client(client_id):
                 'active_orders': True
             }), 400
         
+        # Сначала удаляем все автомобили клиента
+        cars = Car.query.filter_by(client_id=client_id).all()
+        for car in cars:
+            db.session.delete(car)
+        
+        # Теперь удаляем клиента
         db.session.delete(client)
         db.session.commit()
         
-        return jsonify({'message': 'Клиент удален'})
+        return jsonify({'message': 'Клиент и его автомобили удалены'})
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500

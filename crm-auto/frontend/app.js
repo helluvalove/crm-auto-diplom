@@ -506,8 +506,8 @@ async function createClient() {
     
     const carModel = carModelInput.value.trim();
     const carVin = carVinInput.value.trim();
-    const carYear = carYearInput.value.trim();
-    const carMileage = carMileageInput.value.trim();
+    const carYear = carYearInput.value ? parseInt(carYearInput.value.trim()) : null;
+    const carMileage = carMileageInput.value ? parseInt(carMileageInput.value.trim()) : null;
     
     const hasCar = carModel || carVin;
     
@@ -517,91 +517,78 @@ async function createClient() {
     };
     
     try {
-        const response = await fetch(`${API_URL}/clients`, {
+        // 1. Сначала создаем клиента
+        const clientResponse = await fetch(`${API_URL}/clients`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(clientData)
         });
         
-        const responseData = await response.json();
+        const clientResponseData = await clientResponse.json();
         
-        if (response.ok) {
-            const newClientId = responseData.client.client_id;
+        if (!clientResponse.ok) {
+            // Обработка ошибок клиента
+            throw new Error(clientResponseData.error || 'Ошибка создания клиента');
+        }
+        
+        const newClientId = clientResponseData.client.client_id;
+        
+        // 2. Если есть данные об автомобиле, создаем его
+        if (hasCar && newClientId) {
+            const carData = {
+                client_id: newClientId,
+                model: carModel || 'Не указана',
+                vin: carVin || null,
+                year: carYear,
+                mileage: carMileage
+            };
             
-            if (hasCar && newClientId) {
-                const carData = {
-                    client_id: newClientId,
-                    model: carModel || 'Не указана',
-                    vin: carVin || null,
-                    year: carYear || null,
-                    mileage: carMileage || null
-                };
-                
-                try {
-                    await fetch(`${API_URL}/cars`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(carData)
-                    });
-                    
-                    showSuccess(`Клиент "${validation.name}" и его автомобиль созданы!`);
-                } catch (carError) {
-                    showSuccess(`Клиент "${validation.name}" создан, но произошла ошибка при добавлении автомобиля`);
-                }
-            } else {
-                showSuccess(`Клиент "${validation.name}" создан!`);
-            }
+            const carResponse = await fetch(`${API_URL}/cars`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(carData)
+            });
             
-            // Очищаем форму
-            nameInput.value = '';
-            phoneInput.value = '';
-            carModelInput.value = '';
-            carVinInput.value = '';
-            carYearInput.value = '';
-            carMileageInput.value = '';
+            const carResponseData = await carResponse.json();
             
-            // Очищаем ошибки
-            showFieldError('newClientName', null);
-            showFieldError('newClientPhone', null);
-            
-            loadClients();
-            
-        } else {
-            // Серверная валидация вернула ошибки
-            if (responseData.details) {
-                // Показываем ошибки серверной валидации под полями
-                let serverErrorMessage = '';
-                
-                Object.entries(responseData.details).forEach(([field, errorMessage]) => {
-                    if (field === 'name') {
-                        showFieldError('newClientName', errorMessage);
-                        serverErrorMessage += `Имя: ${errorMessage}\n`;
-                    } else if (field === 'phone') {
-                        showFieldError('newClientPhone', errorMessage);
-                        serverErrorMessage += `Телефон: ${errorMessage}\n`;
-                    } else if (field === 'telegram_chat_id') {
-                        serverErrorMessage += `Telegram: ${errorMessage}\n`;
-                    }
+            if (!carResponse.ok) {
+                // Если авто не создалось, удаляем клиента
+                await fetch(`${API_URL}/clients/${newClientId}`, {
+                    method: 'DELETE'
                 });
                 
-                // Если есть конкретное сообщение о дублировании телефона, показываем его
-                if (responseData.details.phone && responseData.details.phone.includes('уже существует')) {
-                    showError(responseData.details.phone);
-                } else if (serverErrorMessage) {
-                    showError('Исправьте ошибки в форме:\n' + serverErrorMessage.trim());
+                // Показываем конкретную ошибку
+                if (carResponseData.details && carResponseData.details.vin) {
+                    throw new Error(`Автомобиль не создан: ${carResponseData.details.vin}. Клиент также удален.`);
                 } else {
-                    showError(responseData.message || 'Ошибка создания клиента');
+                    throw new Error(`Автомобиль не создан: ${carResponseData.error || 'Неизвестная ошибка'}. Клиент также удален.`);
                 }
-                
-            } else if (responseData.error && responseData.error.includes('уже существует')) {
-                // Прямая проверка на наличие фразы "уже существует" в сообщении об ошибке
-                showError(responseData.error);
-            } else {
-                showError(responseData.error || 'Ошибка создания клиента');
             }
+            
+            // Успех - клиент и авто созданы
+            showSuccess(`Клиент "${validation.name}" и его автомобиль "${carModel}" созданы!`);
+        } else {
+            // Успех - только клиент создан
+            showSuccess(`Клиент "${validation.name}" создан!`);
         }
+        
+        // 3. Очищаем форму
+        nameInput.value = '';
+        phoneInput.value = '';
+        carModelInput.value = '';
+        carVinInput.value = '';
+        carYearInput.value = '';
+        carMileageInput.value = '';
+        
+        // Очищаем ошибки
+        showFieldError('newClientName', null);
+        showFieldError('newClientPhone', null);
+        
+        loadClients();
+        
     } catch (error) {
-        showError('Ошибка подключения к серверу: ' + error.message);
+        // Обработка всех ошибок
+        showError(error.message);
     }
 }
 
