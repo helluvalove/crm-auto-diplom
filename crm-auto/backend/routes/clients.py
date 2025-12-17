@@ -241,27 +241,47 @@ def delete_client(client_id):
     try:
         client = Client.query.filter_by(client_id=client_id).first_or_404()
         
-        # Проверяем, есть ли активные заказы
+        # Проверяем, есть ли активные заказы у клиента
         active_orders = WorkOrder.query.filter_by(client_id=client_id).filter(
-            WorkOrder.status.notin_(['Выполнен', 'Отменен'])
-        ).first()
+            WorkOrder.status.in_(['Создан', 'На диагностике', 'В работе', 'Готов к выдаче'])
+        ).all()
         
         if active_orders:
+            order_ids = [order.order_id for order in active_orders]
             return jsonify({
                 'error': 'Нельзя удалить клиента с активными заказами',
-                'active_orders': True
+                'active_orders': order_ids,
+                'message': f'У клиента есть {len(active_orders)} активных заказов. Сначала завершите или удалите их.'
             }), 400
         
-        # Сначала удаляем все автомобили клиента
+        # Удаляем все автомобили клиента
         cars = Car.query.filter_by(client_id=client_id).all()
+        car_ids = [car.car_id for car in cars]
+        
         for car in cars:
+            # Удаляем все заказы для этого автомобиля
+            car_orders = WorkOrder.query.filter_by(car_id=car.car_id).all()
+            for order in car_orders:
+                db.session.delete(order)
+            
+            # Удаляем автомобиль
             db.session.delete(car)
         
-        # Теперь удаляем клиента
+        # Удаляем все оставшиеся заказы клиента (если есть выполненные/отмененные)
+        all_client_orders = WorkOrder.query.filter_by(client_id=client_id).all()
+        for order in all_client_orders:
+            db.session.delete(order)
+        
+        # Удаляем клиента
         db.session.delete(client)
         db.session.commit()
         
-        return jsonify({'message': 'Клиент и его автомобили удалены'})
+        return jsonify({
+            'message': 'Клиент и все связанные данные удалены',
+            'deleted_cars': len(cars),
+            'deleted_car_ids': car_ids,
+            'deleted_orders': len(all_client_orders)
+        })
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500

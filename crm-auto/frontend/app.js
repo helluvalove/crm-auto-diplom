@@ -460,25 +460,23 @@ async function loadClients() {
 }
 
 async function deleteClient(clientId) {
-    if (!confirm('Вы уверены, что хотите удалить клиента? Все его автомобили и заказы также будут удалены.')) {
-        return;
-    }
-    
     try {
+        // Сначала проверяем есть ли активные заказы
         const response = await fetch(`${API_URL}/clients/${clientId}`, {
             method: 'DELETE'
         });
         
+        const data = await response.json();
+        
         if (response.ok) {
-            showSuccess('Клиент удален');
+            showSuccess(`Клиент удален. Удалено ${data.deleted_cars} авто и ${data.deleted_orders} заказов.`);
             document.getElementById(`client-${clientId}`).remove();
             loadClients();
         } else {
-            const errorData = await response.json();
-            if (errorData.active_orders) {
-                showError('Нельзя удалить клиента с активными заказами');
+            if (data.active_orders) {
+                showError(`Нельзя удалить клиента с активными заказами (ID: ${data.active_orders.join(', ')}). Сначала завершите или удалите эти заказы.`);
             } else {
-                showError(errorData.error || 'Ошибка удаления клиента');
+                showError(data.error || 'Ошибка удаления клиента');
             }
         }
     } catch (error) {
@@ -501,17 +499,56 @@ async function createClient() {
     // Клиентская валидация
     const validation = validateClientOnClient(name, phone);
     if (!validation.isValid) {
-        showError('Исправьте ошибки в форме');
+        showError('Исправьте ошибки в форме клиента');
         return;
     }
     
     const carModel = carModelInput.value.trim();
-    const carVin = carVinInput.value.trim();
-    const carGosNumber = carGosNumberInput.value.trim();
+    const carVin = carVinInput.value.trim().toUpperCase();
+    const carGosNumber = carGosNumberInput.value.trim().toUpperCase();
     const carYear = carYearInput.value ? parseInt(carYearInput.value.trim()) : null;
     const carMileage = carMileageInput.value ? parseInt(carMileageInput.value.trim()) : null;
     
-    const hasCar = carModel || carVin || carGosNumber;
+    // Проверяем, заполнены ли хоть какие-то поля автомобиля
+    const hasCarData = carModel || carVin || carGosNumber || carYear || carMileage;
+    
+    // Если заполнено хоть одно поле автомобиля, проверяем все обязательные
+    if (hasCarData) {
+        const errors = [];
+        
+        if (!carModel) {
+            errors.push('Поле "Модель автомобиля" обязательно для заполнения');
+        }
+        
+        if (!carVin) {
+            errors.push('Поле "VIN номер" обязательно для заполнения');
+        } else if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(carVin)) {
+            errors.push('Неверный формат VIN номера автомобиля. Должно быть ровно 17 символов (цифры и заглавные латинские буквы, кроме I, O, Q)');
+        }
+        
+        if (!carGosNumber) {
+            errors.push('Поле "Госномер" обязательно для заполнения');
+        } else if (!/^[А-Я][0-9]{3}[А-Я]{2}[0-9]{2,3}$|^[А-Я]{2}[0-9]{3}[0-9]{2,3}$/.test(carGosNumber)) {
+            errors.push('Неверный формат госномера автомобиля. Примеры: А123БВ77, ВС12345');
+        }
+        
+        if (!carYear) {
+            errors.push('Поле "Год выпуска" обязательно для заполнения');
+        } else if (carYear < 1900 || carYear > new Date().getFullYear() + 1) {
+            errors.push(`Год выпуска автомобиля должен быть в диапазоне от 1900 до ${new Date().getFullYear() + 1}`);
+        }
+        
+        if (!carMileage) {
+            errors.push('Поле "Пробег" обязательно для заполнения');
+        } else if (carMileage < 0 || carMileage > 1000000) {
+            errors.push('Пробег автомобиля должен быть в диапазоне от 0 до 1,000,000 км');
+        }
+        
+        if (errors.length > 0) {
+            showError(errors.join('<br>'));
+            return;
+        }
+    }
     
     const clientData = { 
         name: validation.name, 
@@ -536,12 +573,12 @@ async function createClient() {
         const newClientId = clientResponseData.client.client_id;
         
         // 2. Если есть данные об автомобиле, создаем его
-        if (hasCar && newClientId) {
+        if (hasCarData && newClientId) {
             const carData = {
                 client_id: newClientId,
-                model: carModel || 'Не указана',
-                vin: carVin || null,
-                gos_number: carGosNumber || null,
+                model: carModel,
+                vin: carVin,
+                gos_number: carGosNumber,
                 year: carYear,
                 mileage: carMileage
             };
@@ -928,7 +965,7 @@ async function deleteCar(carId) {
         } else {
             const errorData = await response.json();
             if (errorData.active_orders) {
-                showError('Нельзя удалить автомобиль с активными заказами');
+                showError('Нельзя удалить автомобиль с активными заказами. Сначала завершите или удалите заказы.');
             } else {
                 showError(errorData.error || 'Ошибка удаления автомобиля');
             }
@@ -941,19 +978,70 @@ async function deleteCar(carId) {
 async function createCar() {
     const clientId = document.getElementById('carClientSelect').value;
     const model = document.getElementById('newCarModel').value.trim();
+    const vin = document.getElementById('newCarVin').value.trim().toUpperCase();
+    const gosNumber = document.getElementById('newCarGosNumber').value.trim().toUpperCase();
+    const year = document.getElementById('newCarYear').value;
+    const mileage = document.getElementById('newCarMileage').value;
     
-    if (!clientId || !model) {
-        showError('Заполните обязательные поля: клиент и модель');
+    // Проверка обязательных полей
+    const errors = [];
+    
+    if (!clientId) {
+        errors.push('Выберите клиента');
+    }
+    
+    if (!model) {
+        errors.push('Поле "Модель автомобиля" обязательно для заполнения');
+    }
+    
+    if (!vin) {
+        errors.push('Поле "VIN номер" обязательно для заполнения');
+    } else if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) {
+        errors.push('Неверный формат VIN номера. Должно быть ровно 17 символов (цифры и заглавные латинские буквы, кроме I, O, Q)');
+    }
+    
+    if (!gosNumber) {
+        errors.push('Поле "Госномер" обязательно для заполнения');
+    } else if (!/^[А-Я][0-9]{3}[А-Я]{2}[0-9]{2,3}$|^[А-Я]{2}[0-9]{3}[0-9]{2,3}$/.test(gosNumber)) {
+        errors.push('Неверный формат госномера. Примеры правильных форматов: А123БВ77, ВС12345');
+    }
+    
+    if (!year) {
+        errors.push('Поле "Год выпуска" обязательно для заполнения');
+    } else {
+        const currentYear = new Date().getFullYear();
+        const yearNum = parseInt(year);
+        if (yearNum < 1900 || yearNum > currentYear + 1) {
+            errors.push(`Год выпуска должен быть в диапазоне от 1900 до ${currentYear + 1}`);
+        } else if (isNaN(yearNum)) {
+            errors.push('Год выпуска должен быть числом');
+        }
+    }
+    
+    if (!mileage) {
+        errors.push('Поле "Пробег" обязательно для заполнения');
+    } else {
+        const mileageNum = parseInt(mileage);
+        if (mileageNum < 0 || mileageNum > 1000000) {
+            errors.push('Пробег должен быть в диапазоне от 0 до 1,000,000 км');
+        } else if (isNaN(mileageNum)) {
+            errors.push('Пробег должен быть числом');
+        }
+    }
+    
+    // Если есть ошибки, показываем их
+    if (errors.length > 0) {
+        showError(errors.join('<br>'));
         return;
     }
     
     const carData = {
         client_id: parseInt(clientId),
         model: model,
-        vin: document.getElementById('newCarVin').value.trim() || null,
-        gos_number: document.getElementById('newCarGosNumber').value.trim() || null,
-        year: document.getElementById('newCarYear').value || null,
-        mileage: document.getElementById('newCarMileage').value || null
+        vin: vin,
+        gos_number: gosNumber,
+        year: parseInt(year),
+        mileage: parseInt(mileage)
     };
     
     try {
@@ -997,9 +1085,9 @@ async function editCar(carId) {
         
         const car = await response.json();
         
-        // Загружаем клиентов для выпадающего списка
-        const clientsResponse = await fetch(`${API_URL}/clients`);
-        const clients = clientsResponse.ok ? await clientsResponse.json() : [];
+        // Загружаем информацию о владельце
+        const clientResponse = await fetch(`${API_URL}/clients/${car.client_id}`);
+        const client = clientResponse.ok ? await clientResponse.json() : { name: 'Неизвестный клиент', phone: 'N/A' };
         
         // Создаем модальное окно для редактирования
         const modalHtml = `
@@ -1011,44 +1099,81 @@ async function editCar(carId) {
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
-                            <div class="mb-3">
-                                <label class="form-label">Клиент</label>
-                                <select class="form-select" id="editCarClientSelect">
-                                    ${clients.map(client => 
-                                        `<option value="${client.client_id}" ${client.client_id === car.client_id ? 'selected' : ''}>${client.name} (${client.phone})</option>`
-                                    ).join('')}
-                                </select>
+                            <div class="alert alert-info mb-3">
+                                <i class="bi bi-person"></i> <strong>Владелец:</strong> ${client.name} (тел: ${client.phone})
+                                <br><small class="text-muted">Сменить владельца можно только через удаление и добавление нового автомобиля</small>
                             </div>
+                            
                             <div class="mb-3">
-                                <label class="form-label">Модель *</label>
+                                <label class="form-label">Модель автомобиля *</label>
                                 <input type="text" class="form-control" id="editCarModel" value="${car.model || ''}" required>
+                                <div class="form-text">Обязательное поле</div>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label">VIN номер</label>
-                                <input type="text" class="form-control" id="editCarVin" value="${car.vin || ''}">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">Госномер</label>
-                                <input type="text" class="form-control" id="editCarGosNumber" value="${car.gos_number || ''}">
-                            </div>
+                            
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label class="form-label">Год выпуска</label>
-                                        <input type="number" class="form-control" id="editCarYear" value="${car.year || ''}" min="1900" max="2030">
+                                        <label class="form-label">VIN номер *</label>
+                                        <input type="text" class="form-control" id="editCarVin" value="${car.vin || ''}" 
+                                               maxlength="17" required
+                                               pattern="[A-HJ-NPR-Z0-9]{17}"
+                                               title="Ровно 17 символов: цифры и заглавные латинские буквы (кроме I, O, Q)">
+                                        <div class="form-text">
+                                            <span class="text-danger"><i class="bi bi-exclamation-circle"></i> Обязательное поле</span><br>
+                                            <span id="vinCounter" class="text-muted">Символов: ${car.vin ? car.vin.length : 0}/17</span>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label class="form-label">Пробег (км)</label>
-                                        <input type="number" class="form-control" id="editCarMileage" value="${car.mileage || ''}" min="0" max="1000000">
+                                        <label class="form-label">Госномер *</label>
+                                        <input type="text" class="form-control" id="editCarGosNumber" value="${car.gos_number || ''}" 
+                                               maxlength="9" required
+                                               pattern="[А-Я][0-9]{3}[А-Я]{2}[0-9]{2,3}|[А-Я]{2}[0-9]{3}[0-9]{2,3}"
+                                               title="Примеры: А123БВ77, ВС12345">
+                                        <div class="form-text">
+                                            <span class="text-danger"><i class="bi bi-exclamation-circle"></i> Обязательное поле</span><br>
+                                            Примеры: А123БВ77, ВС12345
+                                        </div>
                                     </div>
                                 </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Год выпуска *</label>
+                                        <input type="number" class="form-control" id="editCarYear" value="${car.year || ''}" 
+                                               min="1900" max="${new Date().getFullYear() + 1}" required>
+                                        <div class="form-text">
+                                            <span class="text-danger"><i class="bi bi-exclamation-circle"></i> Обязательное поле</span><br>
+                                            От 1900 до ${new Date().getFullYear() + 1}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Пробег (км) *</label>
+                                        <input type="number" class="form-control" id="editCarMileage" value="${car.mileage || ''}" 
+                                               min="0" max="1000000" required>
+                                        <div class="form-text">
+                                            <span class="text-danger"><i class="bi bi-exclamation-circle"></i> Обязательное поле</span><br>
+                                            От 0 до 1,000,000 км
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-warning mt-3">
+                                <i class="bi bi-exclamation-triangle"></i> <strong>Внимание!</strong> Все поля отмеченные * являются обязательными для заполнения.
                             </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                            <button type="button" class="btn btn-primary" onclick="updateCar(${carId})">Сохранить</button>
+                            <button type="button" class="btn btn-danger" onclick="showDeleteCarConfirmation(${carId})">
+                                <i class="bi bi-trash"></i> Удалить авто
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="validateAndUpdateCar(${carId})">Сохранить изменения</button>
                         </div>
                     </div>
                 </div>
@@ -1062,6 +1187,28 @@ async function editCar(carId) {
         // Добавляем модальное окно в DOM
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         
+        // Добавляем счетчик символов для VIN
+        const vinInput = document.getElementById('editCarVin');
+        const vinCounter = document.getElementById('vinCounter');
+        
+        if (vinInput && vinCounter) {
+            vinInput.addEventListener('input', function() {
+                const length = this.value.length;
+                vinCounter.textContent = `Символов: ${length}/17`;
+                
+                if (length === 17) {
+                    vinCounter.className = 'text-success';
+                } else if (length > 0) {
+                    vinCounter.className = 'text-warning';
+                } else {
+                    vinCounter.className = 'text-danger';
+                }
+            });
+            
+            // Инициализируем счетчик
+            vinInput.dispatchEvent(new Event('input'));
+        }
+        
         // Показываем модальное окно
         const modal = new bootstrap.Modal(document.getElementById('editCarModal'));
         modal.show();
@@ -1072,22 +1219,67 @@ async function editCar(carId) {
     }
 }
 
-async function updateCar(carId) {
+// Функция валидации и обновления автомобиля
+async function validateAndUpdateCar(carId) {
     const model = document.getElementById('editCarModel').value.trim();
-    const clientId = document.getElementById('editCarClientSelect').value;
+    const vin = document.getElementById('editCarVin').value.trim().toUpperCase(); // Приводим к верхнему регистру
+    const gosNumber = document.getElementById('editCarGosNumber').value.trim().toUpperCase(); // Приводим к верхнему регистру
+    const year = document.getElementById('editCarYear').value;
+    const mileage = document.getElementById('editCarMileage').value;
     
-    if (!model || !clientId) {
-        showError('Заполните обязательные поля: клиент и модель');
+    // Проверка обязательных полей
+    const errors = [];
+    
+    if (!model) {
+        errors.push('Поле "Модель автомобиля" обязательно для заполнения');
+    }
+    
+    if (!vin) {
+        errors.push('Поле "VIN номер" обязательно для заполнения');
+    } else if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) {
+        errors.push('Неверный формат VIN номера. Должно быть ровно 17 символов (цифры и заглавные латинские буквы, кроме I, O, Q)');
+    }
+    
+    if (!gosNumber) {
+        errors.push('Поле "Госномер" обязательно для заполнения');
+    } else if (!/^[А-Я][0-9]{3}[А-Я]{2}[0-9]{2,3}$|^[А-Я]{2}[0-9]{3}[0-9]{2,3}$/.test(gosNumber)) {
+        errors.push('Неверный формат госномера. Примеры правильных форматов: А123БВ77, ВС12345');
+    }
+    
+    if (!year) {
+        errors.push('Поле "Год выпуска" обязательно для заполнения');
+    } else {
+        const currentYear = new Date().getFullYear();
+        const yearNum = parseInt(year);
+        if (yearNum < 1900 || yearNum > currentYear + 1) {
+            errors.push(`Год выпуска должен быть в диапазоне от 1900 до ${currentYear + 1}`);
+        }
+    }
+    
+    if (!mileage) {
+        errors.push('Поле "Пробег" обязательно для заполнения');
+    } else {
+        const mileageNum = parseInt(mileage);
+        if (mileageNum < 0 || mileageNum > 1000000) {
+            errors.push('Пробег должен быть в диапазоне от 0 до 1,000,000 км');
+        } else if (isNaN(mileageNum)) {
+            errors.push('Пробег должен быть числом');
+        }
+    }
+    
+    // Если есть ошибки, показываем их
+    if (errors.length > 0) {
+        showError(errors.join('<br>'));
         return;
     }
     
+    // Все проверки пройдены, обновляем автомобиль
     const carData = {
-        client_id: parseInt(clientId),
         model: model,
-        vin: document.getElementById('editCarVin').value.trim() || null,
-        gos_number: document.getElementById('editCarGosNumber').value.trim() || null,
-        year: document.getElementById('editCarYear').value || null,
-        mileage: document.getElementById('editCarMileage').value || null
+        vin: vin,
+        gos_number: gosNumber,
+        year: parseInt(year),
+        mileage: parseInt(mileage)
     };
     
     try {
@@ -1105,7 +1297,11 @@ async function updateCar(carId) {
             modal.hide();
             
             // Обновляем список автомобилей
-            loadAllCarsInService();
+            setTimeout(() => {
+                if (document.getElementById('carsTab').style.display === 'block') {
+                    loadAllCarsInService();
+                }
+            }, 500);
             
         } else {
             const errorData = await response.json();
@@ -1114,6 +1310,135 @@ async function updateCar(carId) {
     } catch (error) {
         showError('Ошибка подключения к серверу: ' + error.message);
     }
+}
+
+function showDeleteCarConfirmation(carId) {
+    // Закрываем текущее модальное окно
+    const modal = bootstrap.Modal.getInstance(document.getElementById('editCarModal'));
+    if (modal) modal.hide();
+    
+    // Показываем подтверждение удаления
+    if (confirm('Вы уверены, что хотите удалить этот автомобиль? Все связанные заказы также будут удалены!')) {
+        deleteCar(carId);
+    } else {
+        // Если отмена, показываем модальное окно редактирования снова
+        setTimeout(() => editCar(carId), 300);
+    }
+}
+
+async function updateCar(carId) {
+    const model = document.getElementById('editCarModel').value.trim();
+    
+    if (!model) {
+        showError('Поле "Модель автомобиля" обязательно для заполнения');
+        return;
+    }
+    
+    const vin = document.getElementById('editCarVin').value.trim();
+    const gosNumber = document.getElementById('editCarGosNumber').value.trim();
+    const year = document.getElementById('editCarYear').value;
+    const mileage = document.getElementById('editCarMileage').value;
+    
+    // Валидация VIN (если введен)
+    if (vin && !/^[A-HJ-NPR-Z0-9]{17}$/i.test(vin)) {
+        showError('Неверный формат VIN номера. Должно быть ровно 17 символов (цифры и заглавные буквы, кроме I, O, Q)');
+        return;
+    }
+    
+    // Валидация госномера (если введен)
+    if (gosNumber && !/^[А-Я0-9]{6,9}$/i.test(gosNumber)) {
+        showError('Неверный формат госномера. Используйте русские буквы и цифры (6-9 символов)');
+        return;
+    }
+    
+    // Валидация года
+    if (year) {
+        const currentYear = new Date().getFullYear();
+        const yearNum = parseInt(year);
+        if (yearNum < 1900 || yearNum > currentYear + 1) {
+            showError(`Год выпуска должен быть в диапазоне от 1900 до ${currentYear + 1}`);
+            return;
+        }
+    }
+    
+    // Валидация пробега
+    if (mileage) {
+        const mileageNum = parseInt(mileage);
+        if (mileageNum < 0 || mileageNum > 1000000) {
+            showError('Пробег должен быть в диапазоне от 0 до 1,000,000 км');
+            return;
+        }
+    }
+    
+    // Подтверждение удаления важных полей
+    let warningMessage = '';
+    const originalVin = await getOriginalCarField(carId, 'vin');
+    const originalGosNumber = await getOriginalCarField(carId, 'gos_number');
+    
+    if (originalVin && !vin) {
+        warningMessage += 'Вы удаляете VIN номер автомобиля. Это важный идентификатор!\n';
+    }
+    
+    if (originalGosNumber && !gosNumber) {
+        warningMessage += 'Вы удаляете госномер автомобиля. Это важный идентификатор!\n';
+    }
+    
+    if (warningMessage) {
+        warningMessage += '\nВы уверены, что хотите продолжить?';
+        if (!confirm(warningMessage)) {
+            return;
+        }
+    }
+    
+    const carData = {
+        model: model,
+        vin: vin || null,  // Если поле пустое, отправляем null
+        gos_number: gosNumber || null,
+        year: year || null,
+        mileage: mileage || null
+    };
+    
+    try {
+        const response = await fetch(`${API_URL}/cars/${carId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(carData)
+        });
+        
+        if (response.ok) {
+            showSuccess('Автомобиль обновлен!');
+            
+            // Закрываем модальное окно
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editCarModal'));
+            modal.hide();
+            
+            // Обновляем список автомобилей
+            setTimeout(() => {
+                if (document.getElementById('carsTab').style.display === 'block') {
+                    loadAllCarsInService();
+                }
+            }, 500);
+            
+        } else {
+            const errorData = await response.json();
+            showError(errorData.error || 'Ошибка обновления автомобиля');
+        }
+    } catch (error) {
+        showError('Ошибка подключения к серверу: ' + error.message);
+    }
+}
+
+async function getOriginalCarField(carId, fieldName) {
+    try {
+        const response = await fetch(`${API_URL}/cars/${carId}`);
+        if (response.ok) {
+            const car = await response.json();
+            return car[fieldName] || null;
+        }
+    } catch (error) {
+        console.error('Ошибка получения данных автомобиля:', error);
+    }
+    return null;
 }
 
 // ==================== ЗАКАЗЫ ====================

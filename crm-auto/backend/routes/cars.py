@@ -242,23 +242,35 @@ def update_car(car_id):
 def delete_car(car_id):
     """Удалить автомобиль"""
     try:
-        car = Car.query.filter_by(car_id=car_id).first_or_404()
+        car = Car.query.get_or_404(car_id)
         
-        # Проверяем, есть ли активные заказы для этого автомобиля
+        # Проверяем есть ли активные заказы у автомобиля
         active_orders = WorkOrder.query.filter_by(car_id=car_id).filter(
-            WorkOrder.status.notin_(['Выполнен', 'Отменен'])
-        ).first()
+            WorkOrder.status.in_(['Создан', 'На диагностике', 'В работе', 'Готов к выдаче'])
+        ).all()
         
         if active_orders:
+            order_ids = [order.order_id for order in active_orders]
             return jsonify({
                 'error': 'Нельзя удалить автомобиль с активными заказами',
-                'active_orders': True
+                'active_orders': order_ids,
+                'message': f'У автомобиля есть {len(active_orders)} активных заказов. Сначала завершите или удалите их.'
             }), 400
         
+        # Удаляем все заказы для этого автомобиля
+        all_car_orders = WorkOrder.query.filter_by(car_id=car_id).all()
+        for order in all_car_orders:
+            db.session.delete(order)
+        
+        # Удаляем автомобиль
         db.session.delete(car)
         db.session.commit()
         
-        return jsonify({'message': 'Автомобиль удален'})
+        return jsonify({
+            'message': 'Автомобиль и все связанные заказы удалены',
+            'deleted_orders': len(all_car_orders)
+        })
     except Exception as e:
         db.session.rollback()
+        print(f"❌ Ошибка в delete_car: {e}")
         return jsonify({'error': str(e)}), 500
