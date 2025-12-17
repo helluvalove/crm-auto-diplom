@@ -382,6 +382,176 @@ function logout() {
     showSuccess('Вы успешно вышли из системы');
 }
 
+async function showClientCarsModal(clientId, clientName) {
+    try {
+        // Загружаем автомобили клиента
+        const response = await fetch(`${API_URL}/cars/client/${clientId}`);
+        if (!response.ok) {
+            throw new Error(`Ошибка загрузки автомобилей: ${response.status}`);
+        }
+        
+        const cars = await response.json();
+        
+        // Загружаем активные заказы для определения статуса автомобилей
+        const ordersResponse = await fetch(`${API_URL}/orders`);
+        const allOrders = ordersResponse.ok ? await ordersResponse.json() : [];
+        const activeOrders = allOrders.filter(order => 
+            order.status !== 'Выполнен' && order.status !== 'Отменен'
+        );
+        
+        // Создаем модальное окно
+        let carsHtml = '';
+        
+        if (!cars || cars.length === 0) {
+            carsHtml = `
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> У клиента нет автомобилей
+                </div>
+            `;
+        } else {
+            carsHtml = '<div class="list-group">';
+            
+            cars.forEach(car => {
+                // Находим активные заказы для этого автомобиля
+                const carOrders = activeOrders.filter(order => order.car_id === car.car_id);
+                const hasActiveOrders = carOrders.length > 0;
+                const hasOrderInWork = carOrders.some(o => o.status === 'В работе');
+                const hasOrderReady = carOrders.some(o => o.status === 'Готов к выдаче');
+                const hasOrderDiagnostic = carOrders.some(o => o.status === 'На диагностике');
+                
+                // Определяем статус автомобиля
+                let carStatus = 'Свободен';
+                let statusBadge = '<span class="badge bg-success">Свободен</span>';
+                let statusIcon = '<i class="bi bi-check-circle text-success"></i>';
+                
+                if (hasOrderInWork) {
+                    carStatus = 'В работе';
+                    statusBadge = '<span class="badge bg-warning">В работе</span>';
+                    statusIcon = '<i class="bi bi-tools text-warning"></i>';
+                } else if (hasOrderReady) {
+                    carStatus = 'Готов к выдаче';
+                    statusBadge = '<span class="badge bg-success">Готов</span>';
+                    statusIcon = '<i class="bi bi-check-circle-fill text-success"></i>';
+                } else if (hasOrderDiagnostic) {
+                    carStatus = 'На диагностике';
+                    statusBadge = '<span class="badge bg-info">Диагностика</span>';
+                    statusIcon = '<i class="bi bi-clipboard-pulse text-info"></i>';
+                } else if (hasActiveOrders) {
+                    carStatus = 'В сервисе';
+                    statusBadge = '<span class="badge bg-secondary">В сервисе</span>';
+                    statusIcon = '<i class="bi bi-clock-history text-secondary"></i>';
+                }
+                
+                // Информация о заказах
+                let ordersInfo = '';
+                if (carOrders.length > 0) {
+                    ordersInfo = '<div class="small mt-2"><strong>Активные заказы:</strong><br>';
+                    carOrders.forEach(order => {
+                        const orderDate = new Date(order.created_date).toLocaleDateString();
+                        ordersInfo += `• #${order.order_id}: ${order.status} (${orderDate})<br>`;
+                    });
+                    ordersInfo += '</div>';
+                }
+                
+                carsHtml += `
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">
+                                ${statusIcon} ${car.model || 'Модель не указана'}
+                            </h6>
+                            <div>
+                                ${statusBadge}
+                            </div>
+                        </div>
+                        <p class="mb-1">
+                            ${car.vin ? `<i class="bi bi-upc"></i> VIN: ${car.vin}<br>` : ''}
+                            ${car.gos_number ? `<i class="bi bi-123"></i> Госномер: ${car.gos_number}<br>` : ''}
+                            ${car.year ? `<i class="bi bi-calendar"></i> Год: ${car.year}<br>` : ''}
+                            ${car.mileage ? `<i class="bi bi-speedometer2"></i> Пробег: ${car.mileage} км<br>` : ''}
+                            <strong>Статус:</strong> ${carStatus}<br>
+                            <strong>Активных заказов:</strong> ${carOrders.length}
+                        </p>
+                        ${ordersInfo}
+                        <div class="mt-2">
+                            <button class="btn btn-sm btn-outline-primary" onclick="closeModalAndLoadClientCars(${clientId})" title="Подробнее">
+                                <i class="bi bi-info-circle"></i> Подробнее
+                            </button>
+                            <button class="btn btn-sm btn-outline-success" onclick="createOrderForCar(${car.car_id}, ${clientId})" 
+                                    title="Создать заказ" ${hasOrderInWork ? 'disabled' : ''}>
+                                <i class="bi bi-plus-circle"></i> Новый заказ
+                            </button>
+                            ${hasOrderInWork ? '<small class="text-danger ms-2">Автомобиль уже в работе!</small>' : ''}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            carsHtml += '</div>';
+        }
+        
+        const modalHtml = `
+            <div class="modal fade" id="clientCarsModal" tabindex="-1" aria-labelledby="clientCarsModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="clientCarsModalLabel">
+                                <i class="bi bi-person"></i> Автомобили клиента: ${clientName}
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-info mb-3">
+                                <i class="bi bi-info-circle"></i> Здесь отображаются все автомобили клиента и их текущий статус в сервисе.
+                            </div>
+                            ${carsHtml}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                            <button type="button" class="btn btn-primary" onclick="closeModalAndLoadClientCars(${clientId})">
+                                <i class="bi bi-arrow-right"></i> Перейти к автомобилям
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Удаляем старые модальные окна если есть
+        const oldModal = document.getElementById('clientCarsModal');
+        if (oldModal) oldModal.remove();
+        
+        // Добавляем модальное окно в DOM
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Показываем модальное окно
+        const modal = new bootstrap.Modal(document.getElementById('clientCarsModal'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Ошибка загрузки автомобилей клиента:', error);
+        showError('Ошибка загрузки автомобилей клиента: ' + error.message);
+    }
+}
+
+function closeModalAndLoadClientCars(clientId) {
+    // Закрываем модальное окно
+    const modalElement = document.getElementById('clientCarsModal');
+    if (modalElement) {
+        const modal = bootstrap.Modal.getInstance(modalElement);
+        if (modal) {
+            modal.hide();
+        }
+        // Удаляем элемент из DOM
+        modalElement.remove();
+    }
+    
+    // Ждем немного, чтобы модальное окно успело закрыться
+    setTimeout(() => {
+        // Загружаем автомобили клиента
+        loadClientCars(clientId);
+    }, 300);
+}
+
 // ==================== КЛИЕНТЫ ====================
 async function loadClients() {
     try {
@@ -410,17 +580,70 @@ async function loadClients() {
                 if (carsResponse.ok) {
                     const cars = await carsResponse.json();
                     client.car_count = cars.length;
+                    
+                    // Загружаем информацию о статусе автомобилей
+                    const ordersResponse = await fetch(`${API_URL}/orders`);
+                    const allOrders = ordersResponse.ok ? await ordersResponse.json() : [];
+                    const activeOrders = allOrders.filter(order => 
+                        order.status !== 'Выполнен' && order.status !== 'Отменен'
+                    );
+                    
+                    // Считаем автомобили в работе
+                    let carsInWork = 0;
+                    let carsReady = 0;
+                    let carsDiagnostic = 0;
+                    
+                    cars.forEach(car => {
+                        const carOrders = activeOrders.filter(order => order.car_id === car.car_id);
+                        if (carOrders.some(o => o.status === 'В работе')) carsInWork++;
+                        if (carOrders.some(o => o.status === 'Готов к выдаче')) carsReady++;
+                        if (carOrders.some(o => o.status === 'На диагностике')) carsDiagnostic++;
+                    });
+                    
+                    client.cars_in_work = carsInWork;
+                    client.cars_ready = carsReady;
+                    client.cars_diagnostic = carsDiagnostic;
+                    
                 } else {
                     client.car_count = 0;
+                    client.cars_in_work = 0;
+                    client.cars_ready = 0;
+                    client.cars_diagnostic = 0;
                 }
             } catch {
                 client.car_count = 0;
+                client.cars_in_work = 0;
+                client.cars_ready = 0;
+                client.cars_diagnostic = 0;
             }
             return client;
         }));
         
         let html = '<div class="list-group">';
         clientsWithCarCount.forEach(client => {
+            // Определяем цвет иконки в зависимости от статуса авто
+            let carIconClass = 'bi-car-front';
+            let carIconColor = 'text-primary';
+            let carStatusBadge = '';
+            
+            if (client.cars_in_work > 0) {
+                carIconClass = 'bi-tools';
+                carIconColor = 'text-warning';
+                carStatusBadge = `<span class="badge bg-warning ms-1">${client.cars_in_work} в работе</span>`;
+            } else if (client.cars_ready > 0) {
+                carIconClass = 'bi-check-circle';
+                carIconColor = 'text-success';
+                carStatusBadge = `<span class="badge bg-success ms-1">${client.cars_ready} готовы</span>`;
+            } else if (client.cars_diagnostic > 0) {
+                carIconClass = 'bi-clipboard-pulse';
+                carIconColor = 'text-info';
+                carStatusBadge = `<span class="badge bg-info ms-1">${client.cars_diagnostic} на диагностике</span>`;
+            } else if (client.car_count > 0) {
+                carIconClass = 'bi-car-front';
+                carIconColor = 'text-secondary';
+                carStatusBadge = `<span class="badge bg-secondary ms-1">${client.car_count} авто</span>`;
+            }
+            
             html += `
                 <div class="list-group-item list-group-item-action" id="client-${client.client_id}">
                     <div class="d-flex w-100 justify-content-between">
@@ -437,8 +660,8 @@ async function loadClients() {
                         ${client.telegram_chat_id ? `<br><i class="bi bi-telegram"></i> Chat ID: ${client.telegram_chat_id}` : ''}
                     </p>
                     <div class="mt-2">
-                        <button class="btn btn-sm btn-outline-primary" onclick="loadClientCars(${client.client_id})">
-                            <i class="bi bi-car-front"></i> Авто (${client.car_count || 0})
+                        <button class="btn btn-sm btn-outline-primary" onclick="showClientCarsModal(${client.client_id}, '${client.name.replace(/'/g, "\\'")}')">
+                            <i class="bi ${carIconClass} ${carIconColor}"></i> Авто (${client.car_count || 0}) ${carStatusBadge}
                         </button>
                         <button class="btn btn-sm btn-outline-success" onclick="createOrderForClient(${client.client_id}, '${client.name.replace(/'/g, "\\'")}')">
                             <i class="bi bi-plus-circle"></i> Новый заказ
@@ -2252,7 +2475,7 @@ function showTab(tabName, event = null) {
         tab.style.display = 'none';
     });
     
-    // Убираем активный класс у всех кнопок
+    // Убираем активный класс у всех кнопок в главных вкладках
     document.querySelectorAll('#mainTabs .nav-link').forEach(btn => {
         btn.classList.remove('active');
     });
@@ -2260,7 +2483,13 @@ function showTab(tabName, event = null) {
     // Показываем выбранную вкладку
     document.getElementById(`${tabName}Tab`).style.display = 'block';
     
-    // Активируем кнопку если есть event
+    // Находим и активируем соответствующую кнопку в главных вкладках
+    const tabButton = document.querySelector(`#mainTabs button[onclick*="showTab('${tabName}'"]`);
+    if (tabButton) {
+        tabButton.classList.add('active');
+    }
+    
+    // Если передан event (клик по кнопке), тоже активируем
     if (event && event.target) {
         event.target.classList.add('active');
     }
