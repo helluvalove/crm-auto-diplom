@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from models import db, User
 from datetime import datetime, timedelta
 import jwt
@@ -18,14 +18,12 @@ def login():
         if not user or not user.check_password(data['password']):
             return jsonify({'error': 'Неверный логин или пароль'}), 401
         
-        # Создаем JWT токен
-        from app import create_app
-        app = create_app()
-        
+        # Создаем JWT токен с ролью пользователя
         token = jwt.encode({
             'user_id': user.user_id,
+            'role': user.role,  # Критически важно добавить роль!
             'exp': datetime.utcnow() + timedelta(hours=24)
-        }, app.config['SECRET_KEY'], algorithm='HS256')
+        }, current_app.config['SECRET_KEY'], algorithm='HS256')
         
         return jsonify({
             'token': token,

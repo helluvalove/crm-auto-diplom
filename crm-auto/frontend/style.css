@@ -5,6 +5,11 @@
 .status-в-работе { color: #0d6efd; }
 .status-готов-к-выдаче { color: #ffc107; }
 .status-выполнен { color: #198754; }
+.status-completed { color: #198754; }
+.status-cancelled { color: #dc3545; } 
+.status-in-progress { color: #0d6efd; } 
+.status-diagnostic { color: #0dcaf0; } 
+.status-ready { color: #ffc107; } 
 
 /* Статусы автомобилей */
 .status-free { color: #198754; }

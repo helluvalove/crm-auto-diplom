@@ -683,26 +683,51 @@ async function loadClients() {
 }
 
 async function deleteClient(clientId) {
+    console.log('=== DEBUG DELETE CLIENT ===');
+    console.log('Client ID to delete:', clientId);
+    console.log('Current token:', token);
+    console.log('Current user:', currentUser);
+    
+    if (!confirm('Вы уверены, что хотите удалить клиента?')) {
+        return;
+    }
+    
     try {
-        // Сначала проверяем есть ли активные заказы
         const response = await fetch(`${API_URL}/clients/${clientId}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
         });
         
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+        
         const data = await response.json();
+        console.log('Response data:', data);
         
         if (response.ok) {
             showSuccess(`Клиент удален. Удалено ${data.deleted_cars} авто и ${data.deleted_orders} заказов.`);
             document.getElementById(`client-${clientId}`).remove();
             loadClients();
         } else {
-            if (data.active_orders) {
+            // Проверяем разные типы ошибок
+            console.log('Error data:', data);
+            
+            if (data.error && data.error.includes('Доступ запрещен')) {
+                showError('У вас недостаточно прав для удаления клиентов. Обратитесь к менеджеру.');
+            } else if (data.active_orders) {
                 showError(`Нельзя удалить клиента с активными заказами (ID: ${data.active_orders.join(', ')}). Сначала завершите или удалите эти заказы.`);
+            } else if (data.error && data.error.includes('Требуется авторизация')) {
+                showError('Ошибка авторизации. Пожалуйста, войдите заново.');
+                logout();
             } else {
                 showError(data.error || 'Ошибка удаления клиента');
             }
         }
     } catch (error) {
+        console.error('Network error:', error);
         showError('Ошибка подключения к серверу: ' + error.message);
     }
 }
@@ -779,10 +804,13 @@ async function createClient() {
     };
     
     try {
-        // 1. Сначала создаем клиента
+        // 1. Сначала создаем клиента (с авторизацией)
         const clientResponse = await fetch(`${API_URL}/clients`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify(clientData)
         });
         
@@ -790,12 +818,17 @@ async function createClient() {
         
         if (!clientResponse.ok) {
             // Обработка ошибок клиента
+            if (clientResponse.status === 401) {
+                showError('Ошибка авторизации. Пожалуйста, войдите заново.');
+                logout();
+                return;
+            }
             throw new Error(clientResponseData.error || 'Ошибка создания клиента');
         }
         
         const newClientId = clientResponseData.client.client_id;
         
-        // 2. Если есть данные об автомобиле, создаем его
+        // 2. Если есть данные об автомобиле, создаем его (тоже с авторизацией)
         if (hasCarData && newClientId) {
             const carData = {
                 client_id: newClientId,
@@ -808,7 +841,10 @@ async function createClient() {
             
             const carResponse = await fetch(`${API_URL}/cars`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify(carData)
             });
             
@@ -817,7 +853,10 @@ async function createClient() {
             if (!carResponse.ok) {
                 // Если авто не создалось, удаляем клиента
                 await fetch(`${API_URL}/clients/${newClientId}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
                 });
                 
                 // Показываем конкретную ошибку
@@ -2062,20 +2101,33 @@ async function createOrder() {
 }
 
 function createOrderForClient(clientId, clientName) {
-    document.getElementById('orderClientSelect').value = clientId;
-    
-    if (document.getElementById('orderClientSelect').dispatchEvent) {
-        document.getElementById('orderClientSelect').dispatchEvent(new Event('change'));
-    }
-    
+    // Сначала переключаемся на вкладку нового заказа
     showTab('newOrder');
-    document.getElementById('orderProblem').focus();
     
-    showInfo(`Создание заказа для клиента: ${clientName}`);
+    // Даем время для переключения вкладки и загрузки списка клиентов
+    setTimeout(() => {
+        const clientSelect = document.getElementById('orderClientSelect');
+        if (clientSelect) {
+            clientSelect.value = clientId;
+            
+            // Форсируем событие change
+            const event = new Event('change', { bubbles: true });
+            clientSelect.dispatchEvent(event);
+            
+            console.log(`Клиент выбран: ${clientId} - ${clientName}`);
+        } else {
+            console.error('Элемент orderClientSelect не найден');
+        }
+        
+        // Фокусируемся на поле описания проблемы
+        document.getElementById('orderProblem').focus();
+        
+        showInfo(`Создание заказа для клиента: ${clientName}`);
+    }, 100);
 }
 
 async function createOrderForCar(carId, clientId) {
-    // Проверяем, есть ли у автомобиля активные заказы
+    // Сначала проверяем, есть ли у автомобиля активные заказы
     try {
         const ordersResponse = await fetch(`${API_URL}/orders`);
         if (ordersResponse.ok) {
@@ -2097,20 +2149,34 @@ async function createOrderForCar(carId, clientId) {
         console.error('Ошибка проверки заказов:', error);
     }
     
-    document.getElementById('orderClientSelect').value = clientId;
-    
-    if (document.getElementById('orderClientSelect').dispatchEvent) {
-        document.getElementById('orderClientSelect').dispatchEvent(new Event('change'));
-    }
-    
-    setTimeout(() => {
-        document.getElementById('orderCarSelect').value = carId;
-    }, 500);
-    
+    // Сначала переключаемся на вкладку нового заказа
     showTab('newOrder');
-    document.getElementById('orderProblem').focus();
     
-    showInfo('Создание заказа для выбранного автомобиля');
+    // Даем время для переключения вкладки
+    setTimeout(async () => {
+        const clientSelect = document.getElementById('orderClientSelect');
+        if (clientSelect) {
+            clientSelect.value = clientId;
+            
+            // Форсируем событие change для загрузки автомобилей клиента
+            const changeEvent = new Event('change', { bubbles: true });
+            clientSelect.dispatchEvent(changeEvent);
+            
+            // Ждем загрузки автомобилей (можно добавить небольшую задержку)
+            setTimeout(() => {
+                const carSelect = document.getElementById('orderCarSelect');
+                if (carSelect) {
+                    carSelect.value = carId;
+                    console.log(`Автомобиль выбран: ${carId}`);
+                } else {
+                    console.error('Элемент orderCarSelect не найден');
+                }
+            }, 300);
+        }
+        
+        document.getElementById('orderProblem').focus();
+        showInfo('Создание заказа для выбранного автомобиля');
+    }, 100);
 }
 
 // ==================== ЗАЯВКИ ИЗ TELEGRAM ====================
@@ -2315,16 +2381,55 @@ async function createMechanic() {
     const login = document.getElementById('newMechanicLogin').value.trim();
     const password = document.getElementById('newMechanicPassword').value;
     
-    if (!fullName || !phone || !specialization || !employeeNumber || !login || !password) {
-        showError('Заполните все поля');
+    // Валидация
+    let isValid = true;
+    
+    // Валидация имени
+    if (!fullName) {
+        showFieldError('newMechanicName', 'Введите ФИО механика');
+        isValid = false;
+    } else {
+        showFieldError('newMechanicName', null);
+    }
+    
+    // Валидация телефона
+    const phoneValidation = validateRussianPhone(phone);
+    if (!phoneValidation.isValid) {
+        showFieldError('newMechanicPhone', phoneValidation.message);
+        isValid = false;
+    } else {
+        showFieldError('newMechanicPhone', null);
+    }
+    
+    // Валидация логина
+    if (!login) {
+        showFieldError('newMechanicLogin', 'Введите логин');
+        isValid = false;
+    } else {
+        showFieldError('newMechanicLogin', null);
+    }
+    
+    // Валидация пароля
+    if (!password) {
+        showFieldError('newMechanicPassword', 'Введите пароль');
+        isValid = false;
+    } else if (password.length < 6) {
+        showFieldError('newMechanicPassword', 'Пароль должен содержать минимум 6 символов');
+        isValid = false;
+    } else {
+        showFieldError('newMechanicPassword', null);
+    }
+    
+    if (!isValid) {
+        showError('Исправьте ошибки в форме');
         return;
     }
     
     const mechanicData = {
         full_name: fullName,
-        phone: phone,
-        specialization: specialization,
-        employee_number: employeeNumber,
+        phone: phoneValidation.phone || phone,
+        specialization: specialization || null,
+        employee_number: employeeNumber || null,
         login: login,
         password: password
     };
@@ -2336,10 +2441,24 @@ async function createMechanic() {
             body: JSON.stringify(mechanicData)
         });
         
+        console.log("Create mechanic response status:", response.status);
+        
+        // Для отладки
+        const responseText = await response.text();
+        console.log("Create mechanic response text:", responseText);
+        
+        let errorData = null;
+        try {
+            errorData = responseText ? JSON.parse(responseText) : null;
+        } catch (parseError) {
+            console.error("Error parsing response:", parseError);
+        }
+        
         if (response.ok) {
-            const data = await response.json();
+            const data = errorData || await response.json();
             showSuccess(`Механик "${fullName}" добавлен!`);
             
+            // Очищаем форму
             document.getElementById('newMechanicName').value = '';
             document.getElementById('newMechanicPhone').value = '';
             document.getElementById('newMechanicSpecialization').value = '';
@@ -2347,15 +2466,40 @@ async function createMechanic() {
             document.getElementById('newMechanicLogin').value = '';
             document.getElementById('newMechanicPassword').value = '';
             
+            // Очищаем ошибки
+            clearMechanicCreationErrors();
+            
             loadMechanicsList();
             
         } else {
-            const errorData = await response.json();
-            showError(errorData.error || 'Ошибка добавления механика');
+            if (errorData) {
+                // Обработка ошибок дублирования
+                if (errorData.error && errorData.error.includes('телефон')) {
+                    showFieldError('newMechanicPhone', 'Механик с таким номером телефона уже существует');
+                    showError('Механик с таким номером телефона уже существует');
+                } else if (errorData.error && errorData.error.includes('логин')) {
+                    showFieldError('newMechanicLogin', 'Логин уже занят');
+                    showError('Логин уже занят');
+                } else if (errorData.error) {
+                    showError(errorData.error);
+                }
+            } else {
+                showError('Ошибка добавления механика');
+            }
         }
     } catch (error) {
+        console.error("Create mechanic error:", error);
         showError('Ошибка добавления механика: ' + error.message);
     }
+}
+
+// Очистка ошибок при создании механика
+function clearMechanicCreationErrors() {
+    const fields = ['newMechanicName', 'newMechanicPhone', 'newMechanicSpecialization', 
+                   'newMechanicEmployeeNumber', 'newMechanicLogin', 'newMechanicPassword'];
+    fields.forEach(fieldId => {
+        showFieldError(fieldId, null);
+    });
 }
 
 async function deleteMechanic(mechanicId) {
@@ -2497,7 +2641,7 @@ function showTab(tabName, event = null) {
     // Загружаем данные для определенных вкладок
     switch(tabName) {
         case 'cars':
-            loadAllCarsInService(); // Загружаем автомобили в сервисе
+            loadAllCarsInService();
             break;
         case 'requests':
             loadRequests();
@@ -2524,6 +2668,11 @@ function showTab(tabName, event = null) {
                 .then(clients => {
                     if (clients && clients.length > 0) {
                         updateClientSelects(clients);
+                        // Сбросить выбранные значения при открытии вкладки
+                        document.getElementById('orderClientSelect').value = '';
+                        document.getElementById('orderCarSelect').innerHTML = '<option value="">Сначала выберите клиента</option>';
+                        document.getElementById('orderProblem').value = '';
+                        document.getElementById('orderPrice').value = '';
                     }
                 })
                 .catch(error => console.error('Ошибка загрузки клиентов:', error));
@@ -2559,35 +2708,50 @@ function updateClientSelects(clients) {
     });
     
     if (orderClientSelect) {
-        orderClientSelect.addEventListener('change', async function() {
-            const clientId = this.value;
-            if (!clientId) return;
+        // Удаляем старый обработчик если есть
+        orderClientSelect.removeEventListener('change', handleClientSelectChange);
+        
+        // Добавляем новый обработчик
+        orderClientSelect.addEventListener('change', handleClientSelectChange);
+    }
+}
+
+// Выносим обработчик в отдельную функцию
+async function handleClientSelectChange() {
+    const clientId = this.value;
+    if (!clientId) {
+        const carSelect = document.getElementById('orderCarSelect');
+        if (carSelect) {
+            carSelect.innerHTML = '<option value="">Сначала выберите клиента</option>';
+        }
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_URL}/cars/client/${clientId}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error ${response.status}`);
+        }
+        
+        const cars = await response.json();
+        const carSelect = document.getElementById('orderCarSelect');
+        
+        if (carSelect) {
+            carSelect.innerHTML = '<option value="">Выберите автомобиль</option>';
+            cars.forEach(car => {
+                const displayText = `${car.model} ${car.vin ? '(VIN: ' + car.vin + ')' : ''} ${car.gos_number ? '(' + car.gos_number + ')' : ''}`;
+                carSelect.innerHTML += `<option value="${car.car_id}">${displayText}</option>`;
+            });
             
-            try {
-                const response = await fetch(`${API_URL}/cars/client/${clientId}`);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error ${response.status}`);
-                }
-                
-                const cars = await response.json();
-                const carSelect = document.getElementById('orderCarSelect');
-                
-                if (carSelect) {
-                    carSelect.innerHTML = '<option value="">Выберите автомобиль</option>';
-                    cars.forEach(car => {
-                        const displayText = `${car.model} ${car.vin ? '(VIN: ' + car.vin + ')' : ''} ${car.gos_number ? '(' + car.gos_number + ')' : ''}`;
-                        carSelect.innerHTML += `<option value="${car.car_id}">${displayText}</option>`;
-                    });
-                }
-            } catch (error) {
-                console.error('Ошибка загрузки автомобилей:', error);
-                const carSelect = document.getElementById('orderCarSelect');
-                if (carSelect) {
-                    carSelect.innerHTML = '<option value="">Ошибка загрузки автомобилей</option>';
-                }
-            }
-        });
+            console.log(`Загружено ${cars.length} автомобилей для клиента ${clientId}`);
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки автомобилей:', error);
+        const carSelect = document.getElementById('orderCarSelect');
+        if (carSelect) {
+            carSelect.innerHTML = '<option value="">Ошибка загрузки автомобилей</option>';
+        }
     }
 }
 
@@ -2681,6 +2845,348 @@ async function loadMechanics() {
 }
 
 // Функция редактирования механика
-async function editMechanic(id) { 
-    showInfo('Функция редактирования механика в разработке'); 
+async function editMechanic(mechanicId) {
+    try {
+        // Загружаем информацию о механике
+        const response = await fetch(`${API_URL}/mechanics/${mechanicId}`);
+        if (!response.ok) {
+            throw new Error(`Ошибка загрузки механика: ${response.status}`);
+        }
+        
+        const mechanic = await response.json();
+        
+        // Создаем модальное окно для редактирования
+        const modalHtml = `
+            <div class="modal fade" id="editMechanicModal" tabindex="-1" aria-labelledby="editMechanicModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="editMechanicModalLabel">Редактировать механика</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="editMechanicForm">
+                                <div class="mb-3">
+                                    <label class="form-label">ФИО *</label>
+                                    <input type="text" class="form-control" id="editMechanicName" 
+                                           value="${mechanic.full_name}" required>
+                                    <div class="invalid-feedback" id="editMechanicNameError"></div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Телефон *</label>
+                                    <input type="tel" class="form-control" id="editMechanicPhone" 
+                                           value="${mechanic.phone}" required>
+                                    <div class="invalid-feedback" id="editMechanicPhoneError"></div>
+                                    <div class="form-text">В формате: +7XXX XXX-XX-XX</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Специализация</label>
+                                    <input type="text" class="form-control" id="editMechanicSpecialization" 
+                                           value="${mechanic.specialization || ''}">
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Табельный номер</label>
+                                    <input type="text" class="form-control" id="editMechanicEmployeeNumber" 
+                                           value="${mechanic.employee_number || ''}">
+                                    <div class="invalid-feedback" id="editMechanicEmployeeNumberError"></div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Логин *</label>
+                                    <input type="text" class="form-control" id="editMechanicLogin" 
+                                           value="${mechanic.login}" required>
+                                    <div class="invalid-feedback" id="editMechanicLoginError"></div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Пароль</label>
+                                    <input type="password" class="form-control" id="editMechanicPassword" 
+                                           placeholder="Оставьте пустым, если не нужно менять">
+                                    <div class="form-text">Минимум 6 символов</div>
+                                </div>
+                                
+                                <div class="alert alert-warning mt-3">
+                                    <i class="bi bi-exclamation-triangle"></i> Поля отмеченные * обязательны для заполнения
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                            <button type="button" class="btn btn-danger" onclick="confirmDeleteMechanic(${mechanicId})">
+                                <i class="bi bi-trash"></i> Удалить
+                            </button>
+                            <button type="button" class="btn btn-primary" onclick="validateAndUpdateMechanic(${mechanicId})">Сохранить</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Удаляем старые модальные окна если есть
+        const oldModal = document.getElementById('editMechanicModal');
+        if (oldModal) oldModal.remove();
+        
+        // Добавляем модальное окно в DOM
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Инициализируем валидацию телефона
+        const phoneInput = document.getElementById('editMechanicPhone');
+        if (phoneInput) {
+            phoneInput.addEventListener('input', function(e) {
+                formatPhoneInput(this);
+            });
+            
+            phoneInput.addEventListener('keydown', function(e) {
+                const allowedKeys = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+                
+                if (e.ctrlKey && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) {
+                    return;
+                }
+                
+                if (e.key >= '0' && e.key <= '9') {
+                    return;
+                }
+                
+                if (e.key === '+' && (this.selectionStart === 0 || this.value === '')) {
+                    return;
+                }
+                
+                if (allowedKeys.includes(e.key)) {
+                    return;
+                }
+                
+                e.preventDefault();
+            });
+            
+            phoneInput.addEventListener('focus', function() {
+                if (!this.value) {
+                    this.value = '+7 ';
+                }
+            });
+            
+            phoneInput.addEventListener('blur', function() {
+                const validation = validateRussianPhone(this.value);
+                const errorElement = document.getElementById('editMechanicPhoneError');
+                if (errorElement) {
+                    errorElement.textContent = validation.isValid ? '' : validation.message;
+                    this.classList.toggle('is-invalid', !validation.isValid);
+                    this.classList.toggle('is-valid', validation.isValid && this.value);
+                }
+            });
+        }
+        
+        // Показываем модальное окно
+        const modal = new bootstrap.Modal(document.getElementById('editMechanicModal'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Ошибка загрузки данных механика:', error);
+        showError('Ошибка загрузки данных механика: ' + error.message);
+    }
+}
+
+// Валидация и обновление механика
+async function validateAndUpdateMechanic(mechanicId) {
+    const name = document.getElementById('editMechanicName').value.trim();
+    const phone = document.getElementById('editMechanicPhone').value.trim();
+    const specialization = document.getElementById('editMechanicSpecialization').value.trim();
+    const employeeNumber = document.getElementById('editMechanicEmployeeNumber').value.trim();
+    const login = document.getElementById('editMechanicLogin').value.trim();
+    const password = document.getElementById('editMechanicPassword').value;
+    
+    // Сбрасываем ошибки
+    clearMechanicValidationErrors();
+    
+    // Валидация
+    let isValid = true;
+    const errors = {};
+    
+    // Валидация имени
+    if (!name) {
+        errors.name = 'Введите ФИО механика';
+        isValid = false;
+    } else if (name.length < 2) {
+        errors.name = 'ФИО должно содержать минимум 2 символа';
+        isValid = false;
+    }
+    
+    // Валидация телефона
+    const phoneValidation = validateRussianPhone(phone);
+    if (!phoneValidation.isValid) {
+        errors.phone = phoneValidation.message;
+        isValid = false;
+    }
+    
+    // Валидация логина
+    if (!login) {
+        errors.login = 'Введите логин';
+        isValid = false;
+    } else if (login.length < 3) {
+        errors.login = 'Логин должен содержать минимум 3 символа';
+        isValid = false;
+    }
+    
+    // Валидация пароля (если указан)
+    if (password && password.length < 6) {
+        errors.password = 'Пароль должен содержать минимум 6 символов';
+        isValid = false;
+    }
+    
+    // Показываем ошибки валидации клиента
+    if (!isValid) {
+        showMechanicValidationErrors(errors);
+        showError('Исправьте ошибки в форме');
+        return;
+    }
+    
+    // Подготовка данных
+    const mechanicData = {
+        full_name: name,
+        phone: phoneValidation.isValid ? phoneValidation.phone : phone,
+        specialization: specialization || null,
+        employee_number: employeeNumber || null,
+        login: login
+    };
+    
+    // Добавляем пароль только если он указан
+    if (password) {
+        mechanicData.password = password;
+    }
+    
+    console.log("Sending update request:", mechanicData);
+    
+    // Отправка данных на сервер
+    try {
+        const response = await fetch(`${API_URL}/mechanics/${mechanicId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(mechanicData)
+        });
+        
+        console.log("Response status:", response.status);
+        
+        // Получаем текст ответа для отладки
+        const responseText = await response.text();
+        console.log("Response text:", responseText);
+        
+        let errorData = null;
+        try {
+            errorData = responseText ? JSON.parse(responseText) : null;
+            console.log("Parsed error data:", errorData);
+        } catch (parseError) {
+            console.error("Error parsing response:", parseError);
+        }
+        
+        if (response.ok) {
+            const data = errorData || await response.json();
+            console.log("Update successful:", data);
+            showSuccess('Данные механика обновлены!');
+            
+            // Закрываем модальное окно
+            const modalElement = document.getElementById('editMechanicModal');
+            if (modalElement) {
+                const modal = bootstrap.Modal.getInstance(modalElement);
+                if (modal) modal.hide();
+            }
+            
+            // Обновляем список механиков
+            setTimeout(() => {
+                loadMechanicsList();
+            }, 300);
+            
+        } else {
+            // Специальная обработка для ошибок валидации с сервера
+            if (errorData) {
+                console.log("Server error details:", errorData);
+                
+                // Показываем конкретные ошибки от сервера
+                if (errorData.duplicate_phone) {
+                    showMechanicValidationErrors({ 
+                        phone: 'Механик с таким номером телефона уже существует'
+                    });
+                    showError('Механик с таким номером телефона уже существует');
+                } else if (errorData.duplicate_login) {
+                    showMechanicValidationErrors({ 
+                        login: 'Логин уже занят другим пользователем'
+                    });
+                    showError('Логин уже занят другим пользователем');
+                } else if (errorData.duplicate_employee_number) {
+                    showMechanicValidationErrors({ 
+                        employee_number: 'Механик с таким табельным номером уже существует'
+                    });
+                    showError('Механик с таким табельным номером уже существует');
+                } else if (errorData.error) {
+                    showError(errorData.error);
+                } else {
+                    showError('Неизвестная ошибка сервера');
+                }
+            } else {
+                showError(`Ошибка сервера: ${response.status} ${response.statusText}`);
+            }
+        }
+    } catch (error) {
+        console.error("Network error:", error);
+        showError('Ошибка подключения к серверу: ' + error.message);
+    }
+}
+
+// Очистка ошибок валидации
+function clearMechanicValidationErrors() {
+    const fields = ['name', 'phone', 'login', 'password', 'employee_number'];
+    fields.forEach(field => {
+        const input = document.getElementById(`editMechanic${field.charAt(0).toUpperCase() + field.slice(1)}`);
+        const errorElement = document.getElementById(`editMechanic${field.charAt(0).toUpperCase() + field.slice(1)}Error`);
+        
+        if (input) {
+            input.classList.remove('is-invalid', 'is-valid');
+        }
+        if (errorElement) {
+            errorElement.textContent = '';
+            errorElement.style.display = 'none';
+        }
+    });
+}
+
+// Показ ошибок валидации
+function showMechanicValidationErrors(errors) {
+    console.log("Validation errors:", errors); // Debug
+    
+    for (const [field, message] of Object.entries(errors)) {
+        const input = document.getElementById(`editMechanic${field.charAt(0).toUpperCase() + field.slice(1)}`);
+        const errorElement = document.getElementById(`editMechanic${field.charAt(0).toUpperCase() + field.slice(1)}Error`);
+        
+        if (input && errorElement) {
+            input.classList.add('is-invalid');
+            errorElement.textContent = message;
+            errorElement.style.display = 'block';
+            
+            // Прокрутка к ошибке
+            errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+    
+    // Показываем общее уведомление
+    if (Object.keys(errors).length > 0) {
+        showError('Исправьте ошибки в форме');
+    }
+}
+
+// Подтверждение удаления механика
+function confirmDeleteMechanic(mechanicId) {
+    // Закрываем модальное окно редактирования
+    const modal = bootstrap.Modal.getInstance(document.getElementById('editMechanicModal'));
+    if (modal) modal.hide();
+    
+    // Показываем подтверждение
+    setTimeout(() => {
+        if (confirm('Вы уверены, что хотите удалить механика? Это действие нельзя отменить.')) {
+            deleteMechanic(mechanicId);
+        } else {
+            // Если отмена, показываем модальное окно снова
+            setTimeout(() => editMechanic(mechanicId), 300);
+        }
+    }, 300);
 }

@@ -1,8 +1,51 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from models import db, Client, WorkOrder, Car
 import re
+import jwt
 
 clients_bp = Blueprint('clients', __name__, url_prefix='/api/clients')
+
+# Функция для проверки авторизации и ролей
+def check_auth_and_role(required_role=None):
+    """Проверяет авторизацию и роль пользователя"""
+    auth_header = request.headers.get('Authorization')
+    print(f"=== DEBUG AUTH CHECK ===")
+    print(f"Authorization header: {auth_header}")
+    print(f"Required role: {required_role}")
+    
+    if not auth_header:
+        print("No authorization header")
+        return None, 'Требуется авторизация', 401
+    
+    try:
+        token = auth_header.split(' ')[1] if ' ' in auth_header else auth_header
+        print(f"Token extracted: {token[:20]}...")
+        
+        decoded_token = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+        print(f"Decoded token: {decoded_token}")
+        
+        user_id = decoded_token.get('user_id')
+        user_role = decoded_token.get('role')
+        
+        print(f"User ID: {user_id}, Role: {user_role}")
+        
+        if required_role and user_role != required_role:
+            print(f"Role mismatch: user has {user_role}, required {required_role}")
+            return None, f'Доступ запрещен. Требуется роль: {required_role}', 403
+        
+        return {'user_id': user_id, 'role': user_role}, None, None
+        
+    except jwt.ExpiredSignatureError:
+        print("Token expired")
+        return None, 'Токен истек', 401
+    except jwt.InvalidTokenError as e:
+        print(f"Invalid token: {str(e)}")
+        return None, 'Неверный токен', 401
+    except Exception as e:
+        print(f"Other error: {str(e)}")
+        return None, f'Ошибка проверки токена: {str(e)}', 401
+
+# Остальные функции остаются без изменений до функции delete_client...
 
 def validate_russian_phone(phone):
     """
@@ -81,11 +124,10 @@ def validate_client_data(data, is_update=False, client_id=None):
             query = Client.query.filter_by(phone=validated_phone)
             if client_id:
                 # При обновлении исключаем текущего клиента из проверки
-                query = query.filter(Client.client_id != client_id)  # Исправлено здесь
+                query = query.filter(Client.client_id != client_id)
             
             existing_client = query.first()
             if existing_client:
-                # Используем правильное имя поля из модели
                 errors['phone'] = f'Клиент с таким номером телефона уже существует (ID: {existing_client.client_id}, Имя: {existing_client.name})'
             else:
                 # Сохраняем валидированный телефон в данные
@@ -129,7 +171,6 @@ def get_clients():
 
 def get_client(client_id):
     try:
-        # Используем правильное имя поля для поиска
         client = Client.query.filter_by(client_id=client_id).first_or_404()
         client_data = client.to_dict()
         
@@ -142,6 +183,11 @@ def get_client(client_id):
 
 def create_client():
     try:
+        # Проверяем авторизацию (любой авторизованный пользователь может создавать клиентов)
+        auth_result, error_message, status_code = check_auth_and_role()
+        if error_message:
+            return jsonify({'error': error_message}), status_code
+        
         data = request.get_json()
         
         if not data:
@@ -185,7 +231,6 @@ def create_client():
         })
     except Exception as e:
         db.session.rollback()
-        # Если это ошибка уникальности (например, дублирование телефона)
         if 'UNIQUE constraint failed' in str(e) or 'duplicate key' in str(e).lower():
             return jsonify({
                 'error': 'Клиент с таким номером телефона уже существует',
@@ -195,6 +240,11 @@ def create_client():
 
 def update_client(client_id):
     try:
+        # Проверяем авторизацию (любой авторизованный пользователь может редактировать клиентов)
+        auth_result, error_message, status_code = check_auth_and_role()
+        if error_message:
+            return jsonify({'error': error_message}), status_code
+        
         client = Client.query.filter_by(client_id=client_id).first_or_404()
         data = request.get_json()
         
@@ -215,7 +265,6 @@ def update_client(client_id):
             client.name = data['name'].strip()
         
         if 'phone' in data and data['phone']:
-            # Используем валидированный телефон
             validated_phone = data.get('_validated_phone', data.get('phone'))
             if validated_phone:
                 client.phone = validated_phone
@@ -237,8 +286,13 @@ def update_client(client_id):
         return jsonify({'error': str(e)}), 500
 
 def delete_client(client_id):
-    """Удалить клиента"""
+    """Удалить клиента (только для менеджеров)"""
     try:
+        # Проверяем авторизацию и роль - только менеджеры могут удалять
+        auth_result, error_message, status_code = check_auth_and_role('manager')
+        if error_message:
+            return jsonify({'error': error_message}), status_code
+        
         client = Client.query.filter_by(client_id=client_id).first_or_404()
         
         # Проверяем, есть ли активные заказы у клиента
