@@ -15,6 +15,80 @@
         .tab-pane { padding: 1rem 0; }
         #statusDot { font-size: 1.2em; }
         
+        /* Простые стили для кнопки бэкапа */
+        /* Стили для кнопки бэкапа - КАК КНОПКА "ВЫЙТИ" */
+        .backup-btn {
+            background-color: transparent !important;
+            border: 1px solid #f8f9fa !important;
+            color: #f8f9fa !important;
+            border-radius: 6px !important;
+            padding: 6px 12px !important;
+            font-weight: 500 !important;
+            font-size: 0.875rem !important;
+            transition: all 0.2s ease !important;
+            margin-left: 10px !important;
+        }
+        
+        .backup-btn:hover {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            border-color: #ffffff !important;
+            color: #ffffff !important;
+            transform: translateY(-1px);
+        }
+        
+        .backup-btn:active {
+            transform: translateY(0);
+        }
+        
+        /* Стили для иконки в кнопке бэкапа */
+        .backup-btn i {
+            margin-right: 4px !important;
+        }
+        
+        /* Улучшенные стили модального окна */
+        .backup-modal .modal-header {
+            background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%) !important;
+            color: white !important;
+            border-bottom: none !important;
+            padding: 1.2rem 1.5rem !important;
+            border-radius: 0.3rem 0.3rem 0 0 !important;
+        }
+        
+        /* Яркая надпись "Резервное копирование" */
+        .backup-modal .modal-title {
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            font-size: 1.25rem !important;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15) !important;
+            letter-spacing: 0.3px !important;
+        }
+        
+        .backup-modal .backup-option {
+            border: 1px solid #dee2e6 !important;
+            border-radius: 8px !important;
+            padding: 15px !important;
+            margin-bottom: 10px !important;
+            cursor: pointer !important;
+            transition: all 0.2s ease !important;
+        }
+        
+        .backup-modal .backup-option:hover {
+            border-color: #0d6efd !important;
+            background-color: #f8f9fa !important;
+        }
+        
+        .backup-modal .backup-option.active {
+            border-color: #0d6efd !important;
+            background-color: #e7f1ff !important;
+        }
+        
+        .backup-status {
+            display: none;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+        
         /* Временные стили валидации пока не загрузится style.css */
         .is-valid { border-color: #198754 !important; }
         .is-invalid { border-color: #dc3545 !important; }
@@ -33,6 +107,7 @@
                 <button id="logoutBtn" class="btn btn-sm btn-outline-light ms-2" style="display: none;" onclick="logout()">
                     <i class="bi bi-box-arrow-right"></i> Выйти
                 </button>
+                <!-- Кнопка бэкапа УДАЛЕНА отсюда - будет добавляться динамически после входа -->
             </div>
         </div>
     </nav>
@@ -86,6 +161,7 @@
                             <li><code>/api/orders</code> — заказ-наряды</li>
                             <li><code>/api/cars</code> — автомобили</li>
                             <li><code>/api/orders/archive</code> — архив заказов</li>
+                            <li><code>/api/backup</code> — резервное копирование</li>
                         </ul>
                     </div>
                 </div>
@@ -556,6 +632,127 @@
                                 </button>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно бэкапа -->
+    <div class="modal fade backup-modal" id="backupModal" tabindex="-1" aria-labelledby="backupModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-cloud-arrow-down-fill"></i> Резервное копирование базы данных</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Выберите один из вариантов резервного копирования. Рекомендуется выполнять бэкап регулярно для сохранения данных.
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="backup-option" onclick="selectBackupOption('quick')" id="quickBackupOption">
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="bi bi-lightning-fill text-warning fs-4 me-3"></i>
+                                    <div>
+                                        <h6 class="mb-0">Быстрый бэкап</h6>
+                                        <small class="text-muted">Только структура БД</small>
+                                    </div>
+                                </div>
+                                <p class="mb-0 small">Создает файл с SQL-запросами для восстановления структуры базы данных (таблицы, индексы, связи). Не включает данные клиентов и заказов.</p>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="backup-option" onclick="selectBackupOption('full')" id="fullBackupOption">
+                                <div class="d-flex align-items-center mb-2">
+                                    <i class="bi bi-database-fill text-primary fs-4 me-3"></i>
+                                    <div>
+                                        <h6 class="mb-0">Полный бэкап</h6>
+                                        <small class="text-muted">Структура + все данные</small>
+                                    </div>
+                                </div>
+                                <p class="mb-0 small">Создает полный дамп базы данных со всеми таблицами, данными клиентов, заказов, автомобилей и механиков. Рекомендуется для регулярных бэкапов.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="backup-option" onclick="selectBackupOption('custom')" id="customBackupOption">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="bi bi-sliders text-success fs-4 me-3"></i>
+                            <div>
+                                <h6 class="mb-0">Выборочный бэкап</h6>
+                                <small class="text-muted">Выбор таблиц для сохранения</small>
+                            </div>
+                        </div>
+                        <div id="customTablesSection" style="display: none; margin-top: 15px;">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="backupClients" checked>
+                                        <label class="form-check-label" for="backupClients">
+                                            Клиенты
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="backupOrders" checked>
+                                        <label class="form-check-label" for="backupOrders">
+                                            Заказы
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="backupCars" checked>
+                                        <label class="form-check-label" for="backupCars">
+                                            Автомобили
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="backupMechanics" checked>
+                                        <label class="form-check-label" for="backupMechanics">
+                                            Механики
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="backupArchive" checked>
+                                        <label class="form-check-label" for="backupArchive">
+                                            Архив
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="backupUsers" checked>
+                                        <label class="form-check-label" for="backupUsers">
+                                            Пользователи
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="mb-0 small">Позволяет выбрать конкретные таблицы для резервного копирования. Полезно для частичного сохранения или миграции данных.</p>
+                    </div>
+                    
+                    <div id="backupStatus" class="backup-status">
+                        <!-- Статус будет отображаться здесь -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <div class="d-flex justify-content-between w-100">
+                        <button type="button" class="btn btn-outline-secondary" onclick="showBackupInfo()">
+                            <i class="bi bi-question-circle"></i> Информация
+                        </button>
+                        <button type="button" class="btn btn-outline-info ms-2" onclick="showBackupList()">
+                            <i class="bi bi-list"></i> Список бэкапов
+                        </button>
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                        <button type="button" class="btn btn-primary" id="startBackupBtn" onclick="startBackup()" disabled>
+                            <i class="bi bi-cloud-download"></i> Начать бэкап
+                        </button>
                     </div>
                 </div>
             </div>

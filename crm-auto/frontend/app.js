@@ -279,13 +279,6 @@ function initializeValidation() {
     }
 }
 
-// ==================== ИНИЦИАЛИЗАЦИЯ ====================
-document.addEventListener('DOMContentLoaded', function() {
-    checkAPIStatus();
-    loadMechanics();
-    initializeValidation();
-});
-
 // ==================== ПРОВЕРКА СТАТУСА API ====================
 async function checkAPIStatus() {
     try {
@@ -3190,3 +3183,476 @@ function confirmDeleteMechanic(mechanicId) {
         }
     }, 300);
 }
+
+// ==================== БЭКАП БАЗЫ ДАННЫХ ====================
+let selectedBackupOption = '';
+
+// Показать модальное окно бэкапа
+function showBackupModal() {
+    // Сбросить выбранный вариант
+    selectedBackupOption = '';
+    document.getElementById('startBackupBtn').disabled = true;
+    
+    // Сбросить стили
+    document.querySelectorAll('.backup-option').forEach(option => {
+        option.classList.remove('active');
+    });
+    
+    // Скрыть кастомные таблицы
+    document.getElementById('customTablesSection').style.display = 'none';
+    
+    // Очистить статус
+    const backupStatus = document.getElementById('backupStatus');
+    if (backupStatus) {
+        backupStatus.innerHTML = '';
+        backupStatus.style.display = 'none';
+    }
+    
+    // Показать модальное окно
+    const modalElement = document.getElementById('backupModal');
+    if (modalElement) {
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    }
+}
+
+// Выбор опции бэкапа
+function selectBackupOption(option) {
+    selectedBackupOption = option;
+    
+    // Обновить стили
+    document.querySelectorAll('.backup-option').forEach(opt => {
+        opt.classList.remove('active');
+    });
+    
+    if (option === 'quick') {
+        const quickOption = document.getElementById('quickBackupOption');
+        if (quickOption) quickOption.classList.add('active');
+        const customSection = document.getElementById('customTablesSection');
+        if (customSection) customSection.style.display = 'none';
+    } else if (option === 'full') {
+        const fullOption = document.getElementById('fullBackupOption');
+        if (fullOption) fullOption.classList.add('active');
+        const customSection = document.getElementById('customTablesSection');
+        if (customSection) customSection.style.display = 'none';
+    } else if (option === 'custom') {
+        const customOption = document.getElementById('customBackupOption');
+        if (customOption) customOption.classList.add('active');
+        const customSection = document.getElementById('customTablesSection');
+        if (customSection) customSection.style.display = 'block';
+    }
+    
+    // Активировать кнопку
+    const startBtn = document.getElementById('startBackupBtn');
+    if (startBtn) {
+        startBtn.disabled = false;
+    }
+}
+
+// Начать процесс бэкапа
+async function startBackup() {
+    if (!selectedBackupOption) {
+        showError('Выберите вариант бэкапа');
+        return;
+    }
+    
+    const backupStatus = document.getElementById('backupStatus');
+    const startBtn = document.getElementById('startBackupBtn');
+    
+    if (!backupStatus || !startBtn) {
+        showError('Элементы бэкапа не найдены');
+        return;
+    }
+    
+    // Показать статус
+    backupStatus.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border text-primary mb-2" role="status">
+                <span class="visually-hidden">Загрузка...</span>
+            </div>
+            <p class="mb-0">Создание резервной копии...</p>
+            <small class="text-muted">Пожалуйста, подождите</small>
+        </div>
+    `;
+    backupStatus.className = 'backup-status alert alert-info';
+    backupStatus.style.display = 'block';
+    
+    // Отключить кнопку
+    startBtn.disabled = true;
+    startBtn.innerHTML = '<i class="bi bi-hourglass"></i> Выполняется...';
+    
+    try {
+        let backupData = {
+            type: selectedBackupOption,
+            timestamp: new Date().toISOString(),
+            user: currentUser ? currentUser.full_name : 'Неизвестный пользователь'
+        };
+        
+        // Если выбран кастомный бэкап, добавить выбранные таблицы
+        if (selectedBackupOption === 'custom') {
+            backupData.tables = {};
+            backupData.tables.clients = document.getElementById('backupClients')?.checked || false;
+            backupData.tables.orders = document.getElementById('backupOrders')?.checked || false;
+            backupData.tables.cars = document.getElementById('backupCars')?.checked || false;
+            backupData.tables.mechanics = document.getElementById('backupMechanics')?.checked || false;
+            backupData.tables.archive = document.getElementById('backupArchive')?.checked || false;
+            backupData.tables.users = document.getElementById('backupUsers')?.checked || false;
+        }
+        
+        console.log('Отправка данных для бэкапа:', backupData);
+        
+        // Отправить запрос на сервер
+        const response = await fetch(`${API_URL}/backup`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(backupData)
+        });
+        
+        console.log('Ответ сервера:', response.status);
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('Результат бэкапа:', result);
+            
+            backupStatus.innerHTML = `
+                <div class="text-center">
+                    <i class="bi bi-check-circle-fill text-success display-4 mb-3"></i>
+                    <h5>Бэкап успешно создан!</h5>
+                    <p>Файл: <code>${result.filename || 'backup.sql'}</code></p>
+                    ${result.size ? `<p>Размер: ${result.size}</p>` : ''}
+                    <p>Дата создания: ${new Date(result.timestamp || Date.now()).toLocaleString()}</p>
+                    <div class="mt-3">
+                        <button class="btn btn-success btn-sm me-2" onclick="downloadBackup('${result.filename || 'backup.sql'}')">
+                            <i class="bi bi-download"></i> Скачать
+                        </button>
+                        <button class="btn btn-outline-primary btn-sm" onclick="viewBackupInfo('${result.filename || 'backup.sql'}')">
+                            <i class="bi bi-info-circle"></i> Информация
+                        </button>
+                    </div>
+                </div>
+            `;
+            backupStatus.className = 'backup-status alert alert-success';
+            
+            showSuccess('Резервная копия успешно создана!');
+            
+        } else {
+            const errorText = await response.text();
+            let errorMessage = 'Неизвестная ошибка';
+            
+            try {
+                const errorData = JSON.parse(errorText);
+                errorMessage = errorData.error || errorData.message || errorText;
+            } catch {
+                errorMessage = errorText || `Ошибка ${response.status}`;
+            }
+            
+            backupStatus.innerHTML = `
+                <div class="text-center">
+                    <i class="bi bi-x-circle-fill text-danger display-4 mb-3"></i>
+                    <h5>Ошибка создания бэкапа</h5>
+                    <p>${errorMessage}</p>
+                    <button class="btn btn-warning btn-sm mt-2" onclick="startBackup()">
+                        <i class="bi bi-arrow-clockwise"></i> Попробовать снова
+                    </button>
+                </div>
+            `;
+            backupStatus.className = 'backup-status alert alert-danger';
+            
+            showError(`Ошибка создания резервной копии: ${errorMessage}`);
+        }
+        
+    } catch (error) {
+        console.error('Ошибка при выполнении бэкапа:', error);
+        
+        backupStatus.innerHTML = `
+            <div class="text-center">
+                <i class="bi bi-exclamation-triangle-fill text-warning display-4 mb-3"></i>
+                <h5>Ошибка подключения</h5>
+                <p>${error.message}</p>
+                <button class="btn btn-warning btn-sm mt-2" onclick="startBackup()">
+                    <i class="bi bi-arrow-clockwise"></i> Попробовать снова
+                </button>
+            </div>
+        `;
+        backupStatus.className = 'backup-status alert alert-warning';
+        
+        showError('Ошибка подключения к серверу: ' + error.message);
+    } finally {
+        // Восстановить кнопку
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<i class="bi bi-cloud-download"></i> Начать бэкап';
+    }
+}
+
+// Скачать файл бэкапа
+function downloadBackup(filename) {
+    if (!filename) {
+        showError('Имя файла не указано');
+        return;
+    }
+    
+    if (!token) {
+        showError('Требуется авторизация для скачивания');
+        return;
+    }
+    
+    // Создаем ссылку для скачивания с авторизацией
+    const downloadUrl = `${API_URL}/backup/download/${encodeURIComponent(filename)}`;
+    
+    // Создаем временную ссылку с авторизацией
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = filename;
+    
+    // Добавляем заголовок авторизации (не работает для прямых ссылок)
+    // Вместо этого используем fetch для скачивания
+    
+    fetch(downloadUrl, {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Ошибка ${response.status}: ${response.statusText}`);
+        }
+        return response.blob();
+    })
+    .then(blob => {
+        // Создаем ссылку для скачивания
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showSuccess(`Файл ${filename} скачивается...`);
+    })
+    .catch(error => {
+        console.error('Ошибка скачивания:', error);
+        showError(`Ошибка скачивания: ${error.message}`);
+    });
+}
+
+// Показать список бэкапов
+async function showBackupList() {
+    try {
+        if (!token) {
+            showError('Требуется авторизация');
+            return;
+        }
+        
+        showInfo('Загрузка списка бэкапов...');
+        
+        const response = await fetch(`${API_URL}/backup/list`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Ошибка ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.backups || data.backups.length === 0) {
+            showInfo('Нет доступных бэкапов');
+            return;
+        }
+        
+        // Создаем модальное окно со списком
+        let backupListHtml = '<div class="list-group">';
+        
+        data.backups.forEach(backup => {
+            backupListHtml += `
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-1">${backup.filename}</h6>
+                        <small class="text-muted">
+                            Создан: ${new Date(backup.created).toLocaleString()}<br>
+                            Размер: ${backup.size}
+                        </small>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-success" onclick="downloadBackup('${backup.filename}')">
+                            <i class="bi bi-download"></i> Скачать
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteBackupFile('${backup.filename}')">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        backupListHtml += `</div>
+            <div class="mt-3 text-center">
+                <small class="text-muted">Всего файлов: ${data.count}</small>
+            </div>`;
+        
+        // Показываем в модальном окне бэкапа
+        const backupStatus = document.getElementById('backupStatus');
+        if (backupStatus) {
+            backupStatus.innerHTML = `
+                <div class="alert alert-info">
+                    <h6><i class="bi bi-list"></i> Список бэкапов</h6>
+                    ${backupListHtml}
+                </div>
+            `;
+            backupStatus.style.display = 'block';
+            backupStatus.className = 'backup-status alert alert-info';
+        }
+        
+    } catch (error) {
+        console.error('Ошибка загрузки списка бэкапов:', error);
+        showError('Ошибка загрузки списка бэкапов: ' + error.message);
+    }
+}
+
+// Удалить файл бэкапа
+async function deleteBackupFile(filename) {
+    if (!confirm(`Вы уверены, что хотите удалить файл ${filename}?`)) {
+        return;
+    }
+    
+    try {
+        if (!token) {
+            showError('Требуется авторизация');
+            return;
+        }
+        
+        const response = await fetch(`${API_URL}/backup/${encodeURIComponent(filename)}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (response.ok) {
+            showSuccess(`Файл ${filename} удален`);
+            // Обновляем список
+            showBackupList();
+        } else {
+            const errorData = await response.json();
+            showError(errorData.error || 'Ошибка удаления файла');
+        }
+    } catch (error) {
+        showError('Ошибка удаления файла: ' + error.message);
+    }
+}
+
+// Показать информацию о бэкапе
+function viewBackupInfo(filename) {
+    showInfo(`Информация о файле бэкапа: ${filename || 'Неизвестный файл'}`);
+}
+
+// Показать информацию о бэкапах
+function showBackupInfo() {
+    const backupStatus = document.getElementById('backupStatus');
+    if (!backupStatus) return;
+    
+    const infoHtml = `
+        <div class="alert alert-info">
+            <h6><i class="bi bi-info-circle"></i> Информация о резервном копировании</h6>
+            <p>Резервное копирование (бэкап) — это создание копии данных для их восстановления в случае утери или повреждения.</p>
+            <p><strong>Рекомендации:</strong></p>
+            <ul>
+                <li>Выполняйте полный бэкап ежедневно</li>
+                <li>Храните бэкапы в надежном месте</li>
+                <li>Проверяйте созданные файлы бэкапов</li>
+                <li>Не храните бэкапы на том же сервере, что и основная БД</li>
+            </ul>
+            <p><strong>Формат файлов:</strong> SQL (можно открыть любым текстовым редактором)</p>
+            <p><strong>Восстановление:</strong> Для восстановления используйте программу для работы с базами данных или командную строку.</p>
+        </div>
+    `;
+    
+    backupStatus.innerHTML = infoHtml;
+    backupStatus.style.display = 'block';
+    backupStatus.className = 'backup-status';
+}
+
+// ==================== ОБНОВЛЯЕМ ФУНКЦИИ ВХОДА/ВЫХОДА ====================
+
+// Переопределяем функцию login для добавления кнопки бэкапа
+const originalLoginFunction = window.login;
+
+window.login = async function() {
+    // Вызываем оригинальную функцию
+    await originalLoginFunction.apply(this, arguments);
+    
+    console.log('=== DEBUG LOGIN FUNCTION ===');
+    console.log('Current user:', currentUser);
+    console.log('User role:', currentUser?.role);
+    console.log('User login:', currentUser?.login);
+    
+    // Проверяем роль и показываем кнопку
+    const isAdminOrManager = currentUser?.role === 'менеджер' || 
+                           currentUser?.login === 'admin';
+    
+    console.log('Is admin or manager?', isAdminOrManager);
+    
+    if (isAdminOrManager) {
+        // Сначала удаляем старую кнопку если есть
+        const oldBackupBtn = document.getElementById('backupBtn');
+        if (oldBackupBtn) {
+            oldBackupBtn.remove();
+        }
+        
+        // Добавляем новую кнопку
+        const userInfo = document.getElementById('userInfo');
+        const backupBtnHtml = `
+            <button id="backupBtn" class="btn btn-sm btn-primary ms-2" onclick="showBackupModal()">
+                <i class="bi bi-cloud-arrow-down"></i> Бэкап БД
+            </button>
+        `;
+        
+        // Просто добавляем в конец userInfo
+        userInfo.insertAdjacentHTML('beforeend', backupBtnHtml);
+        
+        console.log('Backup button added to userInfo');
+    }
+};
+
+// ==================== ИНИЦИАЛИЗАЦИЯ ====================
+// Оставляем только ОДИН обработчик DOMContentLoaded
+document.addEventListener('DOMContentLoaded', function() {
+    checkAPIStatus();
+    loadMechanics();
+    initializeValidation();
+    
+    // Добавляем обработчики для модального окна бэкапа
+    const backupModal = document.getElementById('backupModal');
+    if (backupModal) {
+        backupModal.addEventListener('hidden.bs.modal', function() {
+            // Сбросить состояние при закрытии модального окна
+            selectedBackupOption = '';
+            const startBtn = document.getElementById('startBackupBtn');
+            if (startBtn) {
+                startBtn.disabled = true;
+            }
+            document.querySelectorAll('.backup-option').forEach(option => {
+                option.classList.remove('active');
+            });
+            const customSection = document.getElementById('customTablesSection');
+            if (customSection) {
+                customSection.style.display = 'none';
+            }
+            
+            const backupStatus = document.getElementById('backupStatus');
+            if (backupStatus) {
+                backupStatus.innerHTML = '';
+                backupStatus.style.display = 'none';
+            }
+        });
+    }
+});
