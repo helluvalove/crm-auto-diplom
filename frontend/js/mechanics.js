@@ -186,7 +186,7 @@ function renderMechanicsList(mechanics) {
                     </div>
                 </div>
                 <p class="mb-1">
-                    <i class="bi bi-telephone"></i> ${mechanic.phone}<br>
+                    <i class="bi bi-telephone"></i> ${formatPhone(mechanic.phone)}<br>
                     <i class="bi bi-wrench"></i> ${mechanic.specialization || 'Не указана'}<br>
                     <i class="bi bi-123"></i> Табельный номер: ${mechanic.employee_number || 'Не указан'}
                 </p>
@@ -265,7 +265,7 @@ async function editMechanic(mechanicId) {
                                 <div class="mb-3">
                                     <label class="form-label">Телефон *</label>
                                     <input type="tel" class="form-control" id="editMechanicPhone" 
-                                           value="${mechanic.phone}" required>
+                                           value="${formatPhone(mechanic.phone)}" required>
                                     <div class="invalid-feedback" id="editMechanicPhoneError"></div>
                                     <div class="form-text">В формате: +7XXX XXX-XX-XX</div>
                                 </div>

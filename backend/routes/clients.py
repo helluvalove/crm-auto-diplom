@@ -183,7 +183,7 @@ def get_client(client_id):
 def create_client():
     try:
         # Проверяем авторизацию (любой авторизованный пользователь может создавать клиентов)
-        auth_result, error_message, status_code = check_auth_and_role()
+        auth_result, error_message, status_code = check_auth_and_role('manager')
         if error_message:
             return jsonify({'error': error_message}), status_code
         
@@ -240,7 +240,7 @@ def create_client():
 def update_client(client_id):
     try:
         # Проверяем авторизацию (любой авторизованный пользователь может редактировать клиентов)
-        auth_result, error_message, status_code = check_auth_and_role()
+        auth_result, error_message, status_code = check_auth_and_role('manager')
         if error_message:
             return jsonify({'error': error_message}), status_code
         

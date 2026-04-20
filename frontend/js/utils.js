@@ -6,8 +6,19 @@ function formatPhoneInput(input) {
     let cleaned = value.replace(/\D/g, '');
 
     // Сохраняем "+" если он был в начале
-    if (value.startsWith('+')) {
+    const hadPlus = value.trim().startsWith('+');
+    if (hadPlus && cleaned.length > 0) {
         cleaned = '+' + cleaned;
+    }
+
+    // === НОВАЯ ПРОВЕРКА: если нет цифр или только + / +7 — ставим базовую маску ===
+    if (!cleaned || cleaned === '+' || cleaned === '+7' || /^\+?$/.test(cleaned)) {
+        input.value = '+7 ';
+        setTimeout(() => {
+            const validation = validateRussianPhone(input.value);
+            showFieldError(input.id, validation.isValid ? null : validation.message);
+        }, 10);
+        return;
     }
 
     // Приводим к формату +7

@@ -95,24 +95,32 @@ function initializeValidation() {
 
         phoneInput.addEventListener('keydown', function (e) {
             const allowedKeys = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
-
             if (e.ctrlKey && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) return;
             if (e.key >= '0' && e.key <= '9') return;
             if (e.key === '+' && (this.selectionStart === 0 || !this.value)) return;
             if (allowedKeys.includes(e.key)) return;
-
             e.preventDefault();
-        });
-
-        phoneInput.addEventListener('blur', function () {
-            const validation = validateRussianPhone(this.value);
-            showFieldError('newClientPhone', validation.isValid ? null : validation.message);
-
-            if (!this.value) showFieldError('newClientPhone', null);
         });
 
         phoneInput.addEventListener('focus', function () {
             if (!this.value) this.value = '+7 ';
+        });
+
+        // ИЗМЕНЁННЫЙ BLUR
+        phoneInput.addEventListener('blur', function () {
+            let val = this.value.trim();
+            // Если поле пустое или содержит неполную маску — восстанавливаем
+            if (val === '' || val === '+' || val === '+7' || val === '+7 ') {
+                this.value = '+7 ';
+            } else {
+                const validation = validateRussianPhone(this.value);
+                if (!validation.isValid) {
+                    this.value = '+7 ';
+                }
+            }
+            // Показываем ошибку после восстановления
+            const validation = validateRussianPhone(this.value);
+            showFieldError('newClientPhone', validation.isValid ? null : validation.message);
         });
     }
 
@@ -139,17 +147,30 @@ function initializeValidation() {
 
         mechanicPhoneInput.addEventListener('keydown', function (e) {
             const allowedKeys = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
-
             if (e.ctrlKey && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) return;
             if (e.key >= '0' && e.key <= '9') return;
             if (e.key === '+' && (this.selectionStart === 0 || !this.value)) return;
             if (allowedKeys.includes(e.key)) return;
-
             e.preventDefault();
         });
 
         mechanicPhoneInput.addEventListener('focus', function () {
             if (!this.value) this.value = '+7 ';
+        });
+
+        // ИЗМЕНЁННЫЙ BLUR
+        mechanicPhoneInput.addEventListener('blur', function () {
+            let val = this.value.trim();
+            if (val === '' || val === '+' || val === '+7' || val === '+7 ') {
+                this.value = '+7 ';
+            } else {
+                const validation = validateRussianPhone(this.value);
+                if (!validation.isValid) {
+                    this.value = '+7 ';
+                }
+            }
+            const validation = validateRussianPhone(this.value);
+            showFieldError('newMechanicPhone', validation.isValid ? null : validation.message);
         });
     }
 }
