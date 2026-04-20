@@ -21,8 +21,8 @@ def login():
         # Создаем JWT токен с ролью пользователя
         token = jwt.encode({
             'user_id': user.user_id,
-            'role': user.role,  # Критически важно добавить роль!
-            'exp': datetime.utcnow() + timedelta(hours=24)
+            'role': user.role_name, 
+            'exp': datetime.now() + timedelta(hours=24)
         }, current_app.config['SECRET_KEY'], algorithm='HS256')
         
         return jsonify({

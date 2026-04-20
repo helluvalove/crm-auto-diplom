@@ -1,7 +1,17 @@
 from flask import Blueprint, request, jsonify
-from models import db, User, WorkOrder
+from models import db, User, Role, WorkOrder
 
 mechanics_bp = Blueprint('mechanics', __name__, url_prefix='/api/mechanics')
+
+# Вспомогательная функция для получения роли "mechanic"
+def get_mechanic_role():
+    role = Role.query.filter_by(role_name='mechanic').first()
+    if not role:
+        # На случай, если роль не создана (должна быть при миграции)
+        role = Role(role_name='mechanic')
+        db.session.add(role)
+        db.session.commit()
+    return role
 
 @mechanics_bp.route('/', methods=['GET', 'POST'])
 def handle_mechanics():
@@ -22,7 +32,8 @@ def handle_mechanic(mechanic_id):
 def get_mechanics():
     """Получить всех механиков"""
     try:
-        mechanics = User.query.filter_by(role='mechanic').all()
+        # Фильтрация через JOIN с таблицей roles
+        mechanics = User.query.join(Role).filter(Role.role_name == 'mechanic').all()
         mechanics_list = [mechanic.to_dict() for mechanic in mechanics]
         return jsonify(mechanics_list)
     except Exception as e:
@@ -31,7 +42,10 @@ def get_mechanics():
 def get_mechanic(mechanic_id):
     """Получить конкретного механика"""
     try:
-        mechanic = User.query.filter_by(user_id=mechanic_id, role='mechanic').first_or_404()
+        mechanic = User.query.join(Role).filter(
+            User.user_id == mechanic_id,
+            Role.role_name == 'mechanic'
+        ).first_or_404()
         return jsonify(mechanic.to_dict())
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -50,14 +64,19 @@ def create_mechanic():
         if existing_user:
             return jsonify({'error': 'Пользователь с таким логином уже существует'}), 400
         
+        # Проверка уникальности телефона
+        if User.query.filter_by(phone=data['phone']).first():
+            return jsonify({'error': 'Пользователь с таким телефоном уже существует'}), 400
+        
         mechanic = User(
             full_name=data['full_name'],
             phone=data['phone'],
             login=data['login'],
-            role='mechanic',
-            specialization=data.get('specialization'),
-            employee_number=data.get('employee_number')
+            specialization=data.get('specialization')
         )
+        
+        # Устанавливаем роль через свойство role_name
+        mechanic.role_name = 'mechanic'   # сеттер сам найдёт роль по имени
         
         mechanic.set_password(data['password'])
         
@@ -73,90 +92,64 @@ def create_mechanic():
         return jsonify({'error': str(e)}), 500
 
 def update_mechanic(mechanic_id):
-    """Обновить механика с проверкой на уникальность телефона"""
+    """Обновить механика с проверкой на уникальность телефона и логина"""
     try:
-        mechanic = User.query.filter_by(user_id=mechanic_id, role='mechanic').first_or_404()
+        mechanic = User.query.join(Role).filter(
+            User.user_id == mechanic_id,
+            Role.role_name == 'mechanic'
+        ).first_or_404()
+        
         data = request.get_json()
         
-        print(f"Updating mechanic {mechanic_id}")  # Debug
-        print(f"Data received: {data}")  # Debug
-        print(f"Current phone: {mechanic.phone}")  # Debug
-        
-        # Проверка уникальности телефона (если телефон изменился)
+        # Проверка уникальности телефона
         if 'phone' in data and data['phone'] != mechanic.phone:
-            print(f"Checking phone uniqueness: {data['phone']}")  # Debug
-            # Ищем пользователя с таким телефоном (не только механиков)
-            existing_phone = User.query.filter_by(phone=data['phone']).first()
-            print(f"Existing phone found: {existing_phone}")  # Debug
-            
-            if existing_phone and existing_phone.user_id != mechanic_id:
+            existing = User.query.filter_by(phone=data['phone']).first()
+            if existing and existing.user_id != mechanic_id:
                 return jsonify({
-                    'error': 'Механик с таким номером телефона уже существует',
+                    'error': 'Пользователь с таким номером телефона уже существует',
                     'duplicate_phone': True
                 }), 400
         
-        # Проверка уникальности логина (если логин изменился)
+        # Проверка уникальности логина
         if 'login' in data and data['login'] != mechanic.login:
-            print(f"Checking login uniqueness: {data['login']}")  # Debug
-            existing_login = User.query.filter_by(login=data['login']).first()
-            print(f"Existing login found: {existing_login}")  # Debug
-            
-            if existing_login and existing_login.user_id != mechanic_id:
+            existing = User.query.filter_by(login=data['login']).first()
+            if existing and existing.user_id != mechanic_id:
                 return jsonify({
                     'error': 'Логин уже занят',
                     'duplicate_login': True
                 }), 400
         
-        # Проверка уникальности табельного номера (если указан)
-        if 'employee_number' in data and data['employee_number'] != mechanic.employee_number:
-            if data['employee_number']:  # Проверяем только если указан
-                print(f"Checking employee number uniqueness: {data['employee_number']}")  # Debug
-                existing_employee_number = User.query.filter_by(
-                    employee_number=data['employee_number'],
-                    role='mechanic'
-                ).first()
-                print(f"Existing employee number found: {existing_employee_number}")  # Debug
-                
-                if existing_employee_number and existing_employee_number.user_id != mechanic_id:
-                    return jsonify({
-                        'error': 'Механик с таким табельным номером уже существует',
-                        'duplicate_employee_number': True
-                    }), 400
-        
-        # Обновление полей
-        update_fields = ['full_name', 'phone', 'specialization', 'employee_number']
+        # Обновление полей (employee_number удалено)
+        update_fields = ['full_name', 'phone', 'specialization']
         for field in update_fields:
             if field in data:
-                print(f"Setting {field} to {data[field]}")  # Debug
                 setattr(mechanic, field, data[field])
         
-        # Отдельная обработка логина
         if 'login' in data:
-            print(f"Setting login to {data['login']}")  # Debug
             mechanic.login = data['login']
         
-        # Отдельная обработка пароля (если нужно изменить)
         if 'password' in data and data['password']:
-            print("Updating password")  # Debug
             mechanic.set_password(data['password'])
         
         db.session.commit()
-        print(f"Mechanic {mechanic_id} updated successfully")  # Debug
         
         return jsonify({
             'message': 'Механик обновлен',
             'mechanic': mechanic.to_dict()
         })
     except Exception as e:
-        print(f"Error updating mechanic: {str(e)}")  # Debug
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 def delete_mechanic(mechanic_id):
     """Удалить механика"""
     try:
-        mechanic = User.query.filter_by(user_id=mechanic_id, role='mechanic').first_or_404()
+        mechanic = User.query.join(Role).filter(
+            User.user_id == mechanic_id,
+            Role.role_name == 'mechanic'
+        ).first_or_404()
         
+        # Проверка на активные заказы
         active_orders = WorkOrder.query.filter_by(mechanic_id=mechanic_id).filter(
             WorkOrder.status.notin_(['Выполнен', 'Отменен'])
         ).first()

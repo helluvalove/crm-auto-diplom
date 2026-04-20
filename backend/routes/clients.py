@@ -45,7 +45,6 @@ def check_auth_and_role(required_role=None):
         print(f"Other error: {str(e)}")
         return None, f'Ошибка проверки токена: {str(e)}', 401
 
-# Остальные функции остаются без изменений до функции delete_client...
 
 def validate_russian_phone(phone):
     """
@@ -133,15 +132,15 @@ def validate_client_data(data, is_update=False, client_id=None):
                 # Сохраняем валидированный телефон в данные
                 data['_validated_phone'] = validated_phone
     
-    # Валидация telegram_chat_id (если передано)
-    if 'telegram_chat_id' in data and data['telegram_chat_id']:
-        telegram_chat_id = str(data['telegram_chat_id']).strip()
-        if telegram_chat_id:
-            # Проверяем формат
-            if not (telegram_chat_id.isdigit() or (telegram_chat_id.startswith('@') and len(telegram_chat_id) > 1)):
-                errors['telegram_chat_id'] = 'Telegram Chat ID должен быть числовым идентификатором или начинаться с @username'
-            elif telegram_chat_id.isdigit() and len(telegram_chat_id) > 20:
-                errors['telegram_chat_id'] = 'Telegram Chat ID слишком длинный'
+    # Валидация vk_user_id (если передано)
+    if 'vk_user_id' in data and data['vk_user_id']:
+        vk_id = str(data['vk_user_id']).strip()
+        if vk_id:
+            # Проверяем, что это числовой идентификатор
+            if not vk_id.isdigit():
+                errors['vk_user_id'] = 'VK User ID должен быть числовым идентификатором'
+            elif len(vk_id) > 20:
+                errors['vk_user_id'] = 'VK User ID слишком длинный'
     
     return errors
 
@@ -219,7 +218,7 @@ def create_client():
         client = Client(
             name=data['name'].strip(),
             phone=validated_phone,
-            telegram_chat_id=data.get('telegram_chat_id', '').strip() or None
+            vk_user_id=data.get('vk_user_id')  # поле теперь называется vk_user_id
         )
         
         db.session.add(client)
@@ -269,11 +268,12 @@ def update_client(client_id):
             if validated_phone:
                 client.phone = validated_phone
         
-        if 'telegram_chat_id' in data:
-            telegram_chat_id = data['telegram_chat_id']
-            if isinstance(telegram_chat_id, str):
-                telegram_chat_id = telegram_chat_id.strip()
-            client.telegram_chat_id = telegram_chat_id if telegram_chat_id else None
+        if 'vk_user_id' in data:
+            vk_id = data['vk_user_id']
+            if vk_id is not None and str(vk_id).strip() == '':
+                client.vk_user_id = None
+            else:
+                client.vk_user_id = int(vk_id) if vk_id else None
         
         db.session.commit()
         

@@ -1,8 +1,6 @@
-# orders.py - исправленная версия
-
 from flask import Blueprint, request, jsonify
 from datetime import datetime
-from models import db, WorkOrder, Client, Car, User
+from models import db, WorkOrder, Client, Car, User, Role
 
 orders_bp = Blueprint('orders', __name__, url_prefix='/api/orders')
 
@@ -26,7 +24,6 @@ def handle_order(order_id):
 def get_archive():
     """Получить архивные заказы"""
     try:
-        # Фильтруем только завершенные и отмененные
         archive_orders = WorkOrder.query.filter(
             WorkOrder.status.in_(['Выполнен', 'Отменен'])
         ).all()
@@ -41,15 +38,14 @@ def get_archive():
                 'problem_description': order.problem_description,
                 'total_price': float(order.total_price) if order.total_price else None,
                 'created_date': order.created_date.isoformat() if order.created_date else None,
-                'completed_date': order.completed_date.isoformat() if order.completed_date else None
+                'completed_date': order.completed_date.isoformat() if order.completed_date else None,
+                'pdf_url': order.pdf_url
             }
             
-            # Добавляем информацию о клиенте
             if order.client:
                 order_data['client_name'] = order.client.name
                 order_data['client_phone'] = order.client.phone
             
-            # Добавляем информацию об автомобиле
             if order.car:
                 order_data['car_model'] = order.car.model
                 order_data['car_vin'] = order.car.vin
@@ -80,15 +76,14 @@ def get_orders():
                 'work_description': order.work_description,
                 'total_price': float(order.total_price) if order.total_price else None,
                 'created_date': order.created_date.isoformat() if order.created_date else None,
-                'completed_date': order.completed_date.isoformat() if order.completed_date else None
+                'completed_date': order.completed_date.isoformat() if order.completed_date else None,
+                'pdf_url': order.pdf_url
             }
             
-            # Добавляем информацию о клиенте
             if order.client:
                 order_data['client_name'] = order.client.name
                 order_data['client_phone'] = order.client.phone
             
-            # Добавляем информацию об автомобиле
             if order.car:
                 order_data['car_model'] = order.car.model
                 order_data['car_vin'] = order.car.vin
@@ -116,7 +111,8 @@ def get_order(order_id):
             'work_description': order.work_description,
             'total_price': float(order.total_price) if order.total_price else None,
             'created_date': order.created_date.isoformat() if order.created_date else None,
-            'completed_date': order.completed_date.isoformat() if order.completed_date else None
+            'completed_date': order.completed_date.isoformat() if order.completed_date else None,
+            'pdf_url': order.pdf_url
         }
         
         if order.client:
@@ -124,7 +120,7 @@ def get_order(order_id):
                 'client_id': order.client.client_id,
                 'name': order.client.name,
                 'phone': order.client.phone,
-                'telegram_chat_id': order.client.telegram_chat_id
+                'vk_user_id': order.client.vk_user_id          # поле переименовано
             }
         
         if order.car:
@@ -137,16 +133,19 @@ def get_order(order_id):
                 'mileage': order.car.mileage
             }
         
-        # Получаем информацию о механике через запрос к User
         if order.mechanic_id:
-            mechanic = User.query.get(order.mechanic_id)
+            # Фильтрация механика через JOIN с Role
+            mechanic = User.query.join(Role).filter(
+                User.user_id == order.mechanic_id,
+                Role.role_name == 'mechanic'
+            ).first()
             if mechanic:
                 order_data['mechanic'] = {
                     'user_id': mechanic.user_id,
                     'full_name': mechanic.full_name,
                     'phone': mechanic.phone,
-                    'specialization': mechanic.specialization,
-                    'employee_number': mechanic.employee_number
+                    'specialization': mechanic.specialization
+                    # employee_number удалено
                 }
         
         return jsonify(order_data)
@@ -174,7 +173,11 @@ def create_order():
         if mechanic_id:
             try:
                 mechanic_id = int(mechanic_id)
-                mechanic = User.query.filter_by(user_id=mechanic_id, role='mechanic').first()
+                # Проверяем, что указанный пользователь – механик
+                mechanic = User.query.join(Role).filter(
+                    User.user_id == mechanic_id,
+                    Role.role_name == 'mechanic'
+                ).first()
                 if not mechanic:
                     mechanic_id = None
             except:
@@ -188,7 +191,8 @@ def create_order():
             problem_description=data['problem_description'],
             work_description=data.get('work_description'),
             total_price=data.get('total_price'),
-            created_date=datetime.now()
+            created_date=datetime.now(),
+            pdf_url=data.get('pdf_url')                     # новое поле
         )
         
         db.session.add(order)
@@ -201,7 +205,8 @@ def create_order():
                 'client_id': order.client_id,
                 'car_id': order.car_id,
                 'status': order.status,
-                'problem_description': order.problem_description
+                'problem_description': order.problem_description,
+                'pdf_url': order.pdf_url
             }
         }), 201
     except Exception as e:
@@ -217,7 +222,6 @@ def update_order(order_id):
         
         if 'status' in data:
             order.status = data['status']
-            
             if data['status'] == 'Выполнен' and not order.completed_date:
                 order.completed_date = datetime.now()
         
@@ -230,12 +234,18 @@ def update_order(order_id):
         if 'total_price' in data:
             order.total_price = data['total_price']
         
+        if 'pdf_url' in data:
+            order.pdf_url = data['pdf_url']
+        
         if 'mechanic_id' in data:
             mechanic_id = data['mechanic_id']
             if mechanic_id:
                 try:
                     mechanic_id = int(mechanic_id)
-                    mechanic = User.query.filter_by(user_id=mechanic_id, role='mechanic').first()
+                    mechanic = User.query.join(Role).filter(
+                        User.user_id == mechanic_id,
+                        Role.role_name == 'mechanic'
+                    ).first()
                     if mechanic:
                         order.mechanic_id = mechanic_id
                     else:
@@ -252,7 +262,8 @@ def update_order(order_id):
             'order': {
                 'order_id': order.order_id,
                 'status': order.status,
-                'mechanic_id': order.mechanic_id
+                'mechanic_id': order.mechanic_id,
+                'pdf_url': order.pdf_url
             }
         })
     except Exception as e:
@@ -264,10 +275,8 @@ def delete_order(order_id):
     """Удалить заказ"""
     try:
         order = WorkOrder.query.get_or_404(order_id)
-        
         db.session.delete(order)
         db.session.commit()
-        
         return jsonify({'message': 'Заказ удален'})
     except Exception as e:
         db.session.rollback()
@@ -279,12 +288,9 @@ def complete_order(order_id):
     """Завершить заказ и отправить в архив"""
     try:
         order = WorkOrder.query.get_or_404(order_id)
-        
         order.status = 'Выполнен'
         order.completed_date = datetime.now()
-        
         db.session.commit()
-        
         return jsonify({
             'message': 'Заказ завершен и перемещен в архив',
             'order': {
