@@ -774,6 +774,56 @@
         </div>
     </div>
 
+    <!-- Модальное окно редактирования клиента -->
+    <div class="modal fade" id="editClientModal" tabindex="-1" aria-labelledby="editClientModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" style="color: white !important;">
+                        <i class="bi bi-pencil-square"></i> Редактирование клиента
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="editClientId">
+                    <div class="mb-3">
+                        <label class="form-label">Имя *</label>
+                        <input type="text" class="form-control" id="editClientName" 
+                            placeholder="Иван Иванов" 
+                            pattern="[A-Za-zА-Яа-яёЁ\s\-]{2,100}"
+                            title="Только буквы, пробелы и дефисы (2-100 символов)"
+                            required>
+                        <div class="invalid-feedback" id="editNameError"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Телефон *</label>
+                        <input type="tel" class="form-control" id="editClientPhone" 
+                            placeholder="+7 (999) 123-45-67"
+                            pattern="^[\+\s\-\(\)\d]{10,20}$"
+                            title="Российский формат: +7XXX, 8XXX или 7XXX"
+                            required>
+                        <div class="invalid-feedback" id="editPhoneError"></div>
+                        <div class="form-text">Пример: +7 (123) 456-78-90</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">VK User ID</label>
+                        <input type="text" class="form-control" id="editClientVkId" 
+                            placeholder="123456789"
+                            pattern="\d*"
+                            title="Только цифры">
+                        <div class="invalid-feedback" id="editVkIdError"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-primary" onclick="saveEditedClient()">
+                        <i class="bi bi-check-lg"></i> Сохранить
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Наш JavaScript -->

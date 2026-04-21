@@ -83,6 +83,9 @@ async function loadClients() {
                         <h6 class="mb-1">${client.name}</h6>
                         <div>
                             <small class="text-muted me-2">ID: ${client.client_id}</small>
+                            <button class="btn btn-sm btn-outline-primary me-1" onclick="editClient(${client.client_id})" title="Редактировать">
+                                <i class="bi bi-pencil"></i>
+                            </button>
                             <button class="btn btn-sm btn-outline-danger" onclick="deleteClient(${client.client_id})" title="Удалить">
                                 <i class="bi bi-trash"></i>
                             </button>
@@ -322,6 +325,151 @@ async function createClient() {
     } catch (error) {
         console.error('Критическая ошибка в createClient:', error);
         showError(error.message);
+    }
+}
+
+// Открытие модального окна редактирования клиента
+async function editClient(clientId) {
+    try {
+        const response = await fetch(`${API_URL}/clients/${clientId}`);
+        if (!response.ok) throw new Error('Ошибка загрузки данных клиента');
+        
+        const client = await response.json();
+        
+        document.getElementById('editClientId').value = client.client_id;
+        document.getElementById('editClientName').value = client.name || '';
+        
+        const phoneField = document.getElementById('editClientPhone');
+        // Устанавливаем отформатированное значение сразу
+        phoneField.value = formatPhone(client.phone) || '+7 ';
+        
+        // Удаляем старые обработчики (чтобы не дублировались)
+        phoneField.removeEventListener('input', formatPhoneInputHandler);
+        phoneField.addEventListener('input', function(e) {
+            formatPhoneInput(e.target);
+            showFieldDuplicate('editClientPhone', null); // сброс жёлтой подсветки
+        });
+        
+        document.getElementById('editClientVkId').value = client.vk_user_id || '';
+        
+        clearEditFormErrors();
+        
+        const modal = new bootstrap.Modal(document.getElementById('editClientModal'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Ошибка при загрузке клиента для редактирования:', error);
+        showError('Не удалось загрузить данные клиента');
+    }
+}
+
+// Вспомогательная функция-обёртка для передачи this в formatPhoneInput
+function formatPhoneInputHandler(e) {
+    formatPhoneInput(e.target);
+}
+
+// Очистка ошибок в форме редактирования
+function clearEditFormErrors() {
+    ['editClientName', 'editClientPhone', 'editClientVkId'].forEach(id => {
+        const input = document.getElementById(id);
+        input.classList.remove('is-invalid', 'is-duplicate');
+        const errorEl = document.getElementById(id.replace('edit', '') + 'Error');
+        if (errorEl) errorEl.textContent = '';
+        // Удаляем возможное сообщение о дубликате
+        const duplicateMsg = input.parentNode.querySelector('.duplicate-feedback');
+        if (duplicateMsg) duplicateMsg.remove();
+    });
+}
+
+// Сохранение изменений клиента
+async function saveEditedClient() {
+    const clientId = document.getElementById('editClientId').value;
+    const nameInput = document.getElementById('editClientName');
+    const phoneInput = document.getElementById('editClientPhone');
+    const vkIdInput = document.getElementById('editClientVkId');
+    
+    const name = nameInput.value.trim();
+    const phone = phoneInput.value.trim();
+    let vkId = vkIdInput.value.trim();
+    
+    // Валидация на стороне клиента
+    let hasErrors = false;
+    clearEditFormErrors();
+    
+    if (!name || name.length < 2) {
+        nameInput.classList.add('is-invalid');
+        document.getElementById('editNameError').textContent = 'Имя должно содержать минимум 2 символа';
+        hasErrors = true;
+    }
+    
+    if (!phone) {
+        phoneInput.classList.add('is-invalid');
+        document.getElementById('editPhoneError').textContent = 'Телефон обязателен';
+        hasErrors = true;
+    }
+    
+    if (vkId && !/^\d+$/.test(vkId)) {
+        vkIdInput.classList.add('is-invalid');
+        document.getElementById('editVkIdError').textContent = 'VK ID должен содержать только цифры';
+        hasErrors = true;
+    }
+    
+    if (hasErrors) return;
+    
+    // Подготовка данных
+    const updateData = {
+        name: name,
+        phone: phone,
+        vk_user_id: vkId ? parseInt(vkId) : null
+    };
+    
+    try {
+        const response = await fetch(`${API_URL}/clients/${clientId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(updateData)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showSuccess('Данные клиента обновлены');
+            // Закрываем модальное окно
+            bootstrap.Modal.getInstance(document.getElementById('editClientModal')).hide();
+            // Обновляем список клиентов
+            loadClients();
+        } else {
+            // Обработка ошибок валидации от сервера
+            if (data.details) {
+                if (data.details.name) {
+                    nameInput.classList.add('is-invalid');
+                    document.getElementById('editNameError').textContent = data.details.name;
+                }
+                if (data.details.phone) {
+                    // Жёлтая подсветка для дубликата (как при создании клиента)
+                    showFieldDuplicate('editClientPhone', data.details.phone);
+                    // Дополнительно можно вывести текст ошибки, но showFieldDuplicate уже создаёт блок
+                } else if (data.details.phone === undefined && data.error?.includes('телефон')) {
+                    // На случай, если ошибка пришла в другом формате
+                    showFieldDuplicate('editClientPhone', 'Клиент с таким телефоном уже существует');
+                }
+                if (data.details.vk_user_id) {
+                    vkIdInput.classList.add('is-invalid');
+                    document.getElementById('editVkIdError').textContent = data.details.vk_user_id;
+                }
+                showError(data.message || 'Ошибка валидации данных');
+            } else if (data.error) {
+                showError(data.error);
+            } else {
+                showError('Ошибка при обновлении клиента');
+            }
+        }
+    } catch (error) {
+        console.error('Ошибка при сохранении клиента:', error);
+        showError('Ошибка соединения с сервером');
     }
 }
 
