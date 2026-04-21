@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from models import db, Car, Client, WorkOrder
 import re
+from datetime import datetime   # <-- добавить импорт
 
 cars_bp = Blueprint('cars', __name__, url_prefix='/api/cars')
 
@@ -8,76 +9,72 @@ def validate_car_data(data, is_update=False, car_id=None):
     """Валидация данных автомобиля"""
     errors = {}
     
-    # Проверка обязательных полей при создании
-    if not is_update:
-        if 'client_id' not in data or not data['client_id']:
-            errors['client_id'] = 'ID клиента является обязательным полем'
-        if 'model' not in data or not data['model']:
-            errors['model'] = 'Модель автомобиля является обязательным полем'
+    # === ОБЯЗАТЕЛЬНЫЕ ПОЛЯ ===
+    required_fields = ['client_id', 'model', 'vin', 'gos_number', 'year', 'mileage']
     
-    # Валидация модели
+    if not is_update:
+        for field in required_fields:
+            if field not in data or not data[field]:
+                errors[field] = f'Поле обязательно для заполнения'
+    
+    # === МОДЕЛЬ ===
     if 'model' in data and data['model']:
         model = data['model'].strip()
-        if len(model) < 1:
-            errors['model'] = 'Модель автомобиля не может быть пустой'
-        elif len(model) > 100:
-            errors['model'] = 'Модель автомобиля не должна превышать 100 символов'
+        if len(model) > 100:
+            errors['model'] = 'Модель не должна превышать 100 символов'
     
-    # Валидация VIN номера
-    if 'vin' in data and data['vin']:
-        vin = data['vin'].strip().upper()
-        if len(vin) > 0:
-            # VIN должен быть 17 символов (стандарт ISO 3779)
-            if len(vin) != 17:
-                errors['vin'] = 'VIN номер должен содержать 17 символов'
-            # Проверка на недопустимые символы (I, O, Q обычно не используются)
-            elif re.search(r'[IOQ]', vin):
-                errors['vin'] = 'VIN номер содержит недопустимые символы (I, O, Q)'
-            else:
-                # Проверяем уникальность VIN
-                query = Car.query.filter_by(vin=vin)
-                if car_id:
-                    query = query.filter(Car.car_id != car_id)
-                
-                existing_car = query.first()
-                if existing_car:
-                    errors['vin'] = f'Автомобиль с VIN {vin} уже существует'
+    # === VIN (ОБЯЗАТЕЛЬНЫЙ) ===
+    if 'vin' in data:
+        vin = data['vin'].strip().upper() if data['vin'] else ''
+        
+        if not vin:
+            errors['vin'] = 'VIN обязателен'
+        elif len(vin) != 17:
+            errors['vin'] = 'VIN должен содержать 17 символов'
+        elif re.search(r'[IOQ]', vin):
+            errors['vin'] = 'VIN содержит недопустимые символы (I, O, Q)'
+        else:
+            query = Car.query.filter_by(vin=vin)
+            if car_id:
+                query = query.filter(Car.car_id != car_id)
+            
+            if query.first():
+                errors['vin'] = f'Автомобиль с VIN {vin} уже существует'
     
-    # Валидация года выпуска
-    if 'year' in data and data['year']:
+    # === ГОСНОМЕР (ОБЯЗАТЕЛЬНЫЙ) ===
+    if 'gos_number' in data:
+        gos = data['gos_number'].strip().upper() if data['gos_number'] else ''
+        
+        if not gos:
+            errors['gos_number'] = 'Госномер обязателен'
+        elif not re.match(r'^[АВЕКМНОРСТУХ]\d{3}[АВЕКМНОРСТУХ]{2}\d{2,3}$', gos):
+            errors['gos_number'] = 'Неверный формат госномера (пример: А123БВ77)'
+        else:
+            query = Car.query.filter_by(gos_number=gos)
+            if car_id:
+                query = query.filter(Car.car_id != car_id)
+            
+            if query.first():
+                errors['gos_number'] = f'Автомобиль с госномером {gos} уже существует'
+    
+    # === ГОД (исправленная проверка) ===
+    if 'year' in data:
         try:
             year = int(data['year'])
-            current_year = 2024
+            current_year = datetime.now().year
             if year < 1900 or year > current_year + 1:
-                errors['year'] = f'Год выпуска должен быть между 1900 и {current_year + 1}'
-        except ValueError:
-            errors['year'] = 'Год выпуска должен быть числом'
+                errors['year'] = f'Год должен быть между 1900 и {current_year + 1}'
+        except:
+            errors['year'] = 'Год должен быть числом'
     
-    # Валидация пробега
-    if 'mileage' in data and data['mileage']:
+    # === ПРОБЕГ ===
+    if 'mileage' in data:
         try:
             mileage = float(data['mileage'])
             if mileage < 0 or mileage > 1000000:
-                errors['mileage'] = 'Пробег должен быть между 0 и 1,000,000 км'
-        except ValueError:
+                errors['mileage'] = 'Пробег должен быть от 0 до 1 000 000'
+        except:
             errors['mileage'] = 'Пробег должен быть числом'
-    
-    # Валидация госномера
-    if 'gos_number' in data and data['gos_number']:
-        gos_number = data['gos_number'].strip().upper()
-        if len(gos_number) > 0:
-            # Российский формат госномера: А123БВ77
-            if not re.match(r'^[АВЕКМНОРСТУХ]\d{3}[АВЕКМНОРСТУХ]{2}\d{2,3}$', gos_number):
-                errors['gos_number'] = 'Неверный формат госномера. Пример: А123БВ77'
-            else:
-                # Проверяем уникальность госномера
-                query = Car.query.filter_by(gos_number=gos_number)
-                if car_id:
-                    query = query.filter(Car.car_id != car_id)
-                
-                existing_car = query.first()
-                if existing_car:
-                    errors['gos_number'] = f'Автомобиль с госномером {gos_number} уже существует'
     
     return errors
 

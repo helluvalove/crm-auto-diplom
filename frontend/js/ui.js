@@ -122,6 +122,34 @@ function updateClientSelects(clients) {
     }
 }
 
+// Показать предупреждение о дублировании значения
+function showFieldDuplicate(inputId, message) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    const errorId = inputId + 'Error';
+
+    // Удаляем старые сообщения
+    const oldError = document.getElementById(errorId);
+    if (oldError) oldError.remove();
+
+    // Сбрасываем все классы состояния
+    input.classList.remove('is-valid', 'is-invalid', 'is-duplicate');
+
+    if (message) {
+        input.classList.add('is-duplicate');
+        const errorDiv = document.createElement('div');
+        errorDiv.id = errorId;
+        errorDiv.className = 'duplicate-feedback';
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+        input.parentNode.appendChild(errorDiv);
+    } else {
+        // Если сообщение null, просто сбрасываем состояние
+        input.classList.remove('is-duplicate');
+    }
+}
+
 // Обработчик выбора клиента -> загрузка его автомобилей
 async function handleClientSelectChange() {
     const clientId = this.value;

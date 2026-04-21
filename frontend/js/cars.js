@@ -19,37 +19,41 @@ function validateCarData(data, checkClientId = false, clientId = null) {
     }
 
     if (!model) {
-        errors.push('Поле "Модель автомобиля" обязательно для заполнения');
+        errors.push('Поле "Модель автомобиля" обязательно');
     }
 
+    // === VIN ===
     if (!vin) {
-        errors.push('Поле "VIN номер" обязательно для заполнения');
+        errors.push('Поле "VIN номер" обязательно');
     } else if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) {
-        errors.push('Неверный формат VIN номера. Должно быть ровно 17 символов (цифры и заглавные латинские буквы, кроме I, O, Q)');
+        errors.push('VIN должен содержать 17 символов (без I, O, Q)');
     }
 
+    // === ГОСНОМЕР ===
     if (!gosNumber) {
-        errors.push('Поле "Госномер" обязательно для заполнения');
-    } else if (!/^[А-Я][0-9]{3}[А-Я]{2}[0-9]{2,3}$|^[А-Я]{2}[0-9]{3}[0-9]{2,3}$/.test(gosNumber)) {
-        errors.push('Неверный формат госномера. Примеры правильных форматов: А123БВ77, ВС12345');
+        errors.push('Поле "Госномер" обязательно');
+    } else if (!/^[АВЕКМНОРСТУХ][0-9]{3}[АВЕКМНОРСТУХ]{2}[0-9]{2,3}$/.test(gosNumber)) {
+        errors.push('Неверный формат госномера (пример: А123БВ77)');
     }
 
+    // === ГОД (динамический) ===
     if (!year) {
-        errors.push('Поле "Год выпуска" обязательно для заполнения');
+        errors.push('Поле "Год" обязательно');
     } else {
-        const currentYear = new Date().getFullYear();
         const yearNum = parseInt(year);
+        const currentYear = new Date().getFullYear();   // <-- динамический год
         if (yearNum < 1900 || yearNum > currentYear + 1) {
-            errors.push(`Год выпуска должен быть в диапазоне от 1900 до ${currentYear + 1}`);
+            errors.push(`Год должен быть от 1900 до ${currentYear + 1}`);
         }
     }
 
+    // === ПРОБЕГ ===
     if (!mileage) {
-        errors.push('Поле "Пробег" обязательно для заполнения');
+        errors.push('Поле "Пробег" обязательно');
     } else {
         const mileageNum = parseInt(mileage);
         if (mileageNum < 0 || mileageNum > 1000000 || isNaN(mileageNum)) {
-            errors.push('Пробег должен быть в диапазоне от 0 до 1,000,000 км');
+            errors.push('Пробег должен быть от 0 до 1 000 000');
         }
     }
 
@@ -378,6 +382,7 @@ async function createCar() {
     const carData = { model, vin, gosNumber, year, mileage };
     const errors = validateCarData(carData, true, clientId);
 
+    // ✅ фронтовая валидация
     if (errors.length > 0) {
         showError(errors.join('<br>'));
         return;
@@ -399,14 +404,18 @@ async function createCar() {
             body: JSON.stringify(payload)
         });
 
+        const data = await response.json(); // ✅ читаем ответ ВСЕГДА
+
         if (response.ok) {
             showSuccess(`Автомобиль "${model}" добавлен!`);
 
+            // очистка формы
             document.getElementById('newCarModel').value = '';
             document.getElementById('newCarVin').value = '';
             document.getElementById('newCarGosNumber').value = '';
             document.getElementById('newCarYear').value = '';
             document.getElementById('newCarMileage').value = '';
+
             const searchInput = document.getElementById('carClientSearch');
             searchInput.value = '';
             delete searchInput.dataset.clientId;
@@ -414,10 +423,20 @@ async function createCar() {
             loadClientCars(clientId);
 
         } else {
-            const errorData = await response.json();
-            showError(errorData.error || 'Ошибка добавления автомобиля');
+            // ✅ нормальный вывод ошибок с бэка
+            if (data.details) {
+                showError(Object.values(data.details).join('<br>'));
+            } else if (data.message) {
+                showError(data.message);
+            } else {
+                showError(data.error || 'Ошибка добавления автомобиля');
+            }
+
+            console.error('Ошибка создания авто:', data); // 👈 для дебага
         }
+
     } catch (error) {
+        console.error('Network error:', error);
         showError('Ошибка подключения к серверу: ' + error.message);
     }
 }

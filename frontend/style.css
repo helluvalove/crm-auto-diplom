@@ -710,3 +710,21 @@
 #clientSearchResults::-webkit-scrollbar {
     display: none;                  /* Chrome, Safari, Opera */
 }
+
+/* Жёлтое предупреждение о дубликате */
+.is-duplicate {
+    border-color: #ffc107 !important;
+    box-shadow: 0 0 0 0.25rem rgba(255, 193, 7, 0.25) !important;
+    background-color: #fff3cd !important;
+}
+
+.duplicate-feedback {
+    color: #ffc107 !important;
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+/* Чтобы не конфликтовало с красной валидацией */
+.is-duplicate.is-invalid {
+    border-color: #ffc107 !important;
+}

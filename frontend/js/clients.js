@@ -162,40 +162,39 @@ async function createClient() {
     const name = nameInput.value.trim();
     const phone = phoneInput.value.trim();
 
-    // Валидация клиента
     const validation = validateClientOnClient(name, phone);
     if (!validation.isValid) {
         showError('Исправьте ошибки в форме клиента');
         return;
     }
 
-    // Данные автомобиля (если заполнены)
-    const carModel = document.getElementById('newClientCarModel')?.value.trim() || '';
-    const carVin = document.getElementById('newClientCarVin')?.value.trim().toUpperCase() || '';
-    const carGosNumber = document.getElementById('newClientCarGosNumber')?.value.trim().toUpperCase() || '';
-    const carYear = parseInt(document.getElementById('newClientCarYear')?.value) || null;
-    const carMileage = parseInt(document.getElementById('newClientCarMileage')?.value) || null;
+    // === Данные автомобиля ===
+    const carModelInput = document.getElementById('newClientCarModel');
+    const carVinInput = document.getElementById('newClientCarVin');
+    const carGosNumberInput = document.getElementById('newClientCarGosNumber');
+    const carYearInput = document.getElementById('newClientCarYear');
+    const carMileageInput = document.getElementById('newClientCarMileage');
+
+    const carModel = carModelInput?.value.trim() || '';
+    const carVin = carVinInput?.value.trim().toUpperCase() || '';
+    const carGosNumber = carGosNumberInput?.value.trim().toUpperCase() || '';
+    const carYear = carYearInput?.value || '';
+    const carMileage = carMileageInput?.value || '';
 
     const hasCarData = !!(carModel || carVin || carGosNumber || carYear || carMileage);
 
-    // Валидация автомобиля, если данные введены
+    // Валидация автомобиля
     if (hasCarData) {
-        const errors = [];
-
-        if (!carModel) errors.push('Поле "Модель автомобиля" обязательно');
-        if (!carVin || !/^[A-HJ-NPR-Z0-9]{17}$/.test(carVin)) {
-            errors.push('Неверный формат VIN номера (ровно 17 символов)');
-        }
-        if (!carGosNumber || !/^[А-Я][0-9]{3}[А-Я]{2}[0-9]{2,3}$|^[А-Я]{2}[0-9]{3}[0-9]{2,3}$/.test(carGosNumber)) {
-            errors.push('Неверный формат госномера (примеры: А123БВ77, ВС12345)');
-        }
-        if (!carYear || carYear < 1900 || carYear > new Date().getFullYear() + 1) {
-            errors.push(`Год выпуска должен быть от 1900 до ${new Date().getFullYear() + 1}`);
-        }
-        if (!carMileage || carMileage < 0 || carMileage > 1000000) {
-            errors.push('Пробег должен быть от 0 до 1 000 000 км');
-        }
-
+        const carData = {
+            model: carModel,
+            vin: carVin,
+            gosNumber: carGosNumber,
+            year: carYear,
+            mileage: carMileage
+        };
+        
+        const errors = validateCarData(carData);
+        
         if (errors.length > 0) {
             showError(errors.join('<br>'));
             return;
@@ -206,7 +205,7 @@ async function createClient() {
 
     try {
         // 1. Создаём клиента
-        const clientRes = await fetch(`${API_URL}/clients`, {
+        const clientRes = await fetch(`${API_URL}/clients/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -223,23 +222,32 @@ async function createClient() {
                 logout();
                 return;
             }
-            throw new Error(clientDataRes.error || 'Ошибка создания клиента');
+
+            if (clientRes.status === 400 && clientDataRes.details?.phone) {
+                showFieldDuplicate('newClientPhone', clientDataRes.details.phone);
+                showError('Клиент с таким номером телефона уже существует');
+                return;
+            }
+
+            console.error('Неожиданная ошибка создания клиента:', clientRes.status, clientDataRes);
+            showError(clientDataRes.error || 'Ошибка создания клиента');
+            return;
         }
 
         const newClientId = clientDataRes.client.client_id;
 
-        // 2. Если есть данные автомобиля — создаём его
+        // 2. Создаём автомобиль (если есть данные)
         if (hasCarData && newClientId) {
             const carData = {
                 client_id: newClientId,
                 model: carModel,
                 vin: carVin,
                 gos_number: carGosNumber,
-                year: carYear,
-                mileage: carMileage
+                year: parseInt(carYear),
+                mileage: parseInt(carMileage)
             };
 
-            const carRes = await fetch(`${API_URL}/cars`, {
+            const carRes = await fetch(`${API_URL}/cars/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -249,17 +257,40 @@ async function createClient() {
             });
 
             if (!carRes.ok) {
-                // Откат: удаляем только что созданного клиента
-                await fetch(`${API_URL}/clients/${newClientId}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
                 const carError = await carRes.json();
-                throw new Error(`Автомобиль не создан: ${carError.details?.vin || carError.error}. Клиент удалён.`);
+
+                // ❗️ ВАЖНО: всегда удаляем клиента при ошибке создания автомобиля
+                try {
+                    await fetch(`${API_URL}/clients/${newClientId}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    console.log(`Клиент ${newClientId} удалён из-за ошибки создания автомобиля`);
+                } catch (deleteError) {
+                    console.error('Ошибка при удалении клиента:', deleteError);
+                }
+
+                // Обрабатываем конкретные ошибки дубликатов
+                if (carRes.status === 400) {
+                    if (carError.details?.vin) {
+                        showFieldDuplicate('newClientCarVin', carError.details.vin);
+                        showError('Автомобиль с таким VIN уже существует. Клиент НЕ создан.');
+                        return;
+                    }
+                    if (carError.details?.gos_number) {
+                        showFieldDuplicate('newClientCarGosNumber', carError.details.gos_number);
+                        showError('Автомобиль с таким госномером уже существует. Клиент НЕ создан.');
+                        return;
+                    }
+                }
+
+                // Другие ошибки
+                showError(carError.error || 'Ошибка создания автомобиля. Клиент НЕ создан.');
+                return;
             }
         }
 
+        // Успех
         showSuccess(hasCarData 
             ? `Клиент "${validation.name}" и автомобиль "${carModel}" созданы!` 
             : `Клиент "${validation.name}" создан!`);
@@ -275,10 +306,14 @@ async function createClient() {
 
         showFieldError('newClientName', null);
         showFieldError('newClientPhone', null);
+        showFieldDuplicate('newClientPhone', null);
+        showFieldDuplicate('newClientCarVin', null);
+        showFieldDuplicate('newClientCarGosNumber', null);
 
         loadClients();
 
     } catch (error) {
+        console.error('Критическая ошибка в createClient:', error);
         showError(error.message);
     }
 }

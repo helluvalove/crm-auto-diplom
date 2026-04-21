@@ -91,6 +91,10 @@ function initializeValidation() {
     if (phoneInput) {
         phoneInput.addEventListener('input', function () {
             formatPhoneInput(this);
+            // При вводе сбрасываем предупреждение о дубликате
+            showFieldDuplicate('newClientPhone', null);
+            // Также убираем стандартную ошибку валидации, если была
+            showFieldError('newClientPhone', null);
         });
 
         phoneInput.addEventListener('keydown', function (e) {
@@ -109,7 +113,6 @@ function initializeValidation() {
         // ИЗМЕНЁННЫЙ BLUR
         phoneInput.addEventListener('blur', function () {
             let val = this.value.trim();
-            // Если поле пустое или содержит неполную маску — восстанавливаем
             if (val === '' || val === '+' || val === '+7' || val === '+7 ') {
                 this.value = '+7 ';
             } else {
@@ -118,9 +121,12 @@ function initializeValidation() {
                     this.value = '+7 ';
                 }
             }
-            // Показываем ошибку после восстановления
             const validation = validateRussianPhone(this.value);
             showFieldError('newClientPhone', validation.isValid ? null : validation.message);
+            // Если номер валиден, но поле было подсвечено как дубликат – сбрасываем
+            if (validation.isValid) {
+                showFieldDuplicate('newClientPhone', null);
+            }
         });
     }
 
