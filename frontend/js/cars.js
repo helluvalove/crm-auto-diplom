@@ -3,13 +3,6 @@
 let currentClients = [];
 
 // ========== ОБЩАЯ ВАЛИДАЦИЯ ДАННЫХ АВТОМОБИЛЯ ==========
-/**
- * Проверяет поля автомобиля.
- * @param {Object} data - { model, vin, gosNumber, year, mileage }
- * @param {boolean} checkClientId - требуется ли проверка client_id (только для создания)
- * @param {number|null} clientId - идентификатор клиента (если checkClientId = true)
- * @returns {string[]} массив сообщений об ошибках
- */
 function validateCarData(data, checkClientId = false, clientId = null) {
     const errors = [];
     const { model, vin, gosNumber, year, mileage } = data;
@@ -22,32 +15,28 @@ function validateCarData(data, checkClientId = false, clientId = null) {
         errors.push('Поле "Модель автомобиля" обязательно');
     }
 
-    // === VIN ===
     if (!vin) {
         errors.push('Поле "VIN номер" обязательно');
     } else if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) {
         errors.push('VIN должен содержать 17 символов (без I, O, Q)');
     }
 
-    // === ГОСНОМЕР ===
     if (!gosNumber) {
         errors.push('Поле "Госномер" обязательно');
     } else if (!/^[АВЕКМНОРСТУХ][0-9]{3}[АВЕКМНОРСТУХ]{2}[0-9]{2,3}$/.test(gosNumber)) {
         errors.push('Неверный формат госномера (пример: А123БВ77)');
     }
 
-    // === ГОД (динамический) ===
     if (!year) {
         errors.push('Поле "Год" обязательно');
     } else {
         const yearNum = parseInt(year);
-        const currentYear = new Date().getFullYear();   // <-- динамический год
+        const currentYear = new Date().getFullYear();
         if (yearNum < 1900 || yearNum > currentYear + 1) {
             errors.push(`Год должен быть от 1900 до ${currentYear + 1}`);
         }
     }
 
-    // === ПРОБЕГ ===
     if (!mileage) {
         errors.push('Поле "Пробег" обязательно');
     } else {
@@ -74,7 +63,6 @@ function setupClientSearch() {
         const query = input.value.toLowerCase().trim();
         resultsContainer.innerHTML = '';
 
-        // Сбрасываем сохранённый clientId при любом изменении текста
         delete input.dataset.clientId;
 
         if (query.length < 2) {
@@ -122,7 +110,6 @@ function getSelectedClientFromSearch() {
     return input && input.dataset.clientId ? parseInt(input.dataset.clientId) : null;
 }
 
-// Показать все автомобили клиента из поиска
 function viewAllClientCars() {
     const input = document.getElementById('carClientSearch');
     if (!input || !input.value.trim()) {
@@ -240,7 +227,6 @@ async function loadAllCarsInService() {
         html += '</div>';
         carsList.innerHTML = html;
 
-        // Обновляем список клиентов для поиска (один раз, в конце)
         const clientsRes = await fetch(`${API_URL}/clients`);
         if (clientsRes.ok) updateClientSearchForCars(await clientsRes.json());
 
@@ -256,13 +242,11 @@ async function loadAllCarsInService() {
     }
 }
 
-// Функция для обновления выпадающего списка клиентов на вкладке автомобилей
 function updateClientSearchForCars(clients) {
-    currentClients = clients; // сохраняем для live-поиска
-    setupClientSearch();      // запускаем обработчики
+    currentClients = clients;
+    setupClientSearch();
 }
 
-// Загрузка автомобилей конкретного клиента
 async function loadClientCars(clientId) {
     const carsList = document.getElementById('carsList');
     carsList.innerHTML = `<div class="text-center py-4">...загрузка...</div>`;
@@ -343,7 +327,6 @@ async function loadClientCars(clientId) {
     }
 }
 
-// Удаление автомобиля с подтверждением и проверкой на активные заказы
 async function deleteCar(carId) {
     if (!confirm('Вы уверены, что хотите удалить автомобиль? Все заказы для этого автомобиля также будут удалены.')) {
         return;
@@ -370,7 +353,36 @@ async function deleteCar(carId) {
     }
 }
 
-// Функция для создания нового автомобиля
+// ========== СБРОС ФОРМЫ СОЗДАНИЯ АВТО ==========
+function resetCarForm() {
+    const model = document.getElementById('newCarModel');
+    const vin = document.getElementById('newCarVin');
+    const gos = document.getElementById('newCarGosNumber');
+    const year = document.getElementById('newCarYear');
+    const mileage = document.getElementById('newCarMileage');
+    const searchInput = document.getElementById('carClientSearch');
+
+    if (model) model.value = '';
+    if (vin) vin.value = '';
+    if (gos) gos.value = '';
+    if (year) year.value = '';
+    if (mileage) mileage.value = '';
+    if (searchInput) {
+        searchInput.value = '';
+        delete searchInput.dataset.clientId;
+    }
+
+    // Сброс всех подсветок
+    showFieldDuplicate('newCarVin', null);
+    showFieldDuplicate('newCarGosNumber', null);
+    showFieldError('newCarVin', null);
+    showFieldError('newCarGosNumber', null);
+    showFieldError('newCarModel', null);
+    showFieldError('newCarYear', null);
+    showFieldError('newCarMileage', null);
+}
+
+// ========== СОЗДАНИЕ НОВОГО АВТОМОБИЛЯ ==========
 async function createCar() {
     const clientId = getSelectedClientFromSearch();
     const model = document.getElementById('newCarModel').value.trim();
@@ -382,7 +394,6 @@ async function createCar() {
     const carData = { model, vin, gosNumber, year, mileage };
     const errors = validateCarData(carData, true, clientId);
 
-    // ✅ фронтовая валидация
     if (errors.length > 0) {
         showError(errors.join('<br>'));
         return;
@@ -404,44 +415,36 @@ async function createCar() {
             body: JSON.stringify(payload)
         });
 
-        const data = await response.json(); // ✅ читаем ответ ВСЕГДА
+        const data = await response.json();
 
         if (response.ok) {
             showSuccess(`Автомобиль "${model}" добавлен!`);
-
-            // очистка формы
-            document.getElementById('newCarModel').value = '';
-            document.getElementById('newCarVin').value = '';
-            document.getElementById('newCarGosNumber').value = '';
-            document.getElementById('newCarYear').value = '';
-            document.getElementById('newCarMileage').value = '';
-
-            const searchInput = document.getElementById('carClientSearch');
-            searchInput.value = '';
-            delete searchInput.dataset.clientId;
-
+            resetCarForm();
             loadClientCars(clientId);
-
         } else {
-            // ✅ нормальный вывод ошибок с бэка
             if (data.details) {
-                showError(Object.values(data.details).join('<br>'));
+                if (data.details.vin) {
+                    showFieldDuplicate('newCarVin', data.details.vin);
+                }
+                if (data.details.gos_number) {
+                    showFieldDuplicate('newCarGosNumber', data.details.gos_number);
+                }
+                const errorMessages = Object.values(data.details).filter(msg => typeof msg === 'string');
+                showError(errorMessages.join('<br>') || 'Ошибка валидации');
             } else if (data.message) {
                 showError(data.message);
             } else {
                 showError(data.error || 'Ошибка добавления автомобиля');
             }
-
-            console.error('Ошибка создания авто:', data); // 👈 для дебага
+            console.error('Ошибка создания авто:', data);
         }
-
     } catch (error) {
         console.error('Network error:', error);
         showError('Ошибка подключения к серверу: ' + error.message);
     }
 }
 
-// Функция редактирования автомобиля
+// ========== РЕДАКТИРОВАНИЕ АВТОМОБИЛЯ ==========
 async function editCar(carId) {
     try {
         const response = await fetch(`${API_URL}/cars/${carId}`);
@@ -547,15 +550,26 @@ async function editCar(carId) {
         document.body.insertAdjacentHTML('beforeend', modalHtml);
 
         const vinInput = document.getElementById('editCarVin');
+        const gosInput = document.getElementById('editCarGosNumber');
         const vinCounter = document.getElementById('vinCounter');
 
-        if (vinInput && vinCounter) {
+        // Сброс дубликата при вводе
+        if (vinInput) {
             vinInput.addEventListener('input', function() {
+                showFieldDuplicate('editCarVin', null);
                 const length = this.value.length;
-                vinCounter.textContent = `Символов: ${length}/17`;
-                vinCounter.className = length === 17 ? 'text-success' : (length > 0 ? 'text-warning' : 'text-danger');
+                if (vinCounter) {
+                    vinCounter.textContent = `Символов: ${length}/17`;
+                    vinCounter.className = length === 17 ? 'text-success' : (length > 0 ? 'text-warning' : 'text-danger');
+                }
             });
             vinInput.dispatchEvent(new Event('input'));
+        }
+
+        if (gosInput) {
+            gosInput.addEventListener('input', function() {
+                showFieldDuplicate('editCarGosNumber', null);
+            });
         }
 
         const modal = new bootstrap.Modal(document.getElementById('editCarModal'));
@@ -567,7 +581,7 @@ async function editCar(carId) {
     }
 }
 
-// Функция валидации и обновления автомобиля
+// ========== ВАЛИДАЦИЯ И ОБНОВЛЕНИЕ АВТОМОБИЛЯ ==========
 async function validateAndUpdateCar(carId) {
     const model = document.getElementById('editCarModel').value.trim();
     const vin = document.getElementById('editCarVin').value.trim().toUpperCase();
@@ -609,17 +623,27 @@ async function validateAndUpdateCar(carId) {
                     loadAllCarsInService();
                 }
             }, 500);
-
         } else {
             const errorData = await response.json();
-            showError(errorData.error || 'Ошибка обновления автомобиля');
+            if (errorData.details) {
+                if (errorData.details.vin) {
+                    showFieldDuplicate('editCarVin', errorData.details.vin);
+                }
+                if (errorData.details.gos_number) {
+                    showFieldDuplicate('editCarGosNumber', errorData.details.gos_number);
+                }
+                const errorMessages = Object.values(errorData.details).filter(msg => typeof msg === 'string');
+                showError(errorMessages.join('<br>') || 'Ошибка обновления');
+            } else {
+                showError(errorData.error || 'Ошибка обновления автомобиля');
+            }
         }
     } catch (error) {
         showError('Ошибка подключения к серверу: ' + error.message);
     }
 }
 
-// Функция для подтверждения удаления автомобиля
+// ========== УДАЛЕНИЕ АВТОМОБИЛЯ (подтверждение) ==========
 function showDeleteCarConfirmation(carId) {
     const modal = bootstrap.Modal.getInstance(document.getElementById('editCarModal'));
     if (modal) modal.hide();
@@ -631,6 +655,7 @@ function showDeleteCarConfirmation(carId) {
     }
 }
 
+// ========== МОДАЛЬНОЕ ОКНО АВТОМОБИЛЕЙ КЛИЕНТА ==========
 async function showClientCarsModal(clientId, clientName) {
     try {
         const response = await fetch(`${API_URL}/cars/client/${clientId}`);
@@ -774,21 +799,27 @@ function closeModalAndLoadClientCars(clientId) {
     }, 300);
 }
 
-// Автообновление поиска при переходе на вкладку
+// ========== ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ ==========
 document.addEventListener('DOMContentLoaded', () => {
+    // Обработчики сброса дубликата при вводе в поля создания
+    const newVin = document.getElementById('newCarVin');
+    const newGos = document.getElementById('newCarGosNumber');
+    if (newVin) {
+        newVin.addEventListener('input', () => showFieldDuplicate('newCarVin', null));
+    }
+    if (newGos) {
+        newGos.addEventListener('input', () => showFieldDuplicate('newCarGosNumber', null));
+    }
+
     const carsTabButton = document.querySelector('button[onclick="showTab(\'cars\', event)"]');
     if (carsTabButton) {
         carsTabButton.addEventListener('click', () => {
             setTimeout(() => {
                 if (document.getElementById('carsTab').style.display === 'block') {
-                    const searchInput = document.getElementById('carClientSearch');
+                    // Сброс формы и поиска при открытии вкладки
+                    resetCarForm();
                     const resultsContainer = document.getElementById('clientSearchResults');
-                    if (searchInput) {
-                        searchInput.value = '';
-                        delete searchInput.dataset.clientId;
-                    }
                     if (resultsContainer) resultsContainer.style.display = 'none';
-
                     loadAllCarsInService();
                 }
             }, 300);

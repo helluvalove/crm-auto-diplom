@@ -150,6 +150,27 @@ async function deleteClient(clientId) {
     }
 }
 
+// ========== СБРОС ФОРМЫ КЛИЕНТА ==========
+function resetClientForm() {
+    const nameInput = document.getElementById('newClientName');
+    const phoneInput = document.getElementById('newClientPhone');
+    const carFields = ['newClientCarModel', 'newClientCarVin', 'newClientCarGosNumber', 'newClientCarYear', 'newClientCarMileage'];
+
+    if (nameInput) nameInput.value = '';
+    if (phoneInput) phoneInput.value = '+7 ';
+    carFields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+
+    // Сброс всех подсветок
+    showFieldError('newClientName', null);
+    showFieldError('newClientPhone', null);
+    showFieldDuplicate('newClientPhone', null);
+    showFieldDuplicate('newClientCarVin', null);
+    showFieldDuplicate('newClientCarGosNumber', null);
+}
+
 async function createClient() {
     const nameInput = document.getElementById('newClientName');
     const phoneInput = document.getElementById('newClientPhone');
@@ -295,21 +316,7 @@ async function createClient() {
             ? `Клиент "${validation.name}" и автомобиль "${carModel}" созданы!` 
             : `Клиент "${validation.name}" создан!`);
 
-        // Очистка формы
-        nameInput.value = '';
-        phoneInput.value = '';
-        ['newClientCarModel', 'newClientCarVin', 'newClientCarGosNumber', 'newClientCarYear', 'newClientCarMileage']
-            .forEach(id => {
-                const el = document.getElementById(id);
-                if (el) el.value = '';
-            });
-
-        showFieldError('newClientName', null);
-        showFieldError('newClientPhone', null);
-        showFieldDuplicate('newClientPhone', null);
-        showFieldDuplicate('newClientCarVin', null);
-        showFieldDuplicate('newClientCarGosNumber', null);
-
+        resetClientForm();
         loadClients();
 
     } catch (error) {
@@ -317,3 +324,46 @@ async function createClient() {
         showError(error.message);
     }
 }
+
+// ========== ИНИЦИАЛИЗАЦИЯ СБРОСА ПРИ ВВОДЕ И ОТКРЫТИИ ВКЛАДКИ ==========
+document.addEventListener('DOMContentLoaded', () => {
+    // Обработчики сброса дубликата при вводе в поля клиента
+    const phoneInput = document.getElementById('newClientPhone');
+    const nameInput = document.getElementById('newClientName');
+    const vinInput = document.getElementById('newClientCarVin');
+    const gosInput = document.getElementById('newClientCarGosNumber');
+
+    if (phoneInput) {
+        // Уже есть в validation.js, но продублируем сброс дубликата на всякий случай
+        phoneInput.addEventListener('input', () => {
+            showFieldDuplicate('newClientPhone', null);
+        });
+    }
+    if (nameInput) {
+        nameInput.addEventListener('input', () => {
+            showFieldError('newClientName', null);
+        });
+    }
+    if (vinInput) {
+        vinInput.addEventListener('input', () => {
+            showFieldDuplicate('newClientCarVin', null);
+        });
+    }
+    if (gosInput) {
+        gosInput.addEventListener('input', () => {
+            showFieldDuplicate('newClientCarGosNumber', null);
+        });
+    }
+
+    // При открытии вкладки "Клиенты" сбрасываем форму и подсветки
+    const clientsTabButton = document.querySelector('button[onclick="showTab(\'clients\', event)"]');
+    if (clientsTabButton) {
+        clientsTabButton.addEventListener('click', () => {
+            setTimeout(() => {
+                if (document.getElementById('clientsTab').style.display === 'block') {
+                    resetClientForm();
+                }
+            }, 100);
+        });
+    }
+});
