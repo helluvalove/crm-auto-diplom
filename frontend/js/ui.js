@@ -286,8 +286,106 @@ async function checkAPIStatus() {
 }
 
 // ==================== СТАТИСТИКА ====================
-function updateStatistics() {
-    if (!ordersData || ordersData.length === 0) {
+// Вспомогательная: определение дат периода
+function getDateRange(period, subperiod) {
+    const now = new Date();
+    let start, end;
+
+    // Нормализуем время до полночи для корректного сравнения
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+    switch (period) {
+        case 'day':
+            if (subperiod === 'current') {
+                start = todayStart;
+                end = todayEnd;
+            } else { // прошлый день
+                const yesterday = new Date(todayStart);
+                yesterday.setDate(yesterday.getDate() - 1);
+                start = yesterday;
+                end = new Date(yesterday.getTime() + 24 * 60 * 60 * 1000 - 1);
+            }
+            break;
+
+        case 'week':
+            const dayOfWeek = now.getDay(); // 0 = вс
+            const mondayThisWeek = new Date(todayStart);
+            mondayThisWeek.setDate(todayStart.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+
+            if (subperiod === 'current') {
+                start = mondayThisWeek;
+                end = new Date(mondayThisWeek.getTime() + 6 * 24 * 60 * 60 * 1000 - 1);
+            } else { // прошлая неделя
+                const mondayLastWeek = new Date(mondayThisWeek);
+                mondayLastWeek.setDate(mondayLastWeek.getDate() - 7);
+                start = mondayLastWeek;
+                end = new Date(mondayLastWeek.getTime() + 6 * 24 * 60 * 60 * 1000 - 1);
+            }
+            break;
+
+        case 'month':
+            if (subperiod === 'current') {
+                start = new Date(now.getFullYear(), now.getMonth(), 1);
+                end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+            } else { // прошлый месяц
+                const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                start = new Date(lastMonthDate.getFullYear(), lastMonthDate.getMonth(), 1);
+                end = new Date(lastMonthDate.getFullYear(), lastMonthDate.getMonth() + 1, 0, 23, 59, 59);
+            }
+            break;
+
+        case 'year':
+            if (subperiod === 'current') {
+                start = new Date(now.getFullYear(), 0, 1);
+                end = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+            } else { // прошлый год
+                start = new Date(now.getFullYear() - 1, 0, 1);
+                end = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59);
+            }
+            break;
+
+        default: // 'all'
+            return null;
+    }
+    return { start, end };
+}
+
+// Основная функция статистики
+async function updateStatistics() {
+    const mainBtns = document.querySelectorAll('#periodMainGroup .btn');
+    const subBtns = document.querySelectorAll('#periodSubGroup .btn');
+
+    // Определяем активный период
+    let period = 'all';
+    let subperiod = 'current';
+    mainBtns.forEach(btn => {
+        if (btn.classList.contains('active')) period = btn.dataset.period;
+    });
+    subBtns.forEach(btn => {
+        if (btn.classList.contains('active')) subperiod = btn.dataset.subperiod;
+    });
+
+    // Показываем/скрываем группу "Текущий/Прошлый"
+    const subGroup = document.getElementById('periodSubGroup');
+    if (period === 'all') {
+        subGroup.style.display = 'none';
+    } else {
+        subGroup.style.display = '';
+    }
+
+    // Параллельно загружаем заказы, клиентов и автомобили
+    const [ordersRes, clientsRes, carsRes] = await Promise.all([
+        fetch(`${API_URL}/orders`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_URL}/clients`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_URL}/cars`).then(r => r.ok ? r.json() : []).catch(() => [])
+    ]);
+
+    const allOrders = ordersRes.length > 0 ? ordersRes : (ordersData || []);
+    const clientsCount = clientsRes.length;
+    const carsCount = carsRes.length;
+
+    if (!allOrders || allOrders.length === 0) {
         document.getElementById('statisticsContent').innerHTML = `
             <div class="alert alert-info">
                 <i class="bi bi-info-circle"></i> Нет данных для статистики
@@ -295,24 +393,76 @@ function updateStatistics() {
         `;
         return;
     }
-    
-    const completedOrders = ordersData.filter(order => order.status === 'Выполнен').length;
-    const activeOrders = ordersData.filter(order => 
-        order.status !== 'Выполнен' && order.status !== 'Отменен'
+
+    const range = getDateRange(period, subperiod);
+
+    // Функция для релевантной даты заказа
+    const getOrderDate = (order) => {
+        if (order.status === 'Выполнен' && order.completed_date) {
+            return new Date(order.completed_date).getTime();
+        }
+        return order.created_date ? new Date(order.created_date).getTime() : null;
+    };
+
+    // Фильтрация по периоду
+    let filteredOrders = allOrders;
+    if (range) {
+        const start = range.start.getTime();
+        const end = range.end.getTime();
+        filteredOrders = allOrders.filter(order => {
+            const date = getOrderDate(order);
+            return date && date >= start && date <= end;
+        });
+    }
+
+    // Метрики
+    const completedOrders = filteredOrders.filter(o => o.status === 'Выполнен').length;
+    const activeOrders = filteredOrders.filter(o =>
+        o.status !== 'Выполнен' && o.status !== 'Отменен'
     ).length;
-    
-    const totalRevenue = ordersData
-        .filter(order => order.status === 'Выполнен' && order.total_price)
-        .reduce((sum, order) => sum + parseFloat(order.total_price), 0);
-    
+    const cancelledOrders = filteredOrders.filter(o => o.status === 'Отменен').length;
+    const totalRevenue = filteredOrders
+        .filter(o => o.status === 'Выполнен' && o.total_price)
+        .reduce((sum, o) => sum + parseFloat(o.total_price), 0);
     const averageOrderValue = completedOrders > 0 ? totalRevenue / completedOrders : 0;
-    
-    const period = document.getElementById('statisticsPeriod').value;
-    let periodText = 'за все время';
-    if (period === 'week') periodText = 'за неделю';
-    if (period === 'month') periodText = 'за месяц';
-    if (period === 'year') periodText = 'за год';
-    
+
+    // Форматирование суммы: 130 780,12 ₽
+    const formatMoney = (value) =>
+        value.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₽';
+
+    // Описание периода
+    let periodText = '';
+    let extraInfo = '';
+    const formatDate = (date) =>
+        date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    if (period === 'all') {
+        periodText = 'за всё время';
+        const allCompleted = allOrders.filter(o => o.status === 'Выполнен');
+        if (allCompleted.length > 0) {
+            allCompleted.sort((a, b) => {
+                const getDate = o => o.completed_date || o.created_date;
+                return new Date(getDate(a)) - new Date(getDate(b));
+            });
+            const firstDate = new Date(allCompleted[0].completed_date || allCompleted[0].created_date);
+            extraInfo = `<small class="text-muted">Первый заказ выполнен: ${formatDate(firstDate)}</small>`;
+        }
+    } else {
+        const periodNames = {
+            day: { current: 'за сегодня', last: 'за вчера' },
+            week: { current: 'за текущую неделю', last: 'за прошлую неделю' },
+            month: { current: 'за текущий месяц', last: 'за прошлый месяц' },
+            year: { current: 'за текущий год', last: 'за прошлый год' }
+        };
+        periodText = periodNames[period]?.[subperiod] || '';
+        if (range) {
+            extraInfo = `<small class="text-muted">${formatDate(range.start)} – ${formatDate(range.end)}</small>`;
+        }
+    }
+
+    // Количество механиков — можно тоже из API, но пока оставим из DOM (если список загружен)
+    const mechanicsCount = document.querySelectorAll('#mechanicsList .list-group-item').length || 0;
+
     const html = `
         <div class="row">
             <div class="col-md-3 mb-3">
@@ -334,7 +484,7 @@ function updateStatistics() {
             <div class="col-md-3 mb-3">
                 <div class="card text-center bg-light">
                     <div class="card-body">
-                        <h1 class="display-5 text-success">${document.querySelectorAll('#mechanicsList .list-group-item').length || 0}</h1>
+                        <h1 class="display-5 text-success">${mechanicsCount}</h1>
                         <p class="card-text">Механиков в штате</p>
                     </div>
                 </div>
@@ -342,7 +492,7 @@ function updateStatistics() {
             <div class="col-md-3 mb-3">
                 <div class="card text-center bg-light">
                     <div class="card-body">
-                        <h1 class="display-5 text-info">${totalRevenue.toFixed(2)} ₽</h1>
+                        <h1 class="display-5 text-info">${formatMoney(totalRevenue)}</h1>
                         <p class="card-text">Общая выручка</p>
                     </div>
                 </div>
@@ -352,18 +502,70 @@ function updateStatistics() {
             <div class="col-12">
                 <div class="card">
                     <div class="card-body">
-                        <h6>Дополнительная статистика ${periodText}:</h6>
-                        <ul class="mb-0">
-                            <li>Средний чек: <strong>${averageOrderValue.toFixed(2)} ₽</strong></li>
-                            <li>Количество клиентов: <strong>${document.querySelectorAll('#clientsList .list-group-item').length || 0}</strong></li>
-                            <li>Количество автомобилей: <strong>${document.querySelectorAll('#carsList .list-group-item').length || 0}</strong></li>
-                            <li>Общее количество заказов: <strong>${ordersData.length}</strong></li>
+                        <h6>Дополнительная статистика ${periodText}</h6>
+                        ${extraInfo ? `<div class="mb-2">${extraInfo}</div>` : ''}
+                        <ul class="mb-0 list-unstyled">
+                            <li class="mb-2">
+                                <i class="bi bi-cash-stack text-success me-2"></i> Средний чек: <strong style="color: #198754;">${formatMoney(averageOrderValue)}</strong>
+                            </li>
+                            <li class="mb-2">
+                                <i class="bi bi-people text-primary me-2"></i> Количество клиентов (всего): <strong>${clientsCount}</strong>
+                            </li>
+                            <li class="mb-2">
+                                <i class="bi bi-car-front text-primary me-2"></i> Количество автомобилей (всего): <strong>${carsCount}</strong>
+                            </li>
+                            <li class="mb-2">
+                                <i class="bi bi-x-circle text-danger me-2"></i> Количество отменённых заказов: <strong style="color: #dc3545;">${cancelledOrders}</strong>
+                            </li>
+                            <li class="mb-2">
+                                <i class="bi bi-clipboard-check text-primary me-2"></i> Общее количество заказов (за период): <strong>${filteredOrders.length}</strong>
+                            </li>
                         </ul>
                     </div>
                 </div>
             </div>
         </div>
     `;
-    
+
     document.getElementById('statisticsContent').innerHTML = html;
 }
+
+// Инициализация обработчиков кнопок периодов
+function initPeriodButtons() {
+    const mainGroup = document.getElementById('periodMainGroup');
+    const subGroup = document.getElementById('periodSubGroup');
+
+    if (!mainGroup) return;
+
+    mainGroup.querySelectorAll('.btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            mainGroup.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            // При переключении на период, не равный 'all', показываем подгруппу и активируем "Текущий"
+            if (this.dataset.period !== 'all') {
+                subGroup.style.display = '';
+                // Сбрасываем выбор на "Текущий"
+                subGroup.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+                subGroup.querySelector('[data-subperiod="current"]').classList.add('active');
+            } else {
+                subGroup.style.display = 'none';
+            }
+            updateStatistics();
+        });
+    });
+
+    if (subGroup) {
+        subGroup.querySelectorAll('.btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                subGroup.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                updateStatistics();
+            });
+        });
+    }
+}
+
+// Вызовем инициализацию после загрузки страницы (или при открытии вкладки)
+document.addEventListener('DOMContentLoaded', () => {
+    initPeriodButtons();
+});

@@ -728,3 +728,30 @@
 .is-duplicate.is-invalid {
     border-color: #ffc107 !important;
 }
+
+/* === Кнопки выбора периода — убираем дёргание и лишнюю подсветку === */
+#periodMainGroup .btn,
+#periodSubGroup .btn {
+    transition: none !important;
+    box-shadow: none !important;
+}
+
+#periodMainGroup .btn:hover,
+#periodSubGroup .btn:hover {
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+#periodMainGroup .btn:focus,
+#periodSubGroup .btn:focus,
+#periodMainGroup .btn:active,
+#periodSubGroup .btn:active {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+#periodMainGroup .btn.active,
+#periodSubGroup .btn.active {
+    box-shadow: none !important;
+    outline: none !important;
+}
