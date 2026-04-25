@@ -188,7 +188,6 @@ function renderMechanicsList(mechanics) {
                 <p class="mb-1">
                     <i class="bi bi-telephone"></i> ${formatPhone(mechanic.phone)}<br>
                     <i class="bi bi-wrench"></i> ${mechanic.specialization || 'Не указана'}<br>
-                    <i class="bi bi-123"></i> Табельный номер: ${mechanic.employee_number || 'Не указан'}
                 </p>
                 <div class="mt-2">
                     <button class="btn btn-sm btn-outline-warning" onclick="editMechanic(${mechanic.user_id})">
@@ -274,13 +273,6 @@ async function editMechanic(mechanicId) {
                                     <label class="form-label">Специализация</label>
                                     <input type="text" class="form-control" id="editMechanicSpecialization" 
                                            value="${mechanic.specialization || ''}">
-                                </div>
-                                
-                                <div class="mb-3">
-                                    <label class="form-label">Табельный номер</label>
-                                    <input type="text" class="form-control" id="editMechanicEmployeeNumber" 
-                                           value="${mechanic.employee_number || ''}">
-                                    <div class="invalid-feedback" id="editMechanicEmployeeNumberError"></div>
                                 </div>
                                 
                                 <div class="mb-3">

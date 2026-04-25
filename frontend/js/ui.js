@@ -85,6 +85,7 @@ function showTab(tabName, event = null) {
                         if (carSelect) carSelect.innerHTML = '<option value="">Сначала выберите клиента</option>';
                         document.getElementById('orderProblem').value = '';
                         document.getElementById('orderPrice').value = '';
+                        initNewOrderPriceFormatting();
                     }
                 })
                 .catch(err => console.error('Ошибка загрузки клиентов для новой заявки:', err));
@@ -111,7 +112,7 @@ function updateClientSelects(clients) {
         if (!select) return;
         select.innerHTML = '<option value="">Выберите клиента</option>';
         clients.forEach(client => {
-            select.innerHTML += `<option value="${client.client_id}">${client.name} (${client.phone})</option>`;
+            select.innerHTML += `<option value="${client.client_id}">${client.name} (${formatPhone(client.phone)})</option>`;
         });
     });
 
@@ -425,10 +426,6 @@ async function updateStatistics() {
         .filter(o => o.status === 'Выполнен' && o.total_price)
         .reduce((sum, o) => sum + parseFloat(o.total_price), 0);
     const averageOrderValue = completedOrders > 0 ? totalRevenue / completedOrders : 0;
-
-    // Форматирование суммы: 130 780,12 ₽
-    const formatMoney = (value) =>
-        value.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₽';
 
     // Описание периода
     let periodText = '';

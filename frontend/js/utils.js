@@ -80,3 +80,8 @@ function getStatusClass(status) {
         default:                return 'status-created';
     }
 }
+
+function formatMoney(value) {
+    if (value === null || value === undefined || isNaN(value)) return '0,00 ₽';
+    return Number(value).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₽';
+}

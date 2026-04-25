@@ -43,9 +43,7 @@ async function loadOrders(filter = 'active') {
         let html = '<div class="list-group">';
         filteredOrders.forEach(order => {
             const statusClass = getStatusClass(order.status);
-            const price = order.total_price 
-                ? `${parseFloat(order.total_price).toFixed(2)} ₽` 
-                : '—';
+            const price = order.total_price ? formatMoney(order.total_price) : '—';
 
             html += `
                 <div class="list-group-item list-group-item-action" id="order-${order.order_id}">
@@ -117,7 +115,7 @@ async function editOrder(orderId) {
         // Создаем модальное окно для редактирования
         const modalHtml = `
             <div class="modal fade" id="editOrderModal" tabindex="-1" aria-labelledby="editOrderModalLabel" aria-hidden="true">
-                <div class="modal-dialog modal-lg">
+                <div class="modal-dialog" style="max-width: 990px;">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title" id="editOrderModalLabel">Редактировать заказ-наряд #${order.order_id}</h5>
@@ -158,6 +156,7 @@ async function editOrder(orderId) {
                                     <div class="mb-3">
                                         <label class="form-label">Стоимость (руб)</label>
                                         <input type="number" class="form-control" id="editOrderPrice" value="${order.total_price || ''}" step="0.01" min="0">
+                                        <div class="form-text text-success" id="editOrderPriceFormatted">${order.total_price ? formatMoney(order.total_price) : ''}</div>
                                     </div>
                                 </div>
                             </div>
@@ -191,6 +190,15 @@ async function editOrder(orderId) {
         // Добавляем модальное окно в DOM
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         
+        const editPriceInput = document.getElementById('editOrderPrice');
+        const editPriceFormatted = document.getElementById('editOrderPriceFormatted');
+        if (editPriceInput && editPriceFormatted) {
+            editPriceInput.addEventListener('input', function() {
+                const val = parseFloat(this.value);
+                editPriceFormatted.textContent = (!isNaN(val) && this.value.trim() !== '') ? formatMoney(val) : '';
+            });
+        }
+
         // Показываем модальное окно
         const modal = new bootstrap.Modal(document.getElementById('editOrderModal'));
         modal.show();
@@ -463,7 +471,7 @@ async function loadArchive() {
         let html = '<div class="list-group">';
         archiveOrders.forEach(order => {
             const statusClass = order.status === 'Выполнен' ? 'status-completed' : 'status-cancelled';
-            const price = order.total_price ? `${parseFloat(order.total_price).toFixed(2)} ₽` : '—';
+            const price = order.total_price ? formatMoney(order.total_price) : '—';
             
             html += `
                 <div class="list-group-item" id="archive-order-${order.order_id}">
@@ -520,5 +528,28 @@ async function deleteArchiveOrder(orderId) {
         }
     } catch (error) {
         showError('Ошибка подключения к серверу: ' + error.message);
+    }
+}
+
+// Инициализация форматирования суммы на вкладке "Новый заказ"
+function initNewOrderPriceFormatting() {
+    const priceInput = document.getElementById('orderPrice');
+    const priceFormatted = document.getElementById('orderPriceFormatted');
+    if (!priceInput || !priceFormatted) return;
+
+    // Удаляем старый обработчик, чтобы не дублировался при повторном вызове
+    priceInput.removeEventListener('input', handlePriceInput);
+    priceInput.addEventListener('input', handlePriceInput);
+
+    // Вызовем один раз, если значение уже есть (например, при возврате на вкладку)
+    handlePriceInput.call(priceInput);
+}
+
+// Вспомогательный обработчик
+function handlePriceInput() {
+    const val = parseFloat(this.value);
+    const formatted = document.getElementById('orderPriceFormatted');
+    if (formatted) {
+        formatted.textContent = (!isNaN(val) && this.value.trim() !== '') ? formatMoney(val) : '';
     }
 }

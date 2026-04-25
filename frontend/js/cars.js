@@ -271,7 +271,7 @@ async function loadClientCars(clientId) {
         let html = `
             <div class="mb-3">
                 <div class="alert alert-primary">
-                    <i class="bi bi-person"></i> Клиент: <strong>${client.name}</strong> (тел: ${client.phone})
+                    <i class="bi bi-person"></i> Клиент: <strong>${client.name}</strong> (тел: ${formatPhone(client.phone)})
                     <button class="btn btn-sm btn-outline-primary float-end" onclick="loadAllCarsInService()">
                         <i class="bi bi-arrow-left"></i> Все авто в сервисе
                     </button>
@@ -444,7 +444,6 @@ async function createCar() {
     }
 }
 
-// ========== РЕДАКТИРОВАНИЕ АВТОМОБИЛЯ ==========
 async function editCar(carId) {
     try {
         const response = await fetch(`${API_URL}/cars/${carId}`);
@@ -456,16 +455,19 @@ async function editCar(carId) {
 
         const modalHtml = `
             <div class="modal fade" id="editCarModal" tabindex="-1" aria-labelledby="editCarModalLabel" aria-hidden="true">
-                <div class="modal-dialog">
+                <div class="modal-dialog" style="max-width: 720px;">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title" id="editCarModalLabel">Редактировать автомобиль</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <div class="modal-body">
-                            <div class="alert alert-info mb-3">
-                                <i class="bi bi-person"></i> <strong>Владелец:</strong> ${client.name} (тел: ${client.phone})
-                                <br><small class="text-muted">Сменить владельца можно только через удаление и добавление нового автомобиля</small>
+                            <div class="alert alert-info mb-3 d-flex align-items-center flex-wrap">
+                                <i class="bi bi-person me-2"></i>
+                                <div>
+                                    <strong>Владелец:</strong> ${client.name} (тел: ${formatPhone(client.phone)})
+                                    <br><small class="text-muted">Сменить владельца можно только через удаление и добавление нового автомобиля</small>
+                                </div>
                             </div>
 
                             <div class="mb-3">
@@ -553,7 +555,6 @@ async function editCar(carId) {
         const gosInput = document.getElementById('editCarGosNumber');
         const vinCounter = document.getElementById('vinCounter');
 
-        // Сброс дубликата при вводе
         if (vinInput) {
             vinInput.addEventListener('input', function() {
                 showFieldDuplicate('editCarVin', null);
