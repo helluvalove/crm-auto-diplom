@@ -1,6 +1,7 @@
 // ==================== АВТОМОБИЛИ ====================
 
 let currentClients = [];
+let currentViewClientId = null;  // id клиента, чьи авто сейчас показаны, иначе null
 
 // ========== ОБЩАЯ ВАЛИДАЦИЯ ДАННЫХ АВТОМОБИЛЯ ==========
 function validateCarData(data, checkClientId = false, clientId = null) {
@@ -126,6 +127,16 @@ function viewAllClientCars() {
 }
 
 async function loadAllCarsInService() {
+    // Сбрасываем фильтр "авто клиента" и очищаем поле поиска
+    currentViewClientId = null;
+    const searchInput = document.getElementById('carClientSearch');
+    if (searchInput) {
+        searchInput.value = '';
+        delete searchInput.dataset.clientId;
+    }
+    const resultsContainer = document.getElementById('clientSearchResults');
+    if (resultsContainer) resultsContainer.style.display = 'none';
+
     const carsList = document.getElementById('carsList');
 
     carsList.innerHTML = `
@@ -248,6 +259,8 @@ function updateClientSearchForCars(clients) {
 }
 
 async function loadClientCars(clientId) {
+    currentViewClientId = clientId;  // запоминаем выбранного клиента
+
     const carsList = document.getElementById('carsList');
     carsList.innerHTML = `<div class="text-center py-4">...загрузка...</div>`;
 
@@ -339,7 +352,11 @@ async function deleteCar(carId) {
 
         if (response.ok) {
             showSuccess('Автомобиль удален');
-            loadAllCarsInService();
+            if (currentViewClientId) {
+                loadClientCars(currentViewClientId);
+            } else {
+                loadAllCarsInService();
+            }
         } else {
             const errorData = await response.json();
             if (errorData.active_orders) {
@@ -420,7 +437,7 @@ async function createCar() {
         if (response.ok) {
             showSuccess(`Автомобиль "${model}" добавлен!`);
             resetCarForm();
-            loadClientCars(clientId);
+            loadClientCars(clientId);  // после создания покажем авто этого клиента
         } else {
             if (data.details) {
                 if (data.details.vin) {
@@ -621,7 +638,11 @@ async function validateAndUpdateCar(carId) {
 
             setTimeout(() => {
                 if (document.getElementById('carsTab').style.display === 'block') {
-                    loadAllCarsInService();
+                    if (currentViewClientId) {
+                        loadClientCars(currentViewClientId);
+                    } else {
+                        loadAllCarsInService();
+                    }
                 }
             }, 500);
         } else {
