@@ -119,7 +119,6 @@ def update_mechanic(mechanic_id):
                     'duplicate_login': True
                 }), 400
         
-        # Обновление полей (employee_number удалено)
         update_fields = ['full_name', 'phone', 'specialization']
         for field in update_fields:
             if field in data:

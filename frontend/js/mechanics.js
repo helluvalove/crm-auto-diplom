@@ -10,7 +10,7 @@ async function loadMechanicsList() {
         } else {
             // Fallback для демо/теста
             mechanics = [
-                { user_id: 2, full_name: 'Петров Алексей', phone: '+79991234567', specialization: 'Двигатель', employee_number: '001', login: 'mechanic' }
+                { user_id: 2, full_name: 'Петров Алексей', phone: '+79991234567', specialization: 'Двигатель', login: 'mechanic' }
             ];
         }
 
@@ -27,7 +27,7 @@ async function createMechanic() {
     const fullName = document.getElementById('newMechanicName').value.trim();
     const phone = document.getElementById('newMechanicPhone').value.trim();
     const specialization = document.getElementById('newMechanicSpecialization').value.trim();
-    const employeeNumber = document.getElementById('newMechanicEmployeeNumber').value.trim();
+    // const employeeNumber = document.getElementById('newMechanicEmployeeNumber').value.trim(); ← УДАЛИТЬ
     const login = document.getElementById('newMechanicLogin').value.trim();
     const password = document.getElementById('newMechanicPassword').value;
 
@@ -75,7 +75,6 @@ async function createMechanic() {
         full_name: fullName,
         phone: phoneValidation.phone || phone,
         specialization: specialization || null,
-        employee_number: employeeNumber || null,
         login: login,
         password: password
     };
@@ -94,9 +93,9 @@ async function createMechanic() {
         if (response.ok) {
             showSuccess(`Механик "${fullName}" добавлен!`);
 
-            // Очистка формы
+            // Очистка формы – уберите 'newMechanicEmployeeNumber' из этого списка
             ['newMechanicName', 'newMechanicPhone', 'newMechanicSpecialization',
-             'newMechanicEmployeeNumber', 'newMechanicLogin', 'newMechanicPassword']
+             'newMechanicLogin', 'newMechanicPassword']
                 .forEach(id => {
                     const el = document.getElementById(id);
                     if (el) el.value = '';
@@ -108,7 +107,7 @@ async function createMechanic() {
         } else {
             if (errorData) {
                 if (errorData.error?.includes('телефон')) {
-                    showFieldError('newMechanicPhone', 'Механик с таким номером телефона уже существует');
+                    showFieldDuplicate('newMechanicPhone', 'Механик с таким номером телефона уже существует');
                     showError('Механик с таким номером телефона уже существует');
                 } else if (errorData.error?.includes('логин')) {
                     showFieldError('newMechanicLogin', 'Логин уже занят');
@@ -215,10 +214,12 @@ function updateMechanicSelect(mechanics) {
 // Очистка ошибок при создании механика
 function clearMechanicCreationErrors() {
     const fields = ['newMechanicName', 'newMechanicPhone', 'newMechanicSpecialization', 
-                   'newMechanicEmployeeNumber', 'newMechanicLogin', 'newMechanicPassword'];
+                    'newMechanicLogin', 'newMechanicPassword'];
     fields.forEach(fieldId => {
         showFieldError(fieldId, null);
     });
+    // Дополнительно сбрасываем жёлтую подсветку дубликата
+    showFieldDuplicate('newMechanicPhone', null);
 }
 
 // Функция для загрузки механиков в выпадающий список
@@ -266,7 +267,7 @@ async function editMechanic(mechanicId) {
                                     <input type="tel" class="form-control" id="editMechanicPhone" 
                                            value="${formatPhone(mechanic.phone)}" required>
                                     <div class="invalid-feedback" id="editMechanicPhoneError"></div>
-                                    <div class="form-text">В формате: +7XXX XXX-XX-XX</div>
+                                    <div class="form-text">В формате: +7(XXX) XXX-XX-XX</div>
                                 </div>
                                 
                                 <div class="mb-3">
@@ -318,6 +319,7 @@ async function editMechanic(mechanicId) {
         if (phoneInput) {
             phoneInput.addEventListener('input', function(e) {
                 formatPhoneInput(this);
+                showFieldDuplicate('editMechanicPhone', null);
             });
             
             phoneInput.addEventListener('keydown', function(e) {
@@ -374,7 +376,6 @@ async function validateAndUpdateMechanic(mechanicId) {
     const name = document.getElementById('editMechanicName').value.trim();
     const phone = document.getElementById('editMechanicPhone').value.trim();
     const specialization = document.getElementById('editMechanicSpecialization').value.trim();
-    const employeeNumber = document.getElementById('editMechanicEmployeeNumber').value.trim();
     const login = document.getElementById('editMechanicLogin').value.trim();
     const password = document.getElementById('editMechanicPassword').value;
     
@@ -428,7 +429,6 @@ async function validateAndUpdateMechanic(mechanicId) {
         full_name: name,
         phone: phoneValidation.isValid ? phoneValidation.phone : phone,
         specialization: specialization || null,
-        employee_number: employeeNumber || null,
         login: login
     };
     
@@ -485,20 +485,13 @@ async function validateAndUpdateMechanic(mechanicId) {
                 
                 // Показываем конкретные ошибки от сервера
                 if (errorData.duplicate_phone) {
-                    showMechanicValidationErrors({ 
-                        phone: 'Механик с таким номером телефона уже существует'
-                    });
+                    showFieldDuplicate('editMechanicPhone', 'Механик с таким номером телефона уже существует');
                     showError('Механик с таким номером телефона уже существует');
                 } else if (errorData.duplicate_login) {
                     showMechanicValidationErrors({ 
                         login: 'Логин уже занят другим пользователем'
                     });
                     showError('Логин уже занят другим пользователем');
-                } else if (errorData.duplicate_employee_number) {
-                    showMechanicValidationErrors({ 
-                        employee_number: 'Механик с таким табельным номером уже существует'
-                    });
-                    showError('Механик с таким табельным номером уже существует');
                 } else if (errorData.error) {
                     showError(errorData.error);
                 } else {
@@ -516,19 +509,20 @@ async function validateAndUpdateMechanic(mechanicId) {
 
 // Очистка ошибок валидации
 function clearMechanicValidationErrors() {
-    const fields = ['name', 'phone', 'login', 'password', 'employee_number'];
+    const fields = ['name', 'phone', 'login', 'password'];
     fields.forEach(field => {
         const input = document.getElementById(`editMechanic${field.charAt(0).toUpperCase() + field.slice(1)}`);
         const errorElement = document.getElementById(`editMechanic${field.charAt(0).toUpperCase() + field.slice(1)}Error`);
-        
         if (input) {
-            input.classList.remove('is-invalid', 'is-valid');
+            input.classList.remove('is-invalid', 'is-valid', 'is-duplicate'); // добавлен is-duplicate
         }
         if (errorElement) {
             errorElement.textContent = '';
             errorElement.style.display = 'none';
         }
     });
+    // Дополнительно сбрасываем дубликат телефона
+    showFieldDuplicate('editMechanicPhone', null);
 }
 
 // Показ ошибок валидации
@@ -571,3 +565,13 @@ function confirmDeleteMechanic(mechanicId) {
         }
     }, 300);
 }
+
+// Сброс жёлтого дубликата при вводе в поле телефона (форма создания)
+document.addEventListener('DOMContentLoaded', () => {
+    const newPhone = document.getElementById('newMechanicPhone');
+    if (newPhone) {
+        newPhone.addEventListener('input', () => {
+            showFieldDuplicate('newMechanicPhone', null);
+        });
+    }
+});
