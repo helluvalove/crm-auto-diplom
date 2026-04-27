@@ -96,23 +96,17 @@ async function loadOrders(filter = 'active') {
 // Функция редактирования заказа
 async function editOrder(orderId) {
     try {
-        // Загружаем информацию о заказе
         const response = await fetch(`${API_URL}/orders/${orderId}`);
-        if (!response.ok) {
-            throw new Error(`Ошибка загрузки заказа: ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`Ошибка загрузки заказа: ${response.status}`);
         
         const order = await response.json();
         
-        // Загружаем клиентов
         const clientsResponse = await fetch(`${API_URL}/clients`);
         const clients = clientsResponse.ok ? await clientsResponse.json() : [];
         
-        // Загружаем механиков
         const mechanicsResponse = await fetch(`${API_URL}/mechanics`);
         const mechanics = mechanicsResponse.ok ? await mechanicsResponse.json() : [];
         
-        // Создаем модальное окно для редактирования
         const modalHtml = `
             <div class="modal fade" id="editOrderModal" tabindex="-1" aria-labelledby="editOrderModalLabel" aria-hidden="true">
                 <div class="modal-dialog" style="max-width: 990px;">
@@ -160,6 +154,13 @@ async function editOrder(orderId) {
                                     </div>
                                 </div>
                             </div>
+
+                            <!-- Компактная информация об автомобиле -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold"><i class="bi bi-car-front"></i> Автомобиль</label>
+                                <input type="text" class="form-control bg-light" value="${order.car ? order.car.model + ', ' + (order.car.year || '—') + ' г., ' + 'VIN: ' + (order.car.vin || '—') + ', Госномер: ' + (order.car.gos_number || '—') + ', ' + (order.car.mileage ? order.car.mileage + ' км' : '—') : 'Нет данных'}" readonly>
+                            </div>
+
                             <div class="mb-3">
                                 <label class="form-label">Описание проблемы</label>
                                 <textarea class="form-control" id="editOrderProblem" rows="3">${order.problem_description || ''}</textarea>
@@ -183,11 +184,9 @@ async function editOrder(orderId) {
             </div>
         `;
         
-        // Удаляем старые модальные окна если есть
         const oldModal = document.getElementById('editOrderModal');
         if (oldModal) oldModal.remove();
         
-        // Добавляем модальное окно в DOM
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         
         const editPriceInput = document.getElementById('editOrderPrice');
@@ -198,22 +197,15 @@ async function editOrder(orderId) {
                 editPriceFormatted.textContent = (!isNaN(val) && this.value.trim() !== '') ? formatMoney(val) : '';
             });
         }
-
-        // Показываем модальное окно
+        
         const modal = new bootstrap.Modal(document.getElementById('editOrderModal'));
         modal.show();
         
-        // Загружаем автомобили выбранного клиента
         document.getElementById('editOrderClientSelect').addEventListener('change', async function() {
             const clientId = this.value;
             if (!clientId) return;
-            
             try {
-                const carsResponse = await fetch(`${API_URL}/cars/client/${clientId}`);
-                if (carsResponse.ok) {
-                    const cars = await carsResponse.json();
-                    // Можно добавить выпадающий список автомобилей если нужно
-                }
+                await fetch(`${API_URL}/cars/client/${clientId}`).then(r => r.json());
             } catch (error) {
                 console.error('Ошибка загрузки автомобилей:', error);
             }
@@ -335,7 +327,7 @@ async function createOrder() {
         return;
     }
     
-    // Проверяем, есть ли у автомобиля активные заказы
+    // Проверяем, есть ли у автомобиля активные заказы (любой статус, кроме Выполнен/Отменен)
     try {
         const ordersResponse = await fetch(`${API_URL}/orders`);
         if (ordersResponse.ok) {
@@ -346,10 +338,8 @@ async function createOrder() {
                 order.status !== 'Отменен'
             );
             
-            const hasOrderInWork = carActiveOrders.some(o => o.status === 'В работе');
-            
-            if (hasOrderInWork) {
-                showError('Нельзя создать заказ для автомобиля, который уже находится в работе!');
+            if (carActiveOrders.length > 0) {
+                showError('Нельзя создать заказ: у этого автомобиля уже есть активный заказ.');
                 return;
             }
         }
@@ -394,22 +384,42 @@ async function createOrder() {
 }
 
 function createOrderForClient(clientId, clientName) {
-    showTab('newOrder');
+    // Закрываем все модальные окна (например, окно списка авто клиента)
+    document.querySelectorAll('.modal.show').forEach(modal => {
+        const bsModal = bootstrap.Modal.getInstance(modal);
+        if (bsModal) bsModal.hide();
+    });
 
-    setTimeout(() => {
-        const clientSelect = document.getElementById('orderClientSelect');
-        if (clientSelect) {
-            clientSelect.value = clientId;
-            clientSelect.dispatchEvent(new Event('change', { bubbles: true }));
-        }
+    // Загружаем список клиентов, затем переключаем вкладку без сброса
+    fetch(`${API_URL}/clients`)
+        .then(res => res.ok ? res.json() : [])
+        .then(clients => {
+            showTab('newOrder', null, { skipReset: true });
+            updateClientSelects(clients);
 
-        document.getElementById('orderProblem')?.focus();
-        showInfo(`Создание заказа для клиента: ${clientName}`);
-    }, 100);
+            const clientSelect = document.getElementById('orderClientSelect');
+            if (clientSelect) {
+                clientSelect.value = clientId;
+                clientSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            document.getElementById('orderProblem')?.focus();
+            showInfo(`Создание заказа для клиента: ${clientName}`);
+        })
+        .catch(err => {
+            console.error('Ошибка загрузки клиентов:', err);
+            showError('Не удалось подготовить форму заказа');
+        });
 }
 
 async function createOrderForCar(carId, clientId) {
-    // Проверка активных заказов
+    // Закрываем все открытые модальные окна
+    document.querySelectorAll('.modal.show').forEach(modal => {
+        const bsModal = bootstrap.Modal.getInstance(modal);
+        if (bsModal) bsModal.hide();
+    });
+
+    // Проверка активных заказов (любой статус, кроме завершённых)
     try {
         const res = await fetch(`${API_URL}/orders`);
         if (res.ok) {
@@ -419,8 +429,8 @@ async function createOrderForCar(carId, clientId) {
                 o.status !== 'Выполнен' && 
                 o.status !== 'Отменен'
             );
-            if (active.some(o => o.status === 'В работе')) {
-                showError('Нельзя создать заказ — автомобиль уже в работе!');
+            if (active.length > 0) {
+                showError('Нельзя создать заказ: у этого автомобиля уже есть активный заказ.');
                 return;
             }
         }
@@ -428,24 +438,30 @@ async function createOrderForCar(carId, clientId) {
         console.error('Ошибка проверки заказов:', e);
     }
 
-    showTab('newOrder');
+    // Загружаем клиентов, переключаем вкладку без сброса
+    try {
+        const clientsRes = await fetch(`${API_URL}/clients`);
+        const clients = clientsRes.ok ? await clientsRes.json() : [];
+        
+        showTab('newOrder', null, { skipReset: true });
+        updateClientSelects(clients);
 
-    setTimeout(async () => {
         const clientSelect = document.getElementById('orderClientSelect');
         if (clientSelect) {
             clientSelect.value = clientId;
             clientSelect.dispatchEvent(new Event('change', { bubbles: true }));
 
-            // Ждём обновления списка автомобилей
-            setTimeout(() => {
-                const carSelect = document.getElementById('orderCarSelect');
-                if (carSelect) carSelect.value = carId;
-            }, 300);
+            await new Promise(resolve => setTimeout(resolve, 300));
+            const carSelect = document.getElementById('orderCarSelect');
+            if (carSelect) carSelect.value = carId;
         }
 
         document.getElementById('orderProblem')?.focus();
         showInfo('Создание заказа для выбранного автомобиля');
-    }, 100);
+    } catch (e) {
+        console.error('Ошибка подготовки формы заказа:', e);
+        showError('Не удалось подготовить форму заказа');
+    }
 }
 
 async function loadArchive() {

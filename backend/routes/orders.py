@@ -169,6 +169,17 @@ def create_order():
         if not car:
             return jsonify({'error': 'Автомобиль не найден'}), 404
         
+        # ---------- НОВАЯ ПРОВЕРКА ----------
+        active_order = WorkOrder.query.filter(
+            WorkOrder.car_id == data['car_id'],
+            WorkOrder.status.notin_(['Выполнен', 'Отменен'])
+        ).first()
+        if active_order:
+            return jsonify({
+                'error': 'У этого автомобиля уже есть активный заказ (не выполнен/не отменен). Один автомобиль — один активный заказ.'
+            }), 409  # Conflict
+        # ------------------------------------
+
         mechanic_id = data.get('mechanic_id')
         if mechanic_id:
             try:

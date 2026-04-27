@@ -28,7 +28,7 @@ function showFieldError(inputId, message) {
 }
 
 // ==================== УПРАВЛЕНИЕ ВКЛАДКАМИ ====================
-function showTab(tabName, event = null) {
+function showTab(tabName, event = null, options = {}) {   // ← добавляем options
     // Скрываем все вкладки
     document.querySelectorAll('.tab-pane').forEach(tab => {
         tab.style.display = 'none';
@@ -54,7 +54,7 @@ function showTab(tabName, event = null) {
     switch (tabName) {
         case 'cars':
             if (typeof resetCarForm === 'function') {
-                resetCarForm();                      // сбросим форму добавления авто
+                resetCarForm();
             }
             const resultsContainer = document.getElementById('clientSearchResults');
             if (resultsContainer) resultsContainer.style.display = 'none';
@@ -79,21 +79,23 @@ function showTab(tabName, event = null) {
             loadClients();
             break;
         case 'newOrder':
-            // Загружаем клиентов и сбрасываем форму
-            fetch(`${API_URL}/clients`)
-                .then(res => res.ok ? res.json() : [])
-                .then(clients => {
-                    if (clients.length > 0) {
-                        updateClientSelects(clients);
-                        document.getElementById('orderClientSelect').value = '';
-                        const carSelect = document.getElementById('orderCarSelect');
-                        if (carSelect) carSelect.innerHTML = '<option value="">Сначала выберите клиента</option>';
-                        document.getElementById('orderProblem').value = '';
-                        document.getElementById('orderPrice').value = '';
-                        initNewOrderPriceFormatting();
-                    }
-                })
-                .catch(err => console.error('Ошибка загрузки клиентов для новой заявки:', err));
+            // Если переход с выбранным клиентом — пропускаем сброс
+            if (!options.skipReset) {
+                fetch(`${API_URL}/clients`)
+                    .then(res => res.ok ? res.json() : [])
+                    .then(clients => {
+                        if (clients.length > 0) {
+                            updateClientSelects(clients);
+                            document.getElementById('orderClientSelect').value = '';
+                            const carSelect = document.getElementById('orderCarSelect');
+                            if (carSelect) carSelect.innerHTML = '<option value="">Сначала выберите клиента</option>';
+                            document.getElementById('orderProblem').value = '';
+                            document.getElementById('orderPrice').value = '';
+                            initNewOrderPriceFormatting();
+                        }
+                    })
+                    .catch(err => console.error('Ошибка загрузки клиентов для новой заявки:', err));
+            }
             break;
     }
 }
