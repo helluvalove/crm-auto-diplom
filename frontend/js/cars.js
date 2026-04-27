@@ -751,9 +751,6 @@ async function showClientCarsModal(clientId, clientName) {
                         </p>
                         ${ordersInfo}
                         <div class="mt-2">
-                            <button class="btn btn-sm btn-outline-primary" onclick="closeModalAndLoadClientCars(${clientId})" title="Подробнее">
-                                <i class="bi bi-info-circle"></i> Подробнее
-                            </button>
                             <button class="btn btn-sm btn-outline-success" onclick="createOrderForCar(${car.car_id}, ${clientId})"
                                     title="Создать заказ" ${hasOrderInWork ? 'disabled' : ''}>
                                 <i class="bi bi-plus-circle"></i> Новый заказ
@@ -809,6 +806,7 @@ async function showClientCarsModal(clientId, clientName) {
 }
 
 function closeModalAndLoadClientCars(clientId) {
+    // 1. Закрываем модальное окно
     const modalElement = document.getElementById('clientCarsModal');
     if (modalElement) {
         const modal = bootstrap.Modal.getInstance(modalElement);
@@ -816,9 +814,24 @@ function closeModalAndLoadClientCars(clientId) {
         modalElement.remove();
     }
 
-    setTimeout(() => {
-        loadClientCars(clientId);
-    }, 300);
+    // 2. Переключаемся на вкладку "Автомобили" вручную (без вызова showTab)
+    // Скрываем все вкладки
+    document.querySelectorAll('.tab-pane').forEach(pane => {
+        pane.style.display = 'none';
+    });
+    // Показываем вкладку "Автомобили"
+    const carsTab = document.getElementById('carsTab');
+    if (carsTab) carsTab.style.display = 'block';
+
+    // Обновляем активную кнопку в меню (снимаем active со всех, ставим на "Автомобили")
+    document.querySelectorAll('#mainTabs .nav-link').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    const carsTabButton = document.querySelector('button[onclick="showTab(\'cars\', event)"]');
+    if (carsTabButton) carsTabButton.classList.add('active');
+
+    // 3. Загружаем автомобили конкретного клиента
+    loadClientCars(clientId);
 }
 
 // ========== ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ ==========
@@ -833,18 +846,4 @@ document.addEventListener('DOMContentLoaded', () => {
         newGos.addEventListener('input', () => showFieldDuplicate('newCarGosNumber', null));
     }
 
-    const carsTabButton = document.querySelector('button[onclick="showTab(\'cars\', event)"]');
-    if (carsTabButton) {
-        carsTabButton.addEventListener('click', () => {
-            setTimeout(() => {
-                if (document.getElementById('carsTab').style.display === 'block') {
-                    // Сброс формы и поиска при открытии вкладки
-                    resetCarForm();
-                    const resultsContainer = document.getElementById('clientSearchResults');
-                    if (resultsContainer) resultsContainer.style.display = 'none';
-                    loadAllCarsInService();
-                }
-            }, 300);
-        });
-    }
 });

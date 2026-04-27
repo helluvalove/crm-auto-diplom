@@ -53,6 +53,11 @@ function showTab(tabName, event = null) {
     // Автозагрузка данных для конкретных вкладок
     switch (tabName) {
         case 'cars':
+            if (typeof resetCarForm === 'function') {
+                resetCarForm();                      // сбросим форму добавления авто
+            }
+            const resultsContainer = document.getElementById('clientSearchResults');
+            if (resultsContainer) resultsContainer.style.display = 'none';
             loadAllCarsInService();
             break;
         case 'requests':
