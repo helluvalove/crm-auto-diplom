@@ -62,7 +62,17 @@ def get_orders():
     """Получить все заказы"""
     try:
         orders = WorkOrder.query.all()
-        
+
+        # Собираем уникальные mechanic_id (не None)
+        mechanic_ids = list(set(o.mechanic_id for o in orders if o.mechanic_id))
+        mechanic_names = {}
+        if mechanic_ids:
+            mechanics = User.query.join(Role).filter(
+                User.user_id.in_(mechanic_ids),
+                Role.role_name == 'mechanic'
+            ).all()
+            mechanic_names = {m.user_id: m.full_name for m in mechanics}
+
         orders_list = []
         for order in orders:
             order_data = {
@@ -71,6 +81,7 @@ def get_orders():
                 'car_id': order.car_id,
                 'manager_id': order.manager_id,
                 'mechanic_id': order.mechanic_id,
+                'mechanic_name': mechanic_names.get(order.mechanic_id) if order.mechanic_id else None,  # новое поле
                 'status': order.status,
                 'problem_description': order.problem_description,
                 'work_description': order.work_description,
@@ -79,18 +90,19 @@ def get_orders():
                 'completed_date': order.completed_date.isoformat() if order.completed_date else None,
                 'pdf_url': order.pdf_url
             }
-            
+
             if order.client:
                 order_data['client_name'] = order.client.name
                 order_data['client_phone'] = order.client.phone
-            
+
             if order.car:
                 order_data['car_model'] = order.car.model
                 order_data['car_vin'] = order.car.vin
                 order_data['car_gos_number'] = order.car.gos_number
-            
+                order_data['car_year'] = order.car.year        # уже было раньше
+
             orders_list.append(order_data)
-        
+
         return jsonify(orders_list)
     except Exception as e:
         print(f"❌ Ошибка в get_orders: {e}")

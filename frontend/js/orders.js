@@ -70,8 +70,14 @@ async function loadOrders(filter = 'active') {
                     <small class="text-muted">
                         <i class="bi bi-calendar"></i> ${new Date(order.created_date).toLocaleDateString()}
                         | Клиент: ${order.client_name || 'N/A'}
-                        ${order.mechanic_id ? `| Механик ID: ${order.mechanic_id}` : ''}
+                        ${order.mechanic_id ? `| Механик: ${order.mechanic_name || 'Механик'} (ID: ${order.mechanic_id})` : ''}
                     </small>
+                    <div class="mt-1">
+                        <i class="bi bi-car-front"></i>
+                        ${order.car_model || '—'}
+                        ${order.car_year ? `(${order.car_year} г.)` : ''}
+                        ${order.car_gos_number ? ` Госномер: ${order.car_gos_number}` : ''}
+                    </div>
                     <div class="mt-2">
                         ${order.status === 'Готов к выдаче' 
                             ? `<button class="btn btn-sm btn-outline-success" onclick="completeOrder(${order.order_id})">
