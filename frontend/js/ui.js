@@ -2,18 +2,11 @@
 function showFieldError(inputId, message) {
     const input = document.getElementById(inputId);
     if (!input) return;
-
     const errorId = inputId + 'Error';
-
-    // Удаляем старую ошибку
     const oldError = document.getElementById(errorId);
     if (oldError) oldError.remove();
-
-    // Сбрасываем классы
     input.classList.remove('is-valid', 'is-invalid');
-
     if (message) {
-        // Ошибка
         input.classList.add('is-invalid');
         const errorDiv = document.createElement('div');
         errorDiv.id = errorId;
@@ -22,20 +15,19 @@ function showFieldError(inputId, message) {
         errorDiv.style.display = 'block';
         input.parentNode.appendChild(errorDiv);
     } else if (input.value.trim()) {
-        // Успех (только если поле не пустое)
         input.classList.add('is-valid');
     }
 }
 
-// ==================== УПРАВЛЕНИЕ ВКЛАДКАМИ ====================
-function showTab(tabName, event = null, options = {}) {   // ← добавляем options
+// ==================== УПРАВЛЕНИЕ ВКЛАДКАМИ (ОБЩЕЕ) ====================
+function showTab(tabName, event = null, options = {}) {
     // Скрываем все вкладки
     document.querySelectorAll('.tab-pane').forEach(tab => {
         tab.style.display = 'none';
     });
 
-    // Убираем активный класс у всех кнопок
-    document.querySelectorAll('#mainTabs .nav-link').forEach(btn => {
+    // Снимаем активный класс со всех кнопок в обеих панелях
+    document.querySelectorAll('#mainTabs .nav-link, #mobileNav .nav-link').forEach(btn => {
         btn.classList.remove('active');
     });
 
@@ -43,19 +35,17 @@ function showTab(tabName, event = null, options = {}) {   // ← добавля�
     const targetTab = document.getElementById(`${tabName}Tab`);
     if (targetTab) targetTab.style.display = 'block';
 
-    // Активируем кнопку вкладки
-    const tabButton = document.querySelector(`#mainTabs button[onclick*="showTab('${tabName}'"]`);
+    // Ищем кнопку, соответствующую вкладке, в обеих панелях и делаем её активной
+    const buttonSelector = `#mainTabs button[onclick*="showTab('${tabName}'"], #mobileNav button[onclick*="showTab('${tabName}'"]`;
+    const tabButton = document.querySelector(buttonSelector);
     if (tabButton) tabButton.classList.add('active');
-
-    // Если кликнули по кнопке — тоже активируем
+    // Дополнительно, если передан event, то активируем и его цель (на случай прямого клика)
     if (event?.target) event.target.classList.add('active');
 
     // Автозагрузка данных для конкретных вкладок
     switch (tabName) {
         case 'cars':
-            if (typeof resetCarForm === 'function') {
-                resetCarForm();
-            }
+            if (typeof resetCarForm === 'function') resetCarForm();
             const resultsContainer = document.getElementById('clientSearchResults');
             if (resultsContainer) resultsContainer.style.display = 'none';
             loadAllCarsInService();
@@ -79,7 +69,6 @@ function showTab(tabName, event = null, options = {}) {   // ← добавля�
             loadClients();
             break;
         case 'newOrder':
-            // Если переход с выбранным клиентом — пропускаем сброс
             if (!options.skipReset) {
                 fetch(`${API_URL}/clients`)
                     .then(res => res.ok ? res.json() : [])
@@ -97,24 +86,29 @@ function showTab(tabName, event = null, options = {}) {   // ← добавля�
                     .catch(err => console.error('Ошибка загрузки клиентов для новой заявки:', err));
             }
             break;
+        case 'availableOrders':
+            loadAvailableOrders();
+            break;
+        case 'myWorks':
+            loadMyWork();
+            break;
+        case 'mechanicProfile':
+            loadMechanicProfile();
+            break;
     }
 }
 
 function filterOrders(status, event = null) {
-    // Сбрасываем активные кнопки
     document.querySelectorAll('#ordersTab .btn-group button').forEach(btn => {
         btn.classList.remove('active');
     });
-
     if (event?.target) event.target.classList.add('active');
-
     loadOrders(status === 'all' ? 'all' : status);
 }
 
 function updateClientSelects(clients) {
     const carSelect = document.getElementById('carClientSelect');
     const orderSelect = document.getElementById('orderClientSelect');
-
     [carSelect, orderSelect].forEach(select => {
         if (!select) return;
         select.innerHTML = '<option value="">Выберите клиента</option>';
@@ -122,8 +116,6 @@ function updateClientSelects(clients) {
             select.innerHTML += `<option value="${client.client_id}">${client.name} (${formatPhone(client.phone)})</option>`;
         });
     });
-
-    // Добавляем обработчик изменения клиента в форме нового заказа
     if (orderSelect) {
         orderSelect.removeEventListener('change', handleClientSelectChange);
         orderSelect.addEventListener('change', handleClientSelectChange);
@@ -134,16 +126,10 @@ function updateClientSelects(clients) {
 function showFieldDuplicate(inputId, message) {
     const input = document.getElementById(inputId);
     if (!input) return;
-
     const errorId = inputId + 'Error';
-
-    // Удаляем старые сообщения
     const oldError = document.getElementById(errorId);
     if (oldError) oldError.remove();
-
-    // Сбрасываем все классы состояния
     input.classList.remove('is-valid', 'is-invalid', 'is-duplicate');
-
     if (message) {
         input.classList.add('is-duplicate');
         const errorDiv = document.createElement('div');
@@ -153,7 +139,6 @@ function showFieldDuplicate(inputId, message) {
         errorDiv.style.display = 'block';
         input.parentNode.appendChild(errorDiv);
     } else {
-        // Если сообщение null, просто сбрасываем состояние
         input.classList.remove('is-duplicate');
     }
 }
@@ -163,19 +148,15 @@ async function handleClientSelectChange() {
     const clientId = this.value;
     const carSelect = document.getElementById('orderCarSelect');
     if (!carSelect) return;
-
     if (!clientId) {
         carSelect.innerHTML = '<option value="">Сначала выберите клиента</option>';
         return;
     }
-
     try {
         const response = await fetch(`${API_URL}/cars/client/${clientId}`);
         if (!response.ok) throw new Error();
-
         const cars = await response.json();
         carSelect.innerHTML = '<option value="">Выберите автомобиль</option>';
-
         cars.forEach(car => {
             const text = `${car.model} ${car.vin ? '(VIN: ' + car.vin + ')' : ''} ${car.gos_number ? '(' + car.gos_number + ')' : ''}`;
             carSelect.innerHTML += `<option value="${car.car_id}">${text}</option>`;
@@ -187,29 +168,17 @@ async function handleClientSelectChange() {
 }
 
 // ==================== УТИЛИТЫ ====================
-function showSuccess(message) {
-    showAlert(message, 'success');
-}
-
-function showError(message) {
-    showAlert(message, 'danger');
-}
-
-function showInfo(message) {
-    showAlert(message, 'info');
-}
+function showSuccess(message) { showAlert(message, 'success'); }
+function showError(message) { showAlert(message, 'danger'); }
+function showInfo(message) { showAlert(message, 'info'); }
 
 function showAlert(message, type) {
-    // Удаляем старые уведомления
     document.querySelectorAll('.alert-notification').forEach(alert => alert.remove());
-
     const alertDiv = document.createElement('div');
     alertDiv.className = `alert alert-${type} alert-notification alert-dismissible fade show`;
     alertDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
-
     const icon = type === 'success' ? 'check-circle-fill' :
                  type === 'danger' ? 'exclamation-triangle-fill' : 'info-circle-fill';
-
     alertDiv.innerHTML = `
         <div class="d-flex align-items-center">
             <i class="bi bi-${icon} me-2 fs-5"></i>
@@ -220,10 +189,7 @@ function showAlert(message, type) {
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     `;
-
     document.body.appendChild(alertDiv);
-
-    // Автоскрытие через 5 секунд
     setTimeout(() => {
         if (alertDiv.parentNode) {
             alertDiv.classList.remove('show');
@@ -239,21 +205,17 @@ async function checkAPIStatus() {
         console.warn('Элемент #systemStatus не найден в DOM');
         return;
     }
-
     statusElement.innerHTML = `
         <div class="alert alert-info">
             <i class="bi bi-hourglass-split"></i> Проверка подключения к API...
         </div>
     `;
-
     try {
-        // Основная проверка API
         const apiResponse = await fetch('/api', { 
             method: 'GET',
             cache: 'no-cache',
             headers: { 'Accept': 'application/json' }
         });
-
         if (apiResponse.ok) {
             const data = await apiResponse.json();
             statusElement.innerHTML = `
@@ -264,13 +226,7 @@ async function checkAPIStatus() {
             `;
             return;
         }
-
-        // Если /api не ответил — проверяем корень сайта
-        const rootResponse = await fetch('/', { 
-            method: 'GET',
-            cache: 'no-cache'
-        });
-
+        const rootResponse = await fetch('/', { method: 'GET', cache: 'no-cache' });
         if (rootResponse.ok) {
             statusElement.innerHTML = `
                 <div class="alert alert-warning">
@@ -281,7 +237,6 @@ async function checkAPIStatus() {
         } else {
             throw new Error('Сервер не отвечает');
         }
-
     } catch (error) {
         console.error('checkAPIStatus error:', error);
         statusElement.innerHTML = `

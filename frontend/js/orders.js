@@ -46,7 +46,7 @@ async function loadOrders(filter = 'active') {
             const price = order.total_price ? formatMoney(order.total_price) : '—';
 
             html += `
-                <div class="list-group-item list-group-item-action" id="order-${order.order_id}">
+                <div class="list-group-item list-group-item-action" id="order-${order.order_id}" title="Двойной клик — быстрый просмотр">
                     <div class="d-flex w-100 justify-content-between">
                         <h6 class="mb-1">Заказ-наряд #${order.order_id}</h6>
                         <div>
@@ -63,9 +63,6 @@ async function loadOrders(filter = 'active') {
                         <span class="${statusClass}">
                             <i class="bi bi-circle-fill"></i> ${order.status}
                         </span>
-                        ${order.problem_description 
-                            ? `<br>${order.problem_description.substring(0, 100)}${order.problem_description.length > 100 ? '...' : ''}` 
-                            : ''}
                     </p>
                     <small class="text-muted">
                         <i class="bi bi-calendar"></i> ${new Date(order.created_date).toLocaleDateString()}
@@ -96,6 +93,101 @@ async function loadOrders(filter = 'active') {
     } catch (error) {
         console.error('Ошибка загрузки заказов:', error);
         showError('Ошибка загрузки заказов: ' + error.message);
+    }
+}
+
+// Функция быстрого просмотра заказа (read-only)
+async function showOrderDetails(orderId) {
+    try {
+        const response = await fetch(`${API_URL}/orders/${orderId}`);
+        if (!response.ok) throw new Error(`Ошибка загрузки заказа: ${response.status}`);
+        const order = await response.json();
+
+        const modalHtml = `
+            <div class="modal fade" id="viewOrderModal" tabindex="-1">
+                <div class="modal-dialog" style="max-width: 990px;">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Просмотр заказ-наряда #${order.order_id}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Клиент</label>
+                                        <input class="form-control" value="${order.client?.name || '—'} ${formatPhone(order.client?.phone || '')}" disabled>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Статус</label>
+                                        <input class="form-control" value="${order.status}" disabled>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Стоимость (руб)</label>
+                                        <input class="form-control" value="${order.total_price ? formatMoney(order.total_price) : '—'}" disabled>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Механик</label>
+                                        <input class="form-control" value="${order.mechanic?.full_name || 'Не назначен'}" disabled>
+                                    </div>
+                                    <!-- Информация об автомобиле в столбик (VIN и Год поменяны местами) -->
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold"><i class="bi bi-car-front"></i> Автомобиль</label>
+                                        <div class="row g-2">
+                                            <div class="col-md-6">
+                                                <input type="text" class="form-control" value="${order.car ? order.car.model : 'Нет данных'}" disabled>
+                                                <small class="text-muted">Модель</small>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <input type="text" class="form-control" value="${order.car ? order.car.year || '—' : '—'}" disabled>
+                                                <small class="text-muted">Год</small>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <input type="text" class="form-control" value="${order.car ? order.car.gos_number || '—' : '—'}" disabled>
+                                                <small class="text-muted">Госномер</small>
+                                            </div>
+                                        </div>
+                                        <div class="row g-2 mt-2">
+                                            <div class="col-md-9">
+                                                <input type="text" class="form-control" value="${order.car ? order.car.vin || '—' : '—'}" disabled>
+                                                <small class="text-muted">VIN</small>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <input type="text" class="form-control" value="${order.car ? (order.car.mileage ? order.car.mileage + ' км' : '—') : '—'}" disabled>
+                                                <small class="text-muted">Пробег</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Описание проблемы</label>
+                                <textarea class="form-control" rows="3" disabled>${order.problem_description || ''}</textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Описание работ</label>
+                                <textarea class="form-control" rows="3" disabled>${order.work_description || ''}</textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const oldModal = document.getElementById('viewOrderModal');
+        if (oldModal) oldModal.remove();
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        const modal = new bootstrap.Modal(document.getElementById('viewOrderModal'));
+        modal.show();
+    } catch (error) {
+        console.error('Ошибка просмотра заказа:', error);
+        showError('Не удалось загрузить информацию о заказе');
     }
 }
 
@@ -161,10 +253,33 @@ async function editOrder(orderId) {
                                 </div>
                             </div>
 
-                            <!-- Компактная информация об автомобиле -->
+                            <!-- Компактная информация об автомобиле (VIN и Год поменяны местами) -->
                             <div class="mb-3">
                                 <label class="form-label fw-bold"><i class="bi bi-car-front"></i> Автомобиль</label>
-                                <input type="text" class="form-control bg-light" value="${order.car ? order.car.model + ', ' + (order.car.year || '—') + ' г., ' + 'VIN: ' + (order.car.vin || '—') + ', Госномер: ' + (order.car.gos_number || '—') + ', ' + (order.car.mileage ? order.car.mileage + ' км' : '—') : 'Нет данных'}" readonly>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <input type="text" class="form-control bg-light" value="${order.car ? order.car.model : 'Нет данных'}" readonly>
+                                        <small class="text-muted">Модель</small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <input type="text" class="form-control bg-light" value="${order.car ? order.car.year || '—' : '—'}" readonly>
+                                        <small class="text-muted">Год</small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <input type="text" class="form-control bg-light" value="${order.car ? order.car.gos_number || '—' : '—'}" readonly>
+                                        <small class="text-muted">Госномер</small>
+                                    </div>
+                                </div>
+                                <div class="row g-2 mt-2">
+                                    <div class="col-md-9">
+                                        <input type="text" class="form-control bg-light" value="${order.car ? order.car.vin || '—' : '—'}" readonly>
+                                        <small class="text-muted">VIN</small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <input type="text" class="form-control bg-light" value="${order.car ? (order.car.mileage ? order.car.mileage + ' км' : '—') : '—'}" readonly>
+                                        <small class="text-muted">Пробег</small>
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="mb-3">
@@ -252,11 +367,9 @@ async function updateOrder(orderId) {
         if (response.ok) {
             showSuccess('Заказ-наряд обновлен!');
             
-            // Закрываем модальное окно
             const modal = bootstrap.Modal.getInstance(document.getElementById('editOrderModal'));
             modal.hide();
             
-            // Обновляем список заказов
             loadOrders('active');
             
         } else {
@@ -282,7 +395,7 @@ async function deleteOrder(orderId) {
             showSuccess('Заказ-наряд удален');
             document.getElementById(`order-${orderId}`).remove();
             loadOrders('active');
-            loadAllCarsInService(); // Обновляем список автомобилей в сервисе
+            loadAllCarsInService();
         } else {
             const errorData = await response.json();
             showError(errorData.error || 'Ошибка удаления заказа');
@@ -306,9 +419,8 @@ async function completeOrder(orderId) {
             showSuccess('Заказ-наряд завершен и перемещен в архив');
             loadOrders('active');
             loadArchive();
-            loadAllCarsInService(); // Обновляем список автомобилей в сервисе
+            loadAllCarsInService();
             
-            // Закрываем модальное окно если оно открыто
             const modal = document.getElementById('editOrderModal');
             if (modal) {
                 const bsModal = bootstrap.Modal.getInstance(modal);
@@ -333,7 +445,6 @@ async function createOrder() {
         return;
     }
     
-    // Проверяем, есть ли у автомобиля активные заказы (любой статус, кроме Выполнен/Отменен)
     try {
         const ordersResponse = await fetch(`${API_URL}/orders`);
         if (ordersResponse.ok) {
@@ -377,7 +488,7 @@ async function createOrder() {
             document.getElementById('orderPrice').value = '';
             
             loadOrders('active');
-            loadAllCarsInService(); // Обновляем список автомобилей в сервисе
+            loadAllCarsInService();
             showTab('orders');
             
         } else {
@@ -390,13 +501,11 @@ async function createOrder() {
 }
 
 function createOrderForClient(clientId, clientName) {
-    // Закрываем все модальные окна (например, окно списка авто клиента)
     document.querySelectorAll('.modal.show').forEach(modal => {
         const bsModal = bootstrap.Modal.getInstance(modal);
         if (bsModal) bsModal.hide();
     });
 
-    // Загружаем список клиентов, затем переключаем вкладку без сброса
     fetch(`${API_URL}/clients`)
         .then(res => res.ok ? res.json() : [])
         .then(clients => {
@@ -419,13 +528,11 @@ function createOrderForClient(clientId, clientName) {
 }
 
 async function createOrderForCar(carId, clientId) {
-    // Закрываем все открытые модальные окна
     document.querySelectorAll('.modal.show').forEach(modal => {
         const bsModal = bootstrap.Modal.getInstance(modal);
         if (bsModal) bsModal.hide();
     });
 
-    // Проверка активных заказов (любой статус, кроме завершённых)
     try {
         const res = await fetch(`${API_URL}/orders`);
         if (res.ok) {
@@ -444,7 +551,6 @@ async function createOrderForCar(carId, clientId) {
         console.error('Ошибка проверки заказов:', e);
     }
 
-    // Загружаем клиентов, переключаем вкладку без сброса
     try {
         const clientsRes = await fetch(`${API_URL}/clients`);
         const clients = clientsRes.ok ? await clientsRes.json() : [];
@@ -529,7 +635,6 @@ async function loadArchive() {
     }
 }
 
-// Функция удаления заказа из архива
 async function deleteArchiveOrder(orderId) {
     if (!confirm('Вы уверены, что хотите удалить этот заказ из архива?')) {
         return;
@@ -553,21 +658,16 @@ async function deleteArchiveOrder(orderId) {
     }
 }
 
-// Инициализация форматирования суммы на вкладке "Новый заказ"
 function initNewOrderPriceFormatting() {
     const priceInput = document.getElementById('orderPrice');
     const priceFormatted = document.getElementById('orderPriceFormatted');
     if (!priceInput || !priceFormatted) return;
 
-    // Удаляем старый обработчик, чтобы не дублировался при повторном вызове
     priceInput.removeEventListener('input', handlePriceInput);
     priceInput.addEventListener('input', handlePriceInput);
-
-    // Вызовем один раз, если значение уже есть (например, при возврате на вкладку)
     handlePriceInput.call(priceInput);
 }
 
-// Вспомогательный обработчик
 function handlePriceInput() {
     const val = parseFloat(this.value);
     const formatted = document.getElementById('orderPriceFormatted');
@@ -575,3 +675,16 @@ function handlePriceInput() {
         formatted.textContent = (!isNaN(val) && this.value.trim() !== '') ? formatMoney(val) : '';
     }
 }
+
+// Обработчик двойного клика для быстрого просмотра заказа
+document.addEventListener('DOMContentLoaded', () => {
+    const ordersList = document.getElementById('ordersList');
+    if (ordersList) {
+        ordersList.addEventListener('dblclick', function(e) {
+            const card = e.target.closest('.list-group-item-action');
+            if (!card) return;
+            const orderId = card.id?.replace('order-', '');
+            if (orderId) showOrderDetails(orderId);
+        });
+    }
+});
