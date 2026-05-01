@@ -181,7 +181,7 @@ def create_order():
         if not car:
             return jsonify({'error': 'Автомобиль не найден'}), 404
         
-        # ---------- НОВАЯ ПРОВЕРКА ----------
+        # ---------- ПРОВЕРКА: у автомобиля только один активный заказ ----------
         active_order = WorkOrder.query.filter(
             WorkOrder.car_id == data['car_id'],
             WorkOrder.status.notin_(['Выполнен', 'Отменен'])
@@ -190,8 +190,8 @@ def create_order():
             return jsonify({
                 'error': 'У этого автомобиля уже есть активный заказ (не выполнен/не отменен). Один автомобиль — один активный заказ.'
             }), 409  # Conflict
-        # ------------------------------------
 
+        # ---------- ПРОВЕРКА МЕХАНИКА ----------
         mechanic_id = data.get('mechanic_id')
         if mechanic_id:
             try:
@@ -203,8 +203,32 @@ def create_order():
                 ).first()
                 if not mechanic:
                     mechanic_id = None
+                else:
+                    # У механика не должно быть других активных заказов
+                    active_order_mech = WorkOrder.query.filter(
+                        WorkOrder.mechanic_id == mechanic_id,
+                        WorkOrder.status.notin_(['Выполнен', 'Отменен'])
+                    ).first()
+                    if active_order_mech:
+                        return jsonify({
+                            'error': 'Механик уже имеет активный заказ. Один механик — один активный заказ.',
+                            'busy_mechanic': True
+                        }), 409
             except:
                 mechanic_id = None
+
+        # ---------- ВАЛИДАЦИЯ СУММЫ ----------
+        total_price = data.get('total_price')
+        total_price_val = None
+        if total_price is not None and str(total_price).strip() != '':
+            try:
+                total_price_val = float(total_price)
+                if total_price_val < 0:
+                    return jsonify({'error': 'Сумма не может быть отрицательной'}), 400
+                if total_price_val > 99999999.99:
+                    return jsonify({'error': 'Сумма превышает максимально допустимую (99 999 999,99 ₽)'}), 400
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Некорректное значение суммы'}), 400
         
         order = WorkOrder(
             client_id=data['client_id'],
@@ -213,9 +237,9 @@ def create_order():
             status=data.get('status', 'Создан'),
             problem_description=data['problem_description'],
             work_description=data.get('work_description'),
-            total_price=data.get('total_price'),
+            total_price=total_price_val,
             created_date=datetime.now(),
-            pdf_url=data.get('pdf_url')                     # новое поле
+            pdf_url=data.get('pdf_url')
         )
         
         db.session.add(order)
@@ -237,6 +261,7 @@ def create_order():
         print(f"❌ Ошибка в create_order: {e}")
         return jsonify({'error': str(e)}), 500
 
+
 def update_order(order_id):
     """Обновить заказ"""
     try:
@@ -254,8 +279,21 @@ def update_order(order_id):
         if 'work_description' in data:
             order.work_description = data['work_description']
         
+        # ---------- ВАЛИДАЦИЯ СУММЫ ----------
         if 'total_price' in data:
-            order.total_price = data['total_price']
+            price = data['total_price']
+            if price is not None and str(price).strip() != '':
+                try:
+                    price_val = float(price)
+                    if price_val < 0:
+                        return jsonify({'error': 'Сумма не может быть отрицательной'}), 400
+                    if price_val > 99999999.99:
+                        return jsonify({'error': 'Сумма превышает максимально допустимую (99 999 999,99 ₽)'}), 400
+                    order.total_price = price_val
+                except (ValueError, TypeError):
+                    return jsonify({'error': 'Некорректное значение суммы'}), 400
+            else:
+                order.total_price = None
         
         if 'pdf_url' in data:
             order.pdf_url = data['pdf_url']
@@ -270,6 +308,17 @@ def update_order(order_id):
                         Role.role_name == 'mechanic'
                     ).first()
                     if mechanic:
+                        # Нет другого активного заказа у этого механика
+                        active_order = WorkOrder.query.filter(
+                            WorkOrder.mechanic_id == mechanic_id,
+                            WorkOrder.order_id != order_id,          # исключаем текущий
+                            WorkOrder.status.notin_(['Выполнен', 'Отменен'])
+                        ).first()
+                        if active_order:
+                            return jsonify({
+                                'error': 'Механик уже имеет другой активный заказ.',
+                                'busy_mechanic': True
+                            }), 409
                         order.mechanic_id = mechanic_id
                     else:
                         order.mechanic_id = None

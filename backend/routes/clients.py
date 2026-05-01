@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 from models import db, Client, WorkOrder, Car
+from crypto import hash_phone            # <-- добавлен импорт
 import re
 import jwt
 
@@ -85,6 +86,7 @@ def validate_russian_phone(phone):
         else:
             return None, "Неверный формат телефона. Используйте +7XXXXXXXXXX, 8XXXXXXXXXX или 7XXXXXXXXXX"
 
+
 def validate_client_data(data, is_update=False, client_id=None):
     """Валидация данных клиента с подробными сообщениями об ошибках"""
     errors = {}
@@ -103,40 +105,35 @@ def validate_client_data(data, is_update=False, client_id=None):
             errors['name'] = 'Имя должно содержать минимум 2 символа'
         elif len(name) > 100:
             errors['name'] = 'Имя не должно превышать 100 символов'
-        # Проверка на недопустимые символы
         elif not re.match(r'^[a-zA-Zа-яА-ЯёЁ\s\-]+$', name):
             errors['name'] = 'Имя может содержать только буквы, пробелы и дефисы'
     
     # Валидация телефона (если передано)
     if 'phone' in data and data['phone']:
         phone = data['phone'].strip()
-        
-        # Получаем результат валидации телефона
         validation_result = validate_russian_phone(phone)
         
-        if validation_result[1]:  # Если есть ошибка (второй элемент кортежа)
+        if validation_result[1]:  # Есть ошибка
             errors['phone'] = validation_result[1]
         else:
-            validated_phone = validation_result[0]  # Первый элемент - валидированный телефон
+            validated_phone = validation_result[0]
             
-            # Проверяем уникальность телефона
-            query = Client.query.filter_by(phone=validated_phone)
+            # Проверяем уникальность телефона по ХЭШУ
+            query = Client.query.filter_by(phone_hash=hash_phone(validated_phone))
             if client_id:
-                # При обновлении исключаем текущего клиента из проверки
                 query = query.filter(Client.client_id != client_id)
             
             existing_client = query.first()
             if existing_client:
+                # existing_client.name вернёт расшифрованное имя
                 errors['phone'] = f'Клиент с таким номером телефона уже существует (ID: {existing_client.client_id}, Имя: {existing_client.name})'
             else:
-                # Сохраняем валидированный телефон в данные
                 data['_validated_phone'] = validated_phone
     
     # Валидация vk_user_id (если передано)
     if 'vk_user_id' in data and data['vk_user_id']:
         vk_id = str(data['vk_user_id']).strip()
         if vk_id:
-            # Проверяем, что это числовой идентификатор
             if not vk_id.isdigit():
                 errors['vk_user_id'] = 'VK User ID должен быть числовым идентификатором'
             elif len(vk_id) > 20:
@@ -144,12 +141,14 @@ def validate_client_data(data, is_update=False, client_id=None):
     
     return errors
 
+
 @clients_bp.route('/', methods=['GET', 'POST'])
 def handle_clients():
     if request.method == 'GET':
         return get_clients()
     elif request.method == 'POST':
         return create_client()
+
 
 @clients_bp.route('/<int:client_id>', methods=['GET', 'PUT', 'DELETE'])
 def handle_client(client_id):
@@ -160,6 +159,7 @@ def handle_client(client_id):
     elif request.method == 'DELETE':
         return delete_client(client_id)
 
+
 def get_clients():
     try:
         clients = Client.query.all()
@@ -168,44 +168,40 @@ def get_clients():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 def get_client(client_id):
     try:
         client = Client.query.filter_by(client_id=client_id).first_or_404()
         client_data = client.to_dict()
-        
         cars = [car.to_dict() for car in client.cars]
         client_data['cars'] = cars
-        
         return jsonify(client_data)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 def create_client():
     try:
-        # Проверяем авторизацию (любой авторизованный пользователь может создавать клиентов)
         auth_result, error_message, status_code = check_auth_and_role('manager')
         if error_message:
             return jsonify({'error': error_message}), status_code
         
         data = request.get_json()
-        
         if not data:
             return jsonify({'error': 'Отсутствуют данные'}), 400
         
-        # Валидация данных
         errors = validate_client_data(data)
         if errors:
             return jsonify({
-                'error': 'Ошибки валидации', 
+                'error': 'Ошибки валидации',
                 'details': errors,
                 'message': 'Пожалуйста, исправьте ошибки в форме'
             }), 400
         
-        # Используем валидированный телефон
         validated_phone = data.get('_validated_phone', data.get('phone'))
         
-        # Дополнительная проверка на случай если validate_client_data не сработала
-        existing_client = Client.query.filter_by(phone=validated_phone).first()
+        # Дополнительная проверка уникальности по хэшу
+        existing_client = Client.query.filter_by(phone_hash=hash_phone(validated_phone)).first()
         if existing_client:
             return jsonify({
                 'error': 'Клиент с таким номером телефона уже существует',
@@ -218,14 +214,14 @@ def create_client():
         client = Client(
             name=data['name'].strip(),
             phone=validated_phone,
-            vk_user_id=data.get('vk_user_id')  # поле теперь называется vk_user_id
+            vk_user_id=data.get('vk_user_id')
         )
         
         db.session.add(client)
         db.session.commit()
         
         return jsonify({
-            'message': 'Клиент успешно создан', 
+            'message': 'Клиент успешно создан',
             'client': client.to_dict()
         })
     except Exception as e:
@@ -237,9 +233,9 @@ def create_client():
             }), 400
         return jsonify({'error': str(e)}), 500
 
+
 def update_client(client_id):
     try:
-        # Проверяем авторизацию (любой авторизованный пользователь может редактировать клиентов)
         auth_result, error_message, status_code = check_auth_and_role('manager')
         if error_message:
             return jsonify({'error': error_message}), status_code
@@ -250,16 +246,14 @@ def update_client(client_id):
         if not data:
             return jsonify({'error': 'Отсутствуют данные для обновления'}), 400
         
-        # Валидация данных с учетом обновления
         errors = validate_client_data(data, is_update=True, client_id=client_id)
         if errors:
             return jsonify({
-                'error': 'Ошибки валидации', 
+                'error': 'Ошибки валидации',
                 'details': errors,
                 'message': 'Пожалуйста, исправьте ошибки в форме'
             }), 400
         
-        # Обновление полей
         if 'name' in data and data['name']:
             client.name = data['name'].strip()
         
@@ -278,17 +272,17 @@ def update_client(client_id):
         db.session.commit()
         
         return jsonify({
-            'message': 'Клиент успешно обновлен', 
+            'message': 'Клиент успешно обновлен',
             'client': client.to_dict()
         })
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+
 def delete_client(client_id):
     """Удалить клиента (только для менеджеров)"""
     try:
-        # Проверяем авторизацию и роль - только менеджеры могут удалять
         auth_result, error_message, status_code = check_auth_and_role('manager')
         if error_message:
             return jsonify({'error': error_message}), status_code
@@ -313,20 +307,15 @@ def delete_client(client_id):
         car_ids = [car.car_id for car in cars]
         
         for car in cars:
-            # Удаляем все заказы для этого автомобиля
             car_orders = WorkOrder.query.filter_by(car_id=car.car_id).all()
             for order in car_orders:
                 db.session.delete(order)
-            
-            # Удаляем автомобиль
             db.session.delete(car)
         
-        # Удаляем все оставшиеся заказы клиента (если есть выполненные/отмененные)
         all_client_orders = WorkOrder.query.filter_by(client_id=client_id).all()
         for order in all_client_orders:
             db.session.delete(order)
         
-        # Удаляем клиента
         db.session.delete(client)
         db.session.commit()
         

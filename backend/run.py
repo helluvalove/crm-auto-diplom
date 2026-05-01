@@ -1,5 +1,6 @@
 import sys
 import os
+import threading
 from sqlalchemy import text
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -26,7 +27,7 @@ if __name__ == '__main__':
                 admin = User(
                     login='admin',
                     full_name='Администратор системы',
-                    role='manager'
+                    role_name='manager'
                 )
                 admin.password_hash = generate_password_hash('admin123')
                 db.session.add(admin)
@@ -37,10 +38,9 @@ if __name__ == '__main__':
                 mechanic = User(
                     login='mechanic',
                     full_name='Петров Алексей Иванович',
-                    role='mechanic',
+                    role_name='mechanic',
                     phone='+79991234567',
-                    specialization='Двигатели',
-                    employee_number='001'
+                    specialization='Двигатели'
                 )
                 mechanic.password_hash = generate_password_hash('mechanic123')
                 db.session.add(mechanic)

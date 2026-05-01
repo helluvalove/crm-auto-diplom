@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from models import db, User, Role, WorkOrder
+from crypto import hash_phone            # <-- добавлен импорт
 
 mechanics_bp = Blueprint('mechanics', __name__, url_prefix='/api/mechanics')
 
@@ -64,8 +65,8 @@ def create_mechanic():
         if existing_user:
             return jsonify({'error': 'Пользователь с таким логином уже существует'}), 400
         
-        # Проверка уникальности телефона
-        if User.query.filter_by(phone=data['phone']).first():
+        # Проверка уникальности телефона по хэшу
+        if User.query.filter_by(phone_hash=hash_phone(data['phone'])).first():
             return jsonify({'error': 'Пользователь с таким телефоном уже существует'}), 400
         
         mechanic = User(
@@ -101,16 +102,16 @@ def update_mechanic(mechanic_id):
         
         data = request.get_json()
         
-        # Проверка уникальности телефона
+        # Проверка уникальности телефона через хэш
         if 'phone' in data and data['phone'] != mechanic.phone:
-            existing = User.query.filter_by(phone=data['phone']).first()
+            existing = User.query.filter_by(phone_hash=hash_phone(data['phone'])).first()
             if existing and existing.user_id != mechanic_id:
                 return jsonify({
                     'error': 'Пользователь с таким номером телефона уже существует',
                     'duplicate_phone': True
                 }), 400
         
-        # Проверка уникальности логина
+        # Проверка уникальности логина (логин не шифруется, оставляем как есть)
         if 'login' in data and data['login'] != mechanic.login:
             existing = User.query.filter_by(login=data['login']).first()
             if existing and existing.user_id != mechanic_id:

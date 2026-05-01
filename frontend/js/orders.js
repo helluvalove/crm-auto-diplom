@@ -247,7 +247,7 @@ async function editOrder(orderId) {
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label">Стоимость (руб)</label>
-                                        <input type="number" class="form-control" id="editOrderPrice" value="${order.total_price || ''}" step="0.01" min="0">
+                                        <input type="number" class="form-control" id="editOrderPrice" value="${order.total_price || ''}" step="0.01" min="0" max="99999999.99">
                                         <div class="form-text text-success" id="editOrderPriceFormatted">${order.total_price ? formatMoney(order.total_price) : ''}</div>
                                     </div>
                                 </div>
@@ -312,11 +312,15 @@ async function editOrder(orderId) {
         
         const editPriceInput = document.getElementById('editOrderPrice');
         const editPriceFormatted = document.getElementById('editOrderPriceFormatted');
-        if (editPriceInput && editPriceFormatted) {
-            editPriceInput.addEventListener('input', function() {
-                const val = parseFloat(this.value);
-                editPriceFormatted.textContent = (!isNaN(val) && this.value.trim() !== '') ? formatMoney(val) : '';
-            });
+        if (editPriceInput) {
+            editPriceInput.setAttribute('max', '99999999.99');
+            if (editPriceFormatted) {
+                editPriceInput.addEventListener('input', function() {
+                    enforceMaxPrice(this, 99999999.99);     
+                    const val = parseFloat(this.value);
+                    editPriceFormatted.textContent = (!isNaN(val) && this.value.trim() !== '') ? formatMoney(val) : '';
+                });
+            }
         }
         
         const modal = new bootstrap.Modal(document.getElementById('editOrderModal'));
@@ -347,6 +351,14 @@ async function updateOrder(orderId) {
         showError('Заполните обязательные поля');
         return;
     }
+
+    // Проверка максимальной суммы перед отправкой
+    const priceInput = document.getElementById('editOrderPrice');
+    const priceVal = parseFloat(priceInput.value);
+    if (!isNaN(priceVal) && priceVal > 99999999.99) {
+        showError('Сумма превышает максимально допустимую (99 999 999,99 ₽)');
+        return;
+    }
     
     const orderData = {
         client_id: parseInt(clientId),
@@ -354,7 +366,7 @@ async function updateOrder(orderId) {
         problem_description: problem,
         work_description: document.getElementById('editOrderWork').value.trim() || null,
         mechanic_id: document.getElementById('editOrderMechanicSelect').value || null,
-        total_price: document.getElementById('editOrderPrice').value || null
+        total_price: priceInput.value || null
     };
     
     try {
@@ -374,6 +386,10 @@ async function updateOrder(orderId) {
             
         } else {
             const errorData = await response.json();
+            if (errorData.busy_mechanic) {
+                const mechSelect = document.getElementById('editOrderMechanicSelect');
+                if (mechSelect) mechSelect.classList.add('is-invalid');
+            }
             showError(errorData.error || 'Ошибка обновления заказа');
         }
     } catch (error) {
@@ -436,6 +452,11 @@ async function completeOrder(orderId) {
 }
 
 async function createOrder() {
+    const priceVal = parseFloat(document.getElementById('orderPrice').value);
+    if (priceVal > 99999999.99) {
+        showError('Сумма превышает максимально допустимую (99 999 999,99 ₽)');
+        return;
+    }
     const clientId = document.getElementById('orderClientSelect').value;
     const carId = document.getElementById('orderCarSelect').value;
     const problem = document.getElementById('orderProblem').value.trim();
@@ -493,6 +514,11 @@ async function createOrder() {
             
         } else {
             const errorData = await response.json();
+            if (errorData.busy_mechanic) {
+                // Подсветим поле механика
+                const mechSelect = document.getElementById('orderMechanicSelect');
+                if (mechSelect) mechSelect.classList.add('is-invalid');
+            }
             showError(errorData.error || 'Ошибка создания заказа');
         }
     } catch (error) {
@@ -663,12 +689,22 @@ function initNewOrderPriceFormatting() {
     const priceFormatted = document.getElementById('orderPriceFormatted');
     if (!priceInput || !priceFormatted) return;
 
+    priceInput.setAttribute('max', '99999999.99');
+
     priceInput.removeEventListener('input', handlePriceInput);
     priceInput.addEventListener('input', handlePriceInput);
     handlePriceInput.call(priceInput);
 }
 
+function enforceMaxPrice(input, maxVal) {
+    const val = parseFloat(input.value);
+    if (!isNaN(val) && val > maxVal) {
+        input.value = maxVal;
+    }
+}
+
 function handlePriceInput() {
+    enforceMaxPrice(this, 99999999.99);             
     const val = parseFloat(this.value);
     const formatted = document.getElementById('orderPriceFormatted');
     if (formatted) {

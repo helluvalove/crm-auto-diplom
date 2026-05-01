@@ -1,6 +1,7 @@
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from crypto import encrypt_data, decrypt_data, hash_phone
 
 db = SQLAlchemy()
 
@@ -22,34 +23,47 @@ class User(db.Model):
     __tablename__ = 'users'
 
     user_id = db.Column(db.Integer, primary_key=True)
-    full_name = db.Column(db.String(255), nullable=False)
+    _full_name = db.Column('full_name', db.String(255), nullable=False)  # шифрованное
     login = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    phone = db.Column(db.String(20))
-    specialization = db.Column(db.Text)                     # было db.String(100), теперь TEXT
+    _phone = db.Column('phone', db.String(255))                         # шифрованное, длина увеличена под base64
+    phone_hash = db.Column(db.String(64), unique=True, nullable=True)   # хэш для поиска
+    specialization = db.Column(db.Text)
     role_id = db.Column(db.Integer, db.ForeignKey('roles.role_id'), nullable=False)
-    # Поле tabel_number удалено (в новой схеме отсутствует)
 
     # Отношение к роли
     role = db.relationship('Role', backref='users', lazy=True)
 
-    # Свойство для обратной совместимости (role как строка)
+    # ------- шифрованные свойства -------
+    @property
+    def full_name(self):
+        return decrypt_data(self._full_name)
+
+    @full_name.setter
+    def full_name(self, value):
+        self._full_name = encrypt_data(value)
+
+    @property
+    def phone(self):
+        return decrypt_data(self._phone)
+
+    @phone.setter
+    def phone(self, value):
+        self._phone = encrypt_data(value)
+        self.phone_hash = hash_phone(value)  # автоматически обновляем хэш
+
+    # ------- роль как строка -------
     @property
     def role_name(self):
         return self.role.role_name if self.role else None
 
     @role_name.setter
     def role_name(self, value):
-        # При установке строки ищем соответствующую роль
         if value:
             r = Role.query.filter_by(role_name=value).first()
             if not r:
                 raise ValueError(f"Role '{value}' does not exist")
             self.role_id = r.role_id
-
-    # Для совместимости со старым кодом, где использовалось self.role (строка)
-    # Можно оставить как свойство, но осторожно: теперь self.role – объект.
-    # Лучше использовать role_name, а в коде заменить обращения.
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -65,12 +79,11 @@ class User(db.Model):
     def to_dict(self):
         return {
             'user_id': self.user_id,
-            'full_name': self.full_name,
+            'full_name': self.full_name,   # расшифрованное
             'login': self.login,
-            'role': self.role_name,          # возвращаем строку роли
-            'phone': self.phone,
+            'role': self.role_name,
+            'phone': self.phone,           # расшифрованное
             'specialization': self.specialization,
-            # 'employee_number': ...         # удалено
         }
 
 
@@ -78,20 +91,30 @@ class Client(db.Model):
     __tablename__ = 'clients'
 
     client_id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), nullable=False)
-    phone = db.Column(db.String(20), nullable=False, unique=True)
-    vk_user_id = db.Column(db.BigInteger)            # новое поле вместо telegram_chat_id
+    _name = db.Column('name', db.String(255), nullable=False)          # шифрованное
+    _phone = db.Column('phone', db.String(255), nullable=False)        # шифрованное, длина увеличена
+    phone_hash = db.Column(db.String(64), unique=True, nullable=False) # хэш для поиска
+    vk_user_id = db.Column(db.BigInteger)                              # идентификатор VK
     date_reg = db.Column(db.DateTime, nullable=False, default=datetime.now)
     accepted_rules = db.Column(db.DateTime)
 
-    # Свойство для обратной совместимости: telegram_chat_id -> vk_user_id
+    # ------- шифрованные свойства -------
     @property
-    def telegram_chat_id(self):
-        return self.vk_user_id
+    def name(self):
+        return decrypt_data(self._name)
 
-    @telegram_chat_id.setter
-    def telegram_chat_id(self, value):
-        self.vk_user_id = value
+    @name.setter
+    def name(self, value):
+        self._name = encrypt_data(value)
+
+    @property
+    def phone(self):
+        return decrypt_data(self._phone)
+
+    @phone.setter
+    def phone(self, value):
+        self._phone = encrypt_data(value)
+        self.phone_hash = hash_phone(value)  # автоматически обновляем хэш
 
     # Отношения
     cars = db.relationship('Car', backref='client', lazy=True)
@@ -100,9 +123,9 @@ class Client(db.Model):
     def to_dict(self):
         return {
             'client_id': self.client_id,
-            'name': self.name,
-            'phone': self.phone,
-            'telegram_chat_id': str(self.telegram_chat_id) if self.telegram_chat_id else None,
+            'name': self.name,          # расшифрованное
+            'phone': self.phone,        # расшифрованное
+            'vk_user_id': str(self.vk_user_id) if self.vk_user_id else None,
             'date_reg': self.date_reg.isoformat() if self.date_reg else None,
             'accepted_rules': self.accepted_rules.isoformat() if self.accepted_rules else None
         }
@@ -148,13 +171,13 @@ class WorkOrder(db.Model):
     car_id = db.Column(db.Integer, db.ForeignKey('cars.car_id', ondelete='CASCADE'), nullable=False)
     manager_id = db.Column(db.Integer, db.ForeignKey('users.user_id', ondelete='SET NULL'))
     mechanic_id = db.Column(db.Integer, db.ForeignKey('users.user_id', ondelete='SET NULL'))
-    status = db.Column(db.String(30), nullable=False, default='Создан')   # длина уменьшена до 30
+    status = db.Column(db.String(30), nullable=False, default='Создан')
     problem_description = db.Column(db.Text)
     work_description = db.Column(db.Text)
     total_price = db.Column(db.Numeric(10, 2))
     created_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     completed_date = db.Column(db.DateTime)
-    pdf_url = db.Column(db.String(500))      # новое поле
+    pdf_url = db.Column(db.String(500))
 
     # Отношения к пользователям (менеджер и механик)
     manager = db.relationship('User', foreign_keys=[manager_id], backref='managed_orders')

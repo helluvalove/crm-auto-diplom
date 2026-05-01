@@ -165,20 +165,21 @@ function renderMechanicsList(mechanics) {
 
     let html = '<div class="list-group">';
     mechanics.forEach(mechanic => {
-        const activeOrders = ordersData?.filter(order =>
+        const isBusy = ordersData?.some(order =>
             order.mechanic_id === mechanic.user_id &&
             order.status !== 'Выполнен' &&
             order.status !== 'Отменен'
-        ).length || 0;
+        );
+
+        const badgeText = isBusy ? 'Занят' : 'Свободен';
+        const badgeClass = isBusy ? 'bg-warning' : 'bg-success';
 
         html += `
             <div class="list-group-item" id="mechanic-${mechanic.user_id}">
                 <div class="d-flex w-100 justify-content-between">
                     <h6 class="mb-1">${mechanic.full_name}</h6>
                     <div>
-                        <span class="badge ${activeOrders > 0 ? 'bg-warning' : 'bg-success'} me-2">
-                            ${activeOrders} активных заказов
-                        </span>
+                        <span class="badge ${badgeClass} me-2">${badgeText}</span>
                         <button class="btn btn-sm btn-outline-danger" onclick="deleteMechanic(${mechanic.user_id})" title="Удалить">
                             <i class="bi bi-trash"></i>
                         </button>

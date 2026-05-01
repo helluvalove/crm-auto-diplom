@@ -76,7 +76,8 @@ htmlcov/
 .ruff_cache/
 .cache/
 
-# ПРОЧЕЕ
-structure.txt          
-test_api.py    
-new_structure.txt        
+# ПРОЧЕЕ     
+test_api.py
+new_structure1.txt        
+dump_data.py
+crypto_data_to_now.py
