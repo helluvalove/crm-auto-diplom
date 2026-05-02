@@ -17,3 +17,9 @@ class Config:
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY')
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
     ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY', 'change-me-in-production-32bytes!')
+    
+    # VK Bot
+    VK_GROUP_ID = int(os.environ.get('VK_GROUP_ID', 0))
+    VK_ACCESS_TOKEN = os.environ.get('VK_ACCESS_TOKEN', '')
+    VK_SECRET_KEY = os.environ.get('VK_SECRET_KEY', '')
+    VK_CONFIRMATION_CODE = os.environ.get('VK_CONFIRMATION_CODE', '')

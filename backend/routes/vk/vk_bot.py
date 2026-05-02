@@ -1,25 +1,28 @@
 import time
 import logging
 import vk_api
-from vk_api.bot_longpoll import VkBotLongPoll, VkBotEventType
+from flask import request, current_app
+from . import vk_bp
 
 logger = logging.getLogger(__name__)
 
-# Временно hardcode, потом вынести в config/.env
-GROUP_ID = 123456789         # ID твоего сообщества (цифры)
-ACCESS_TOKEN = 'vk1.a...'    # Ключ доступа с правами на сообщения
+_LAST_MESSAGE_TIME = {}
 
-vk_session = vk_api.VkApi(token=ACCESS_TOKEN)
-vk = vk_session.get_api()
-longpoll = VkBotLongPoll(vk_session, GROUP_ID)
-
-# Защита от спама: не чаще 1 сообщения в 1.5 секунды
-_LAST_MESSAGE_TIME = {}      # {user_id: timestamp}
+def get_vk_api():
+    token = current_app.config['VK_ACCESS_TOKEN']
+    if not token:
+        raise RuntimeError("VK_ACCESS_TOKEN не задан")
+    session = vk_api.VkApi(token=token)
+    return session.get_api()
 
 def send_message(user_id, text):
-    """Отправка простого сообщения."""
     try:
-        vk.messages.send(user_id=user_id, message=text, random_id=0)
+        vk = get_vk_api()
+        vk.messages.send(
+            user_id=user_id,
+            message=text,
+            random_id=vk_api.utils.get_random_id()
+        )
     except Exception as e:
         logger.error(f"Ошибка отправки: {e}")
 
@@ -31,30 +34,40 @@ def is_spam(user_id):
     _LAST_MESSAGE_TIME[user_id] = now
     return False
 
-def handle_message(event):
-    msg = event.obj.message
-    user_id = msg['from_id']
-    text = msg['text'].strip()
-
+def handle_message(user_id, text):
     if is_spam(user_id):
-        send_message(user_id, "⏳ Слишком частые сообщения. Подождите немного.")
+        send_message(user_id, "⏳ Слишком частые сообщения.")
         return
-
-    if text.lower() in ['начать', 'start']:
-        send_message(user_id, "🚗 Добро пожаловать в автосервис «Киров 43»!\nНапишите «Помощь» для списка команд.")
-    elif text.lower() == 'помощь':
+    text = text.strip().lower()
+    if text in ['начать', 'start']:
+        send_message(user_id, "🚗 Добро пожаловать в сообщество «Автомастерская 43 | КИРОВ»!\nНапишите «Помощь».")
+    elif text == 'помощь':
         send_message(user_id, "📋 Пока доступны:\n• Начать\n• Запись (скоро)\n• Статус (скоро)")
     else:
         send_message(user_id, "Введите «Начать» для начала.")
 
-def start_bot_polling():
-    """Фоновый цикл Long Poll с авторестартом при ошибке."""
-    while True:
-        try:
-            logger.info("VK бот слушает события...")
-            for event in longpoll.listen():
-                if event.type == VkBotEventType.MESSAGE_NEW:
-                    handle_message(event)
-        except Exception as e:
-            logger.error(f"Ошибка Long Poll: {e}")
-            time.sleep(5)
+@vk_bp.route('/callback', methods=['POST'])
+def vk_callback():
+    data = request.get_json(silent=True)
+    if not data:
+        return 'Invalid request', 400
+
+    secret = current_app.config['VK_SECRET_KEY']
+    if secret and data.get('secret') != secret:
+        logger.warning("Неверный секретный ключ")
+        return 'Invalid secret', 403
+
+    if data.get('type') == 'confirmation':
+        code = current_app.config['VK_CONFIRMATION_CODE']
+        return code, 200, {'Content-Type': 'text/plain'}
+
+    if data.get('type') == 'message_new':
+        obj = data.get('object', {})
+        msg = obj.get('message', {})
+        user_id = msg.get('from_id')
+        text = msg.get('text', '')
+        if user_id and text:
+            handle_message(user_id, text)
+        return 'ok', 200
+
+    return 'ok', 200

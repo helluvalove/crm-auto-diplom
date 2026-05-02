@@ -18,7 +18,11 @@ def create_app():
     from routes.orders import orders_bp
     from routes.mechanics import mechanics_bp
     from routes.backup import backup_bp  # <-- Добавьте эту строку
+
+    from routes.vk import vk_bp
     
+    app.register_blueprint(vk_bp)
+
     app.register_blueprint(auth_bp)
     app.register_blueprint(clients_bp)
     app.register_blueprint(cars_bp)
