@@ -17,7 +17,7 @@ def create_app():
     from routes.cars import cars_bp
     from routes.orders import orders_bp
     from routes.mechanics import mechanics_bp
-    from routes.backup import backup_bp  # <-- Добавьте эту строку
+    from routes.backup import backup_bp 
 
     from routes.vk import vk_bp
     
@@ -28,8 +28,12 @@ def create_app():
     app.register_blueprint(cars_bp)
     app.register_blueprint(orders_bp)
     app.register_blueprint(mechanics_bp)
-    app.register_blueprint(backup_bp)  # <-- Добавьте эту строку
+    app.register_blueprint(backup_bp) 
     
+    @app.route('/privacy')
+    def privacy_policy():
+        return send_from_directory(os.path.join(app.static_folder, 'public'), 'privacy.html')
+
     @app.route('/')
     def index():
         return send_from_directory(app.static_folder, 'index.html')
