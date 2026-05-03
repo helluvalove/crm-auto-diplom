@@ -1,12 +1,15 @@
 from flask import Blueprint, request, jsonify, render_template, make_response, send_file, current_app
 from datetime import datetime
 from models import db, WorkOrder, Client, Car, User, Role
-import pdfkit, os
+import pdfkit, os, sys, platform
 
 # ---------- Конфигурация pdfkit для Windows ----------
-PDFKIT_CONFIG = pdfkit.configuration(
-    wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
-)
+if platform.system() == 'Windows':
+    PDFKIT_CONFIG = pdfkit.configuration(
+        wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
+    )
+else:
+    PDFKIT_CONFIG = None
 
 orders_bp = Blueprint('orders', __name__, url_prefix='/api/orders')
 
