@@ -48,7 +48,7 @@ def handle_message(user_id, text):
 
 @vk_bp.route('/callback', methods=['POST'])
 def vk_callback():
-    data = request.get_json(silent=True)
+    data = request.get_json(silent=True) or request.form.to_dict()
     if not data:
         return 'Invalid request', 400
 
