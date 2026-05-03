@@ -1,8 +1,40 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, render_template, make_response, send_file, current_app
 from datetime import datetime
 from models import db, WorkOrder, Client, Car, User, Role
+import pdfkit, os
+
+# ---------- Конфигурация pdfkit для Windows ----------
+PDFKIT_CONFIG = pdfkit.configuration(
+    wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
+)
 
 orders_bp = Blueprint('orders', __name__, url_prefix='/api/orders')
+
+def save_order_pdf(order_id, template_name, suffix):
+    """Генерирует PDF из шаблона и сохраняет в static/pdf, возвращает путь к файлу."""
+    order = WorkOrder.query.get(order_id)
+    if not order:
+        return None
+    client = Client.query.get(order.client_id)
+    car = Car.query.get(order.car_id)
+    manager = User.query.get(order.manager_id) if order.manager_id else User.query.first()
+    ### ДОБАВЛЕНО: получаем механика
+    mechanic = User.query.get(order.mechanic_id) if order.mechanic_id else None
+
+    html = render_template(template_name,
+                           order=order, client=client, car=car,
+                           manager=manager, mechanic=mechanic)    # mechanic передан
+    pdf_dir = os.path.join(current_app.root_path, 'static', 'pdf')
+    os.makedirs(pdf_dir, exist_ok=True)
+    pdf_path = os.path.join(pdf_dir, f'order_{order_id}_{suffix}.pdf')
+
+    options = {
+        'enable-local-file-access': True,
+        'page-size': 'A4',
+        'encoding': 'UTF-8'
+    }
+    pdfkit.from_string(html, pdf_path, options=options, configuration=PDFKIT_CONFIG)
+    return pdf_path
 
 @orders_bp.route('/', methods=['GET', 'POST'])
 def handle_orders():
@@ -63,7 +95,6 @@ def get_orders():
     try:
         orders = WorkOrder.query.all()
 
-        # Собираем уникальные mechanic_id (не None)
         mechanic_ids = list(set(o.mechanic_id for o in orders if o.mechanic_id))
         mechanic_names = {}
         if mechanic_ids:
@@ -81,7 +112,7 @@ def get_orders():
                 'car_id': order.car_id,
                 'manager_id': order.manager_id,
                 'mechanic_id': order.mechanic_id,
-                'mechanic_name': mechanic_names.get(order.mechanic_id) if order.mechanic_id else None,  # новое поле
+                'mechanic_name': mechanic_names.get(order.mechanic_id) if order.mechanic_id else None,
                 'status': order.status,
                 'problem_description': order.problem_description,
                 'work_description': order.work_description,
@@ -99,7 +130,7 @@ def get_orders():
                 order_data['car_model'] = order.car.model
                 order_data['car_vin'] = order.car.vin
                 order_data['car_gos_number'] = order.car.gos_number
-                order_data['car_year'] = order.car.year        # уже было раньше
+                order_data['car_year'] = order.car.year
 
             orders_list.append(order_data)
 
@@ -132,7 +163,7 @@ def get_order(order_id):
                 'client_id': order.client.client_id,
                 'name': order.client.name,
                 'phone': order.client.phone,
-                'vk_user_id': order.client.vk_user_id          # поле переименовано
+                'vk_user_id': order.client.vk_user_id
             }
         
         if order.car:
@@ -146,7 +177,6 @@ def get_order(order_id):
             }
         
         if order.mechanic_id:
-            # Фильтрация механика через JOIN с Role
             mechanic = User.query.join(Role).filter(
                 User.user_id == order.mechanic_id,
                 Role.role_name == 'mechanic'
@@ -157,7 +187,6 @@ def get_order(order_id):
                     'full_name': mechanic.full_name,
                     'phone': mechanic.phone,
                     'specialization': mechanic.specialization
-                    # employee_number удалено
                 }
         
         return jsonify(order_data)
@@ -181,43 +210,30 @@ def create_order():
         if not car:
             return jsonify({'error': 'Автомобиль не найден'}), 404
         
-        # ---------- ПРОВЕРКА: у автомобиля только один активный заказ ----------
         active_order = WorkOrder.query.filter(
             WorkOrder.car_id == data['car_id'],
             WorkOrder.status.notin_(['Выполнен', 'Отменен'])
         ).first()
         if active_order:
-            return jsonify({
-                'error': 'У этого автомобиля уже есть активный заказ (не выполнен/не отменен). Один автомобиль — один активный заказ.'
-            }), 409  # Conflict
+            return jsonify({'error': 'У этого автомобиля уже есть активный заказ.'}), 409
 
-        # ---------- ПРОВЕРКА МЕХАНИКА ----------
         mechanic_id = data.get('mechanic_id')
         if mechanic_id:
             try:
                 mechanic_id = int(mechanic_id)
-                # Проверяем, что указанный пользователь – механик
-                mechanic = User.query.join(Role).filter(
-                    User.user_id == mechanic_id,
-                    Role.role_name == 'mechanic'
-                ).first()
+                mechanic = User.query.join(Role).filter(User.user_id == mechanic_id, Role.role_name == 'mechanic').first()
                 if not mechanic:
                     mechanic_id = None
                 else:
-                    # У механика не должно быть других активных заказов
                     active_order_mech = WorkOrder.query.filter(
                         WorkOrder.mechanic_id == mechanic_id,
                         WorkOrder.status.notin_(['Выполнен', 'Отменен'])
                     ).first()
                     if active_order_mech:
-                        return jsonify({
-                            'error': 'Механик уже имеет активный заказ. Один механик — один активный заказ.',
-                            'busy_mechanic': True
-                        }), 409
+                        return jsonify({'error': 'Механик уже имеет активный заказ.', 'busy_mechanic': True}), 409
             except:
                 mechanic_id = None
 
-        # ---------- ВАЛИДАЦИЯ СУММЫ ----------
         total_price = data.get('total_price')
         total_price_val = None
         if total_price is not None and str(total_price).strip() != '':
@@ -226,7 +242,7 @@ def create_order():
                 if total_price_val < 0:
                     return jsonify({'error': 'Сумма не может быть отрицательной'}), 400
                 if total_price_val > 99999999.99:
-                    return jsonify({'error': 'Сумма превышает максимально допустимую (99 999 999,99 ₽)'}), 400
+                    return jsonify({'error': 'Сумма превышает максимально допустимую'}), 400
             except (ValueError, TypeError):
                 return jsonify({'error': 'Некорректное значение суммы'}), 400
         
@@ -261,7 +277,6 @@ def create_order():
         print(f"❌ Ошибка в create_order: {e}")
         return jsonify({'error': str(e)}), 500
 
-
 def update_order(order_id):
     """Обновить заказ"""
     try:
@@ -272,6 +287,10 @@ def update_order(order_id):
             order.status = data['status']
             if data['status'] == 'Выполнен' and not order.completed_date:
                 order.completed_date = datetime.now()
+                # Автоматически генерируем и сохраняем итоговый PDF
+                pdf_path = save_order_pdf(order_id, 'itogoviy_zakaznaryad.html', 'final')
+                if pdf_path:
+                    order.pdf_url = f'/api/orders/{order_id}/pdf/final'
         
         if 'problem_description' in data:
             order.problem_description = data['problem_description']
@@ -279,7 +298,6 @@ def update_order(order_id):
         if 'work_description' in data:
             order.work_description = data['work_description']
         
-        # ---------- ВАЛИДАЦИЯ СУММЫ ----------
         if 'total_price' in data:
             price = data['total_price']
             if price is not None and str(price).strip() != '':
@@ -288,7 +306,7 @@ def update_order(order_id):
                     if price_val < 0:
                         return jsonify({'error': 'Сумма не может быть отрицательной'}), 400
                     if price_val > 99999999.99:
-                        return jsonify({'error': 'Сумма превышает максимально допустимую (99 999 999,99 ₽)'}), 400
+                        return jsonify({'error': 'Сумма превышает максимально допустимую'}), 400
                     order.total_price = price_val
                 except (ValueError, TypeError):
                     return jsonify({'error': 'Некорректное значение суммы'}), 400
@@ -303,22 +321,15 @@ def update_order(order_id):
             if mechanic_id:
                 try:
                     mechanic_id = int(mechanic_id)
-                    mechanic = User.query.join(Role).filter(
-                        User.user_id == mechanic_id,
-                        Role.role_name == 'mechanic'
-                    ).first()
+                    mechanic = User.query.join(Role).filter(User.user_id == mechanic_id, Role.role_name == 'mechanic').first()
                     if mechanic:
-                        # Нет другого активного заказа у этого механика
                         active_order = WorkOrder.query.filter(
                             WorkOrder.mechanic_id == mechanic_id,
-                            WorkOrder.order_id != order_id,          # исключаем текущий
+                            WorkOrder.order_id != order_id,
                             WorkOrder.status.notin_(['Выполнен', 'Отменен'])
                         ).first()
                         if active_order:
-                            return jsonify({
-                                'error': 'Механик уже имеет другой активный заказ.',
-                                'busy_mechanic': True
-                            }), 409
+                            return jsonify({'error': 'Механик уже имеет другой активный заказ.', 'busy_mechanic': True}), 409
                         order.mechanic_id = mechanic_id
                     else:
                         order.mechanic_id = None
@@ -357,21 +368,80 @@ def delete_order(order_id):
 
 @orders_bp.route('/<int:order_id>/complete', methods=['POST'])
 def complete_order(order_id):
-    """Завершить заказ и отправить в архив"""
     try:
         order = WorkOrder.query.get_or_404(order_id)
         order.status = 'Выполнен'
         order.completed_date = datetime.now()
+        # Генерируем PDF
+        pdf_path = save_order_pdf(order_id, 'itogoviy_zakaznaryad.html', 'final')
+        if pdf_path:
+            order.pdf_url = f'/api/orders/{order_id}/pdf/final'
         db.session.commit()
         return jsonify({
             'message': 'Заказ завершен и перемещен в архив',
             'order': {
                 'order_id': order.order_id,
                 'status': order.status,
-                'completed_date': order.completed_date.isoformat() if order.completed_date else None
+                'completed_date': order.completed_date.isoformat() if order.completed_date else None,
+                'pdf_url': order.pdf_url
             }
         })
     except Exception as e:
         db.session.rollback()
         print(f"❌ Ошибка в complete_order: {e}")
         return jsonify({'error': str(e)}), 500
+
+@orders_bp.route('/<int:order_id>/pdf/preliminary')
+def preliminary_pdf(order_id):
+    order = WorkOrder.query.get_or_404(order_id)
+    client = Client.query.get(order.client_id)
+    car = Car.query.get(order.car_id)
+    manager = User.query.get(order.manager_id) if order.manager_id else User.query.first()
+    ### ДОБАВЛЕНО
+    mechanic = User.query.get(order.mechanic_id) if order.mechanic_id else None
+
+    html = render_template('predv_zakaznaryad.html',
+                           order=order, client=client, car=car,
+                           manager=manager, mechanic=mechanic)
+    options = {'enable-local-file-access': True, 'page-size': 'A4'}
+    pdf = pdfkit.from_string(html, False, options=options, configuration=PDFKIT_CONFIG)
+    response = make_response(pdf)
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = 'inline'
+    return response
+
+@orders_bp.route('/<int:order_id>/pdf/final')
+def final_pdf(order_id):
+    order = WorkOrder.query.get_or_404(order_id)
+    # Ищем файл на диске
+    pdf_path = os.path.join(current_app.root_path, 'static', 'pdf', f'order_{order_id}_final.pdf')
+    if not os.path.exists(pdf_path):
+        # Генерируем на лету (механик уже будет передан через save_order_pdf)
+        pdf_path = save_order_pdf(order_id, 'itogoviy_zakaznaryad.html', 'final')
+        if not pdf_path:
+            return "PDF file not found", 404
+    return send_file(pdf_path, mimetype='application/pdf')
+
+@orders_bp.route('/<int:order_id>/pdf/acceptance')
+def acceptance_pdf(order_id):
+    order = WorkOrder.query.get_or_404(order_id)
+    client = Client.query.get(order.client_id)
+    car = Car.query.get(order.car_id)
+    manager = User.query.get(order.manager_id) if order.manager_id else User.query.first()
+    ### ДОБАВЛЕНО
+    mechanic = User.query.get(order.mechanic_id) if order.mechanic_id else None
+
+    completeness = request.args.get('completeness', '')
+    damages = request.args.get('damages', '')
+    client_parts = request.args.get('client_parts', '')
+
+    html = render_template('akt_priema_peredachi.html',
+                           order=order, client=client, car=car,
+                           manager=manager, mechanic=mechanic,
+                           completeness=completeness, damages=damages, client_parts=client_parts)
+    options = {'enable-local-file-access': True, 'page-size': 'A4'}
+    pdf = pdfkit.from_string(html, False, options=options, configuration=PDFKIT_CONFIG)
+    response = make_response(pdf)
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = 'inline'
+    return response

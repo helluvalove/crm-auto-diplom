@@ -85,3 +85,12 @@ function formatMoney(value) {
     if (value === null || value === undefined || isNaN(value)) return '0,00 ₽';
     return Number(value).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₽';
 }
+
+function generatePDF(orderId, docType, extraParams = {}) {
+    let url = `${API_URL}/orders/${orderId}/pdf/${docType}`;
+    if (extraParams && Object.keys(extraParams).length > 0) {
+        const qs = new URLSearchParams(extraParams).toString();
+        url += '?' + qs;
+    }
+    window.open(url, '_blank');
+}

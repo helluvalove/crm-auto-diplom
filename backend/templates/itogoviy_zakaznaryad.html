@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Итоговый заказ-наряд №{{ order.order_id }}</title>
+    <style>
+        body { font-family: 'Arial', sans-serif; font-size: 12px; line-height: 1.5; padding: 30px; }
+        h2 { text-align: center; margin-bottom: 5px; }
+        .header-table, .car-table, .work-table, .sign-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        .header-table td, .car-table td, .work-table td, .sign-table td { border: 1px solid #000; padding: 6px; vertical-align: top; }
+        .header-table td:first-child { width: 30%; background-color: #f5f5f5; }
+        .stamp { text-align: right; }
+    </style>
+</head>
+<body>
+    <h2>Заказ-наряд №{{ order.order_id }} (итоговый)</h2>
+    <p style="text-align:center">г. Киров, «___» __________ 20__ г.</p>
+
+    <table class="header-table">
+        <tr><td><strong>Исполнитель</strong></td><td>ИП Овчинников М.А., ИНН 434500123456, ОГРНИП 323435000123456<br>610000, г. Киров, Хлебозаводской проезд, 11а</td></tr>
+        <tr><td><strong>Заказчик</strong></td><td>{{ client.name or client.phone }}, тел.: {{ client.phone }}</td></tr>
+        <tr><td><strong>Менеджер</strong></td><td>{{ manager.full_name }}</td></tr>
+        {% if mechanic %}
+        <tr><td><strong>Механик</strong></td><td>{{ mechanic.full_name }}{% if mechanic.specialization %} ({{ mechanic.specialization }}){% endif %}</td></tr>
+        {% endif %}
+    </table>
+
+    <table class="car-table">
+        <tr><td><strong>Автомобиль</strong></td><td>{{ car.model }}, год {{ car.year }}, гос.номер: {{ car.gos_number }}, VIN: {{ car.vin }}</td></tr>
+    </table>
+
+    <table class="work-table">
+        <tr><td colspan="2"><strong>Выполненные работы и установленные запчасти</strong></td></tr>
+        <tr><td>Описание работ</td><td>{{ order.work_description or 'См. приложение' }}</td></tr>
+        <tr><td><strong>Итоговая стоимость</strong></td><td>{{ "%.2f"|format(order.total_price) if order.total_price else '0.00' }} руб.</td></tr>
+        <tr><td>Гарантийный срок</td><td>30 дней с момента подписания</td></tr>
+    </table>
+
+    <p>Своей подписью заказчик подтверждает, что работы выполнены в полном объёме, претензий по качеству и срокам не имеет.</p>
+
+    <table class="sign-table">
+        <tr><td style="height:80px; vertical-align:bottom;">Исполнитель: ______________ /{{ manager.full_name }}/</td><td style="vertical-align:bottom;">Заказчик: ______________ /{{ client.name or '' }}/</td></tr>
+    </table>
+
+    <div class="stamp">М.П.</div>
+
+    <script>
+        window.onload = function() {};
+    </script>
+</body>
+</html>

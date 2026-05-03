@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Предварительный заказ-наряд №{{ order.order_id }}</title>
+    <style>
+        body { font-family: 'Arial', sans-serif; font-size: 12px; line-height: 1.5; padding: 30px; }
+        h2 { text-align: center; margin-bottom: 5px; }
+        .header-table, .car-table, .work-table, .sign-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        .header-table td, .car-table td, .work-table td, .sign-table td { border: 1px solid #000; padding: 6px; vertical-align: top; }
+        .header-table td:first-child { width: 30%; background-color: #f5f5f5; }
+        .note { font-size: 10px; margin-top: 10px; }
+        .stamp { text-align: right; }
+    </style>
+</head>
+<body>
+    <h2>Заказ-наряд (предварительный) №{{ order.order_id }}</h2>
+    <p style="text-align:center">г. Киров, «___» __________ 20__ г.</p>
+
+    <table class="header-table">
+        <tr><td><strong>Исполнитель</strong></td><td>ИП Овчинников Максим Александрович<br>ИНН 434500123456, ОГРНИП 323435000123456<br>610000, г. Киров, Хлебозаводской проезд, 11а<br>Тел. +7 (8332) 67-87-09</td></tr>
+        <tr><td><strong>Заказчик</strong></td><td>{{ client.name or client.phone }}<br>Телефон: {{ client.phone }}<br>{% if client.vk_user_id %}VK ID: {{ client.vk_user_id }}{% endif %}</td></tr>
+        <tr><td><strong>Менеджер (принимающий)</strong></td><td>{{ manager.full_name }}, должность: менеджер</td></tr>
+        {% if mechanic %}
+        <tr><td><strong>Механик</strong></td><td>{{ mechanic.full_name }}{% if mechanic.specialization %} ({{ mechanic.specialization }}){% endif %}</td></tr>
+        {% endif %}
+    </table>
+
+    <table class="car-table">
+        <tr><td><strong>Автомобиль</strong></td><td>{{ car.model }}, год выпуска: {{ car.year }}<br>Гос.номер: {{ car.gos_number }}, VIN: {{ car.vin }}<br>Пробег: {{ car.mileage }} км</td></tr>
+        <tr><td><strong>Цена автомобиля (по соглашению)</strong></td><td>________________________</td></tr>
+    </table>
+
+    <table class="work-table">
+        <tr><td colspan="2"><strong>Предварительный перечень работ и услуг</strong></td></tr>
+        <tr><td style="width:50%;"><em>Описание проблемы (со слов клиента)</em></td><td>{{ order.problem_description or '' }}</td></tr>
+        <tr><td><em>Планируемые работы</em> (будут уточнены после диагностики)</td><td>{{ order.work_description or '' }}</td></tr>
+        <tr><td><strong>Ориентировочная стоимость</strong></td><td>{% if order.total_price %}{{ "%.2f"|format(order.total_price) }} руб.{% else %}Будет определена после диагностики{% endif %}</td></tr>
+    </table>
+
+    <p class="note">
+        * Внимание: окончательный перечень работ и точная стоимость определяются после проведения диагностики и согласовываются с заказчиком дополнительно. Исполнитель вправе не приступать к работам до получения явного согласия заказчика.
+    </p>
+
+    <table class="sign-table">
+        <tr><td style="width:50%; height:80px; vertical-align:bottom;">Исполнитель: ______________ /{{ manager.full_name }}/</td><td style="width:50%; vertical-align:bottom;">Заказчик: ______________ /{{ client.name or '' }}/</td></tr>
+    </table>
+
+    <div class="stamp">М.П.</div>
+
+    <script>
+        window.onload = function() {};
+    </script>
+</body>
+</html>

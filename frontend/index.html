@@ -538,7 +538,7 @@
                     </div>
                 </div>
 
-                <!-- Вкладка Архив (оригинал) -->
+                <!-- Вкладка Архив с фильтрами -->
                 <div id="archiveTab" class="tab-pane" style="display: none;">
                     <div class="card">
                         <div class="card-header d-flex justify-content-between align-items-center">
@@ -550,6 +550,22 @@
                         <div class="card-body">
                             <div class="alert alert-warning">
                                 <i class="bi bi-exclamation-triangle"></i> В архиве содержатся завершенные и отмененные заказ-наряды
+                            </div>
+                            <!-- Панель фильтров -->
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <select class="form-select" id="archiveStatusFilter" onchange="loadArchive()">
+                                        <option value="all">Все статусы</option>
+                                        <option value="Выполнен">Выполненные</option>
+                                        <option value="Отменен">Отменённые</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <select class="form-select" id="archiveSortOrder" onchange="loadArchive()">
+                                        <option value="desc">Сначала новые</option>
+                                        <option value="asc">Сначала старые</option>
+                                    </select>
+                                </div>
                             </div>
                             <div id="archiveList">
                                 <div class="text-center text-muted py-4">

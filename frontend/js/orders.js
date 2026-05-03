@@ -132,7 +132,6 @@ async function showOrderDetails(orderId) {
                                         <label class="form-label">Механик</label>
                                         <input class="form-control" value="${order.mechanic?.full_name || 'Не назначен'}" disabled>
                                     </div>
-                                    <!-- Информация об автомобиле в столбик (VIN и Год поменяны местами) -->
                                     <div class="mb-3">
                                         <label class="form-label fw-bold"><i class="bi bi-car-front"></i> Автомобиль</label>
                                         <div class="row g-2">
@@ -172,6 +171,18 @@ async function showOrderDetails(orderId) {
                             </div>
                         </div>
                         <div class="modal-footer">
+                            <div class="me-auto">
+                                <div class="btn-group">
+                                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="bi bi-file-earmark-pdf"></i> Документы
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li><a class="dropdown-item" href="#" onclick="generatePDF(${order.order_id}, 'preliminary')">Предварительный заказ-наряд</a></li>
+                                        <li><a class="dropdown-item" href="#" onclick="generatePDF(${order.order_id}, 'final')">Итоговый заказ-наряд</a></li>
+                                        <li><a class="dropdown-item" href="#" onclick="generatePDF(${order.order_id}, 'acceptance')">Акт приёма-передачи</a></li>
+                                    </ul>
+                                </div>
+                            </div>
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
                         </div>
                     </div>
@@ -605,25 +616,39 @@ async function createOrderForCar(carId, clientId) {
 async function loadArchive() {
     try {
         const response = await fetch(`${API_URL}/orders/archive`);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP error ${response.status}`);
         
         const archiveOrders = await response.json();
         const archiveList = document.getElementById('archiveList');
         
-        if (!archiveOrders || archiveOrders.length === 0) {
+        // Получаем текущие фильтры
+        const statusFilter = document.getElementById('archiveStatusFilter')?.value || 'all';
+        const sortOrder = document.getElementById('archiveSortOrder')?.value || 'desc';
+        
+        // Фильтрация по статусу
+        let filtered = archiveOrders;
+        if (statusFilter !== 'all') {
+            filtered = archiveOrders.filter(o => o.status === statusFilter);
+        }
+        
+        // Сортировка по дате (сначала новые / старые)
+        filtered.sort((a, b) => {
+            const dateA = a.completed_date ? new Date(a.completed_date) : new Date(a.created_date);
+            const dateB = b.completed_date ? new Date(b.completed_date) : new Date(b.created_date);
+            return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+        });
+        
+        if (!filtered || filtered.length === 0) {
             archiveList.innerHTML = `
                 <div class="alert alert-info">
-                    <i class="bi bi-info-circle"></i> Архив пуст
+                    <i class="bi bi-info-circle"></i> Архив пуст или нет заказов с выбранным статусом
                 </div>
             `;
             return;
         }
         
         let html = '<div class="list-group">';
-        archiveOrders.forEach(order => {
+        filtered.forEach(order => {
             const statusClass = order.status === 'Выполнен' ? 'status-completed' : 'status-cancelled';
             const price = order.total_price ? formatMoney(order.total_price) : '—';
             
@@ -633,6 +658,12 @@ async function loadArchive() {
                         <h6 class="mb-1">Архивный заказ #${order.order_id}</h6>
                         <div>
                             <span class="badge bg-secondary rounded-pill me-1">${price}</span>
+                            ${order.status === 'Выполнен' && order.pdf_url ? `
+                            <a href="${order.pdf_url}" target="_blank" class="btn btn-sm btn-outline-success" title="Открыть итоговый заказ-наряд">
+                                <i class="bi bi-file-earmark-pdf"></i> <strong>ВЫПОЛНЕН</strong>
+                                <br><small>${new Date(order.completed_date).toLocaleDateString()}</small>
+                            </a>
+                            ` : ''}
                             <button class="btn btn-sm btn-outline-danger" onclick="deleteArchiveOrder(${order.order_id})" title="Удалить из архива">
                                 <i class="bi bi-trash"></i>
                             </button>
