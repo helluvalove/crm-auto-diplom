@@ -9,7 +9,9 @@ if platform.system() == 'Windows':
         wkhtmltopdf=r'C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe'
     )
 else:
-    PDFKIT_CONFIG = None
+    PDFKIT_CONFIG = pdfkit.configuration(
+        wkhtmltopdf=r'/usr/bin/wkhtmltopdf'
+    )
 
 orders_bp = Blueprint('orders', __name__, url_prefix='/api/orders')
 
