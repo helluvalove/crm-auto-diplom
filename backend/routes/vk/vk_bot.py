@@ -1,30 +1,16 @@
 import time
 import logging
-import vk_api
 from flask import request, current_app
 from . import vk_bp
+
+from .middleware import require_rules
+from .handlers import handle_accept
+from .utils import send_message
+from .keyboards import kb_main_menu
 
 logger = logging.getLogger(__name__)
 
 _LAST_MESSAGE_TIME = {}
-
-def get_vk_api():
-    token = current_app.config['VK_ACCESS_TOKEN']
-    if not token:
-        raise RuntimeError("VK_ACCESS_TOKEN не задан")
-    session = vk_api.VkApi(token=token)
-    return session.get_api()
-
-def send_message(user_id, text):
-    try:
-        vk = get_vk_api()
-        vk.messages.send(
-            user_id=user_id,
-            message=text,
-            random_id=vk_api.utils.get_random_id()
-        )
-    except Exception as e:
-        logger.error(f"Ошибка отправки: {e}")
 
 def is_spam(user_id):
     now = time.time()
@@ -39,12 +25,7 @@ def handle_message(user_id, text):
         send_message(user_id, "⏳ Слишком частые сообщения.")
         return
     text = text.strip().lower()
-    if text in ['начать', 'start']:
-        send_message(user_id, "🚗 Добро пожаловать в сообщество «Автомастерская 43 | КИРОВ»!\nНапишите «Помощь».")
-    elif text == 'помощь':
-        send_message(user_id, "📋 Пока доступны:\n• Начать\n• Запись (скоро)\n• Статус (скоро)")
-    else:
-        send_message(user_id, "Введите «Начать» для начала.")
+    process_message(user_id, text)
 
 @vk_bp.route('/callback', methods=['POST'])
 def vk_callback():
@@ -71,3 +52,41 @@ def vk_callback():
         return 'ok', 200
 
     return 'ok', 200
+
+@require_rules
+def process_message(user_id, text, client):
+    # client передан декоратором, правила уже приняты
+    if text == "принять":
+        handle_accept(user_id, client)
+        return
+
+    if text in ['начать', 'start']:
+        send_message(
+            user_id,
+            "🚗 Добро пожаловать в автомастерскую! Выберите действие:",
+            keyboard=kb_main_menu()
+        )
+    elif text == 'помощь':
+        send_message(
+            user_id,
+            "📋 Команды:\n• Запись – создать заявку\n• Статус – проверить статус",
+            keyboard=kb_main_menu()
+        )
+    elif text == 'запись':
+        send_message(
+            user_id,
+            "Функция записи в разработке. Пожалуйста, подождите.",
+            keyboard=kb_main_menu()
+        )
+    elif text == 'статус':
+        send_message(
+            user_id,
+            "Раздел статуса появится позже.",
+            keyboard=kb_main_menu()
+        )
+    else:
+        send_message(
+            user_id,
+            "Пожалуйста, используйте кнопки меню.",
+            keyboard=kb_main_menu()
+        )

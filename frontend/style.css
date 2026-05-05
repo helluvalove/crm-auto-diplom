@@ -2,6 +2,7 @@
 
 /* Статусы заказов */
 .status-created { color: #6c757d; }
+.status-booked { color: #ffa200; }
 .status-в-работе { color: #0d6efd; }
 .status-готов-к-выдаче { color: #ffc107; }
 .status-выполнен { color: #198754; }

@@ -72,6 +72,7 @@ function formatPhone(phone) {
 function getStatusClass(status) {
     switch (status) {
         case 'Создан':          return 'status-created';
+        case 'Забронирован':    return 'status-booked';   // <-- новая строка
         case 'В работе':        return 'status-in-progress';
         case 'На диагностике':  return 'status-diagnostic';
         case 'Готов к выдаче':  return 'status-ready';

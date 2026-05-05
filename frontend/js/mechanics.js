@@ -576,3 +576,89 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+function setDefaultAvailabilityDate() {
+    const dateInput = document.getElementById('availabilityDate');
+    if (!dateInput || dateInput.value) return; // если уже выбрано – не трогаем
+
+    let d = new Date();
+    // Если сегодня воскресенье (0), перескочим на понедельник
+    if (d.getDay() === 0) {
+        d.setDate(d.getDate() + 1);
+    }
+    const today = d.toISOString().slice(0, 10);
+    dateInput.value = today;
+}
+
+async function loadAvailability() {
+    const dateInput = document.getElementById('availabilityDate');
+    if (!dateInput) return;
+    const date = dateInput.value;
+    if (!date) {
+        showError('Выберите дату');
+        return;
+    }
+
+    const d = new Date(date);
+    if (d.getDay() === 0) {
+        // Воскресенье – выходной
+        const container = document.getElementById('availabilityContainer');
+        if (container) {
+            container.innerHTML = `<div class="alert alert-warning"><i class="bi bi-calendar-x"></i> Воскресенье — выходной. Записи не принимаются.</div>`;
+        }
+        return;
+    }
+
+    try {
+        const resp = await fetch(`${API_URL}/mechanics/availability?date=${date}`);
+        if (!resp.ok) throw new Error();
+        const data = await resp.json();
+        renderAvailability(data, date);
+    } catch (e) {
+        showError('Ошибка загрузки занятости');
+    }
+}
+
+function renderAvailability(mechanics, date) {
+    const container = document.getElementById('availabilityContainer');
+    if (!container) return;
+    if (!mechanics || mechanics.length === 0) {
+        container.innerHTML = `<div class="alert alert-info">Нет данных о механиках</div>`;
+        return;
+    }
+    let html = `<h6 class="mb-3">Занятость механиков на ${date}</h6><div class="list-group">`;
+    mechanics.forEach(m => {
+        const hasSlots = m.busy_slots && m.busy_slots.length > 0;
+        let badge = hasSlots
+            ? '<span class="badge bg-warning">Занят</span>'
+            : '<span class="badge bg-success">Свободен</span>';
+        let slotsHtml = '';
+        if (hasSlots) {
+            slotsHtml = '<ul class="list-unstyled small mt-1 mb-0">';
+            m.busy_slots.forEach(slot => {
+                let start, end, label = '';
+                if (slot.no_date) {
+                    start = '--:--';
+                    end = '--:--';
+                    label = ' (бессрочно, без даты)';
+                } else if (slot.indefinite) {
+                    start = new Date(slot.start).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                    end = 'конец дня';
+                    label = ' (бессрочно)';
+                } else {
+                    start = new Date(slot.start).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                    end = new Date(slot.end).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+                }
+                slotsHtml += `<li class="text-muted">Заказ #${slot.order_id}: ${start} – ${end} (${slot.status})${label}</li>`;
+            });
+            slotsHtml += '</ul>';
+        }
+        html += `
+            <div class="list-group-item d-flex justify-content-between align-items-start">
+                <div> <strong>${m.full_name}</strong> ${slotsHtml} </div>
+                <div class="ms-2">${badge}</div>
+            </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}

@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, render_template, make_response, send_file, current_app
-from datetime import datetime
+from datetime import datetime, timedelta
 from models import db, WorkOrder, Client, Car, User, Role
 import pdfkit, os, sys, platform
 
@@ -124,7 +124,8 @@ def get_orders():
                 'total_price': float(order.total_price) if order.total_price else None,
                 'created_date': order.created_date.isoformat() if order.created_date else None,
                 'completed_date': order.completed_date.isoformat() if order.completed_date else None,
-                'pdf_url': order.pdf_url
+                'pdf_url': order.pdf_url,
+                'appointment_datetime': order.appointment_datetime.isoformat() if order.appointment_datetime else None
             }
 
             if order.client:
@@ -160,7 +161,8 @@ def get_order(order_id):
             'total_price': float(order.total_price) if order.total_price else None,
             'created_date': order.created_date.isoformat() if order.created_date else None,
             'completed_date': order.completed_date.isoformat() if order.completed_date else None,
-            'pdf_url': order.pdf_url
+            'pdf_url': order.pdf_url,
+            'appointment_datetime': order.appointment_datetime.isoformat() if order.appointment_datetime else None
         }
         
         if order.client:
@@ -203,18 +205,19 @@ def create_order():
     """Создать новый заказ"""
     try:
         data = request.get_json()
-        
+
         if not data.get('client_id') or not data.get('car_id') or not data.get('problem_description'):
             return jsonify({'error': 'Отсутствуют обязательные поля: client_id, car_id, problem_description'}), 400
-        
+
         client = Client.query.get(data['client_id'])
         if not client:
             return jsonify({'error': 'Клиент не найден'}), 404
-            
+
         car = Car.query.get(data['car_id'])
         if not car:
             return jsonify({'error': 'Автомобиль не найден'}), 404
-        
+
+        # Проверка, нет ли уже активного заказа у этого автомобиля
         active_order = WorkOrder.query.filter(
             WorkOrder.car_id == data['car_id'],
             WorkOrder.status.notin_(['Выполнен', 'Отменен'])
@@ -222,23 +225,60 @@ def create_order():
         if active_order:
             return jsonify({'error': 'У этого автомобиля уже есть активный заказ.'}), 409
 
-        mechanic_id = data.get('mechanic_id')
-        if mechanic_id:
-            try:
-                mechanic_id = int(mechanic_id)
-                mechanic = User.query.join(Role).filter(User.user_id == mechanic_id, Role.role_name == 'mechanic').first()
-                if not mechanic:
-                    mechanic_id = None
-                else:
-                    active_order_mech = WorkOrder.query.filter(
-                        WorkOrder.mechanic_id == mechanic_id,
-                        WorkOrder.status.notin_(['Выполнен', 'Отменен'])
-                    ).first()
-                    if active_order_mech:
-                        return jsonify({'error': 'Механик уже имеет активный заказ.', 'busy_mechanic': True}), 409
-            except:
-                mechanic_id = None
+        # --- Обработка даты/времени записи и автостатус ---
+        appointment_str = data.get('appointment_datetime')
+        appointment_dt = None
+        status = data.get('status', 'Создан')
 
+        if appointment_str:
+            try:
+                appointment_dt = datetime.fromisoformat(appointment_str)
+            except:
+                return jsonify({'error': 'Неверный формат даты/времени записи'}), 400
+            if appointment_dt < datetime.now():
+                return jsonify({'error': 'Дата записи не может быть в прошлом'}), 400
+
+            if appointment_dt.weekday() == 6:
+                return jsonify({'error': 'Запись невозможна: воскресенье выходной.'}), 400
+            if appointment_dt.hour < 8 or appointment_dt.hour >= 20:
+                return jsonify({'error': 'Время записи должно быть с 08:00 до 20:00.'}), 400
+
+            if not data.get('status') or data.get('status') == 'Создан':
+                status = 'Забронирован'
+
+        # --- Механик (обязателен) ---
+        mechanic_id = data.get('mechanic_id')
+        if not mechanic_id:
+            return jsonify({'error': 'Механик обязателен для создания заказа.'}), 400
+
+        try:
+            mechanic_id = int(mechanic_id)
+            mechanic = User.query.join(Role).filter(User.user_id == mechanic_id, Role.role_name == 'mechanic').first()
+            if not mechanic:
+                return jsonify({'error': 'Указанный механик не найден.'}), 404
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Некорректный ID механика.'}), 400
+
+        # --- Оценка времени ---
+        est_hours = None
+        if 'estimated_hours' in data:
+            raw = data['estimated_hours']
+            if raw not in (None, ''):
+                try:
+                    est_hours = float(raw)
+                    if est_hours < 0:
+                        return jsonify({'error': 'Оценка времени не может быть отрицательной'}), 400
+                except (ValueError, TypeError):
+                    return jsonify({'error': 'Некорректное значение estimated_hours'}), 400
+
+        # --- Проверка доступности механика ---
+        is_available, error_msg = check_mechanic_availability(
+            mechanic_id, appointment_dt, est_hours
+        )
+        if not is_available:
+            return jsonify({'error': error_msg, 'busy_mechanic': True}), 409
+
+        # --- Стоимость ---
         total_price = data.get('total_price')
         total_price_val = None
         if total_price is not None and str(total_price).strip() != '':
@@ -250,22 +290,28 @@ def create_order():
                     return jsonify({'error': 'Сумма превышает максимально допустимую'}), 400
             except (ValueError, TypeError):
                 return jsonify({'error': 'Некорректное значение суммы'}), 400
-        
+
         order = WorkOrder(
             client_id=data['client_id'],
             car_id=data['car_id'],
             mechanic_id=mechanic_id,
-            status=data.get('status', 'Создан'),
+            status=status,
             problem_description=data['problem_description'],
             work_description=data.get('work_description'),
             total_price=total_price_val,
             created_date=datetime.now(),
+            appointment_datetime=appointment_dt,
+            estimated_hours=est_hours,
             pdf_url=data.get('pdf_url')
         )
-        
+
         db.session.add(order)
         db.session.commit()
-        
+
+        # --- Предупреждение о будущей бессрочной записи ---
+        warning_msg = get_indefinite_warning(mechanic_id, appointment_dt, est_hours,
+                                     exclude_order_id=order.order_id)
+
         return jsonify({
             'message': 'Заказ создан',
             'order': {
@@ -275,34 +321,54 @@ def create_order():
                 'status': order.status,
                 'problem_description': order.problem_description,
                 'pdf_url': order.pdf_url
-            }
+            },
+            'warning': warning_msg          # None, если нет
         }), 201
     except Exception as e:
         db.session.rollback()
         print(f"❌ Ошибка в create_order: {e}")
         return jsonify({'error': str(e)}), 500
-
+    
 def update_order(order_id):
     """Обновить заказ"""
     try:
         order = WorkOrder.query.get_or_404(order_id)
         data = request.get_json()
-        
+
+        # --- Обработка даты/времени записи ---
+        if 'appointment_datetime' in data:
+            appointment_str = data['appointment_datetime']
+            if appointment_str:
+                try:
+                    new_dt = datetime.fromisoformat(appointment_str)
+                except:
+                    return jsonify({'error': 'Неверный формат даты/времени записи'}), 400
+                if new_dt < datetime.now():
+                    return jsonify({'error': 'Дата записи не может быть в прошлом'}), 400
+                if new_dt.weekday() == 6:
+                    return jsonify({'error': 'Запись невозможна: воскресенье выходной.'}), 400
+                if new_dt.hour < 8 or new_dt.hour >= 20:
+                    return jsonify({'error': 'Время записи должно быть с 08:00 до 20:00.'}), 400
+                order.appointment_datetime = new_dt
+            else:
+                order.appointment_datetime = None
+
+        # --- Статус ---
         if 'status' in data:
             order.status = data['status']
             if data['status'] == 'Выполнен' and not order.completed_date:
                 order.completed_date = datetime.now()
-                # Автоматически генерируем и сохраняем итоговый PDF
                 pdf_path = save_order_pdf(order_id, 'itogoviy_zakaznaryad.html', 'final')
                 if pdf_path:
                     order.pdf_url = f'/api/orders/{order_id}/pdf/final'
-        
+
+        # --- Описание ---
         if 'problem_description' in data:
             order.problem_description = data['problem_description']
-        
         if 'work_description' in data:
             order.work_description = data['work_description']
-        
+
+        # --- Стоимость ---
         if 'total_price' in data:
             price = data['total_price']
             if price is not None and str(price).strip() != '':
@@ -317,34 +383,71 @@ def update_order(order_id):
                     return jsonify({'error': 'Некорректное значение суммы'}), 400
             else:
                 order.total_price = None
-        
+
         if 'pdf_url' in data:
             order.pdf_url = data['pdf_url']
-        
+
+        # --- Оценка времени ---
+        if 'estimated_hours' in data:
+            raw = data['estimated_hours']
+            if raw in (None, ''):
+                order.estimated_hours = None
+            else:
+                try:
+                    est = float(raw)
+                    if est < 0:
+                        return jsonify({'error': 'Оценка времени не может быть отрицательной'}), 400
+                    order.estimated_hours = est
+                except (ValueError, TypeError):
+                    return jsonify({'error': 'Некорректное значение estimated_hours'}), 400
+
+        # --- Механик ---
         if 'mechanic_id' in data:
             mechanic_id = data['mechanic_id']
+            if not mechanic_id and order.status not in ['Выполнен', 'Отменен']:
+                return jsonify({'error': 'Нельзя убрать механика у активного заказа.'}), 400
+
             if mechanic_id:
                 try:
                     mechanic_id = int(mechanic_id)
-                    mechanic = User.query.join(Role).filter(User.user_id == mechanic_id, Role.role_name == 'mechanic').first()
-                    if mechanic:
-                        active_order = WorkOrder.query.filter(
-                            WorkOrder.mechanic_id == mechanic_id,
-                            WorkOrder.order_id != order_id,
-                            WorkOrder.status.notin_(['Выполнен', 'Отменен'])
-                        ).first()
-                        if active_order:
-                            return jsonify({'error': 'Механик уже имеет другой активный заказ.', 'busy_mechanic': True}), 409
-                        order.mechanic_id = mechanic_id
-                    else:
+                    mechanic = User.query.join(Role).filter(
+                        User.user_id == mechanic_id, Role.role_name == 'mechanic').first()
+                    if not mechanic:
                         order.mechanic_id = None
-                except:
-                    order.mechanic_id = None
+                    else:
+                        # не проверяем здесь доступность, сделаем в конце
+                        order.mechanic_id = mechanic_id
+                except (ValueError, TypeError):
+                    return jsonify({'error': 'Некорректный ID механика.'}), 400
             else:
                 order.mechanic_id = None
-        
+
+        # ========== ИТОГОВАЯ ПРОВЕРКА ДОСТУПНОСТИ МЕХАНИКА ==========
+        if order.status not in ['Выполнен', 'Отменен']:
+            if not order.mechanic_id:
+                db.session.rollback()
+                return jsonify({'error': 'Механик обязателен для активного заказа.'}), 400
+
+            is_available, error_msg = check_mechanic_availability(
+                order.mechanic_id,
+                order.appointment_datetime,
+                order.estimated_hours,
+                exclude_order_id=order_id
+            )
+            if not is_available:
+                db.session.rollback()
+                return jsonify({'error': error_msg, 'busy_mechanic': True}), 409
+
         db.session.commit()
-        
+
+        # --- Предупреждение при необходимости ---
+        warning_msg = None
+        if order.mechanic_id and order.appointment_datetime:
+            warning_msg = get_indefinite_warning(
+                order.mechanic_id, order.appointment_datetime, order.estimated_hours,
+                exclude_order_id=order_id
+            )
+
         return jsonify({
             'message': 'Заказ обновлен',
             'order': {
@@ -352,13 +455,14 @@ def update_order(order_id):
                 'status': order.status,
                 'mechanic_id': order.mechanic_id,
                 'pdf_url': order.pdf_url
-            }
+            },
+            'warning': warning_msg
         })
     except Exception as e:
         db.session.rollback()
         print(f"❌ Ошибка в update_order: {e}")
         return jsonify({'error': str(e)}), 500
-
+    
 def delete_order(order_id):
     """Удалить заказ"""
     try:
@@ -450,3 +554,109 @@ def acceptance_pdf(order_id):
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = 'inline'
     return response
+
+def get_indefinite_warning(mechanic_id, appointment_dt, estimated_hours, exclude_order_id=None):
+    """
+    Возвращает предупреждающее сообщение, если:
+    - новый заказ бессрочный (estimated_hours пуст/<=0)
+    - и у механика есть будущий бессрочный заказ, начинающийся позже appointment_dt.
+    """
+    if estimated_hours and estimated_hours > 0:
+        return None  # заказ с оценкой времени – не бессрочный
+    if not appointment_dt:
+        return None  # без даты – не к чему привязываться
+
+    now = datetime.now()
+    future_indefinite = WorkOrder.query.filter(
+        WorkOrder.mechanic_id == mechanic_id,
+        WorkOrder.status.in_(['Забронирован', 'Создан', 'На диагностике', 'В работе']),
+        db.or_(WorkOrder.estimated_hours.is_(None), WorkOrder.estimated_hours <= 0),
+        WorkOrder.appointment_datetime > now
+    )
+    if exclude_order_id:
+        future_indefinite = future_indefinite.filter(WorkOrder.order_id != exclude_order_id)
+    future_indefinite = future_indefinite.order_by(WorkOrder.appointment_datetime.asc()).first()
+
+    if future_indefinite and future_indefinite.appointment_datetime > appointment_dt:
+        return (f"Внимание: у механика уже есть бессрочная запись на "
+                f"{future_indefinite.appointment_datetime.strftime('%d.%m.%Y %H:%M')} "
+                f"(заказ #{future_indefinite.order_id}). "
+                f"Текущий заказ необходимо завершить до этого времени.")
+    return None
+
+REST_MINUTES = 30  # окно отдыха/уборки рабочего места после окончания работы
+
+def build_interval(order, next_order_start=None):
+    now = datetime.now()
+
+    # --- старт ---
+    if order.appointment_datetime:
+        start = order.appointment_datetime
+    else:
+        start = now
+
+    # --- конец ---
+    if order.estimated_hours and order.estimated_hours > 0:
+        end = start + timedelta(hours=order.estimated_hours) + timedelta(minutes=REST_MINUTES)
+    else:
+        # бессрочный заказ
+        if next_order_start:
+            end = next_order_start
+        else:
+            end = datetime(2100, 1, 1)  # вместо datetime.max (безопаснее)
+
+    return start, end
+
+
+def intervals_overlap(a_start, a_end, b_start, b_end):
+    return a_start < b_end and a_end > b_start
+
+def check_mechanic_availability(mechanic_id, appointment_dt, estimated_hours, exclude_order_id=None):
+    busy_statuses = ['Забронирован', 'Создан', 'На диагностике', 'В работе']
+    now = datetime.now()
+
+    # --- создаём "виртуальный" заказ ---
+    class TempOrder:
+        pass
+
+    new_order = TempOrder()
+    new_order.appointment_datetime = appointment_dt
+    new_order.estimated_hours = estimated_hours
+
+    # --- получаем все активные заказы механика ---
+    query = WorkOrder.query.filter(
+        WorkOrder.mechanic_id == mechanic_id,
+        WorkOrder.status.in_(busy_statuses)
+    )
+
+    if exclude_order_id:
+        query = query.filter(WorkOrder.order_id != exclude_order_id)
+
+    orders = query.order_by(WorkOrder.appointment_datetime.asc().nullsfirst()).all()
+
+    # --- строим интервалы существующих заказов ---
+    intervals = []
+
+    for i, order in enumerate(orders):
+        next_order = orders[i + 1] if i + 1 < len(orders) else None
+        next_start = next_order.appointment_datetime if next_order else None
+
+        start, end = build_interval(order, next_start)
+        intervals.append((start, end, order.order_id))
+
+    # --- определяем следующий заказ для нового ---
+    next_start = None
+    for o in orders:
+        if o.appointment_datetime and appointment_dt and o.appointment_datetime > appointment_dt:
+            next_start = o.appointment_datetime
+            break
+
+    # --- строим интервал нового заказа ---
+    new_start, new_end = build_interval(new_order, next_start)
+
+    # --- проверяем пересечения ---
+    for start, end, order_id in intervals:
+        if intervals_overlap(new_start, new_end, start, end):
+            return False, f"Механик занят (пересечение с заказом #{order_id})"
+
+    return True, None

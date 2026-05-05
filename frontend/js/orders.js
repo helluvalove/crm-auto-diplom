@@ -105,7 +105,7 @@ async function showOrderDetails(orderId) {
 
         const modalHtml = `
             <div class="modal fade" id="viewOrderModal" tabindex="-1">
-                <div class="modal-dialog" style="max-width: 990px;">
+                <div class="modal-dialog" style="max-width: 1050px;">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title">Просмотр заказ-наряда #${order.order_id}</h5>
@@ -122,6 +122,18 @@ async function showOrderDetails(orderId) {
                                         <label class="form-label">Статус</label>
                                         <input class="form-control" value="${order.status}" disabled>
                                     </div>
+                                    ${order.appointment_datetime ? `
+                                    <div class="mb-3">
+                                        <label class="form-label"><i class="bi bi-calendar-check"></i> Дата и время записи</label>
+                                        <input class="form-control" value="${new Date(order.appointment_datetime).toLocaleString('ru-RU')}" disabled>
+                                    </div>
+                                    ` : ''}
+                                    ${order.estimated_hours ? `
+                                    <div class="mb-3">
+                                        <label class="form-label"><i class="bi bi-hourglass-split"></i> Примерное время</label>
+                                        <input class="form-control" value="${order.estimated_hours} ч." disabled>
+                                    </div>
+                                    ` : ''}
                                     <div class="mb-3">
                                         <label class="form-label">Стоимость (руб)</label>
                                         <input class="form-control" value="${order.total_price ? formatMoney(order.total_price) : '—'}" disabled>
@@ -238,6 +250,7 @@ async function editOrder(orderId) {
                                     <div class="mb-3">
                                         <label class="form-label">Статус</label>
                                         <select class="form-select" id="editOrderStatus">
+                                            <option value="Забронирован" ${order.status === 'Забронирован' ? 'selected' : ''}>Забронирован</option>
                                             <option value="Создан" ${order.status === 'Создан' ? 'selected' : ''}>Создан</option>
                                             <option value="На диагностике" ${order.status === 'На диагностике' ? 'selected' : ''}>На диагностике</option>
                                             <option value="В работе" ${order.status === 'В работе' ? 'selected' : ''}>В работе</option>
@@ -260,6 +273,28 @@ async function editOrder(orderId) {
                                         <label class="form-label">Стоимость (руб)</label>
                                         <input type="number" class="form-control" id="editOrderPrice" value="${order.total_price || ''}" step="0.01" min="0" max="99999999.99">
                                         <div class="form-text text-success" id="editOrderPriceFormatted">${order.total_price ? formatMoney(order.total_price) : ''}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Дата и время записи</label>
+                                        <input type="datetime-local" class="form-control" id="editOrderAppointment"
+                                               value="${order.appointment_datetime ? order.appointment_datetime.slice(0, 16) : ''}">
+                                        <div class="form-text">Оставьте пустым, если заказ без предв. записи</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label">Примерное время (часов)</label>
+                                        <input type="number" class="form-control" id="editOrderEstimatedHours"
+                                            value="${order.estimated_hours || ''}" step="0.5" min="0" max="24">
+                                        <div class="form-text">Оставьте пустым, если точное время неизвестно</div>
                                     </div>
                                 </div>
                             </div>
@@ -371,30 +406,53 @@ async function updateOrder(orderId) {
         return;
     }
     
+    // Читаем дату записи
+    const appointmentInput = document.getElementById('editOrderAppointment');
+    const appointmentDatetime = appointmentInput?.value || null;
+
+    if (appointmentDatetime) {
+        const check = isWorkingTime(appointmentDatetime);
+        if (!check.valid) {
+            showError(check.message);
+            return;
+        }
+    }
+    
+    const estimatedHoursInput = document.getElementById('editOrderEstimatedHours');
+    const estimatedHours = estimatedHoursInput?.value || null;
+
     const orderData = {
         client_id: parseInt(clientId),
         status: status,
         problem_description: problem,
         work_description: document.getElementById('editOrderWork').value.trim() || null,
         mechanic_id: document.getElementById('editOrderMechanicSelect').value || null,
-        total_price: priceInput.value || null
+        total_price: priceInput.value || null,
+        appointment_datetime: appointmentDatetime,
+        estimated_hours: estimatedHours ? parseFloat(estimatedHours) : null
     };
-    
+
     try {
         const response = await fetch(`${API_URL}/orders/${orderId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(orderData)
         });
-        
+
         if (response.ok) {
+            const data = await response.json();
             showSuccess('Заказ-наряд обновлен!');
-            
+
+            // --- Предупреждение ---
+            if (data.warning) {
+                setTimeout(() => showInfo(data.warning), 300);
+            }
+            // --------------------
+
             const modal = bootstrap.Modal.getInstance(document.getElementById('editOrderModal'));
             modal.hide();
-            
             loadOrders('active');
-            
+
         } else {
             const errorData = await response.json();
             if (errorData.busy_mechanic) {
@@ -471,22 +529,32 @@ async function createOrder() {
     const clientId = document.getElementById('orderClientSelect').value;
     const carId = document.getElementById('orderCarSelect').value;
     const problem = document.getElementById('orderProblem').value.trim();
-    
+    const mechanicId = document.getElementById('orderMechanicSelect').value;
+
     if (!clientId || !carId || !problem) {
         showError('Заполните все обязательные поля');
         return;
     }
-    
+
+    // === НОВОЕ: механик теперь обязателен ===
+    if (!mechanicId) {
+        showError('Выберите механика');
+        const mechSelect = document.getElementById('orderMechanicSelect');
+        if (mechSelect) mechSelect.classList.add('is-invalid');
+        return;
+    }
+    // =====================================
+
     try {
         const ordersResponse = await fetch(`${API_URL}/orders`);
         if (ordersResponse.ok) {
             const allOrders = await ordersResponse.json();
-            const carActiveOrders = allOrders.filter(order => 
-                order.car_id == carId && 
-                order.status !== 'Выполнен' && 
+            const carActiveOrders = allOrders.filter(order =>
+                order.car_id == carId &&
+                order.status !== 'Выполнен' &&
                 order.status !== 'Отменен'
             );
-            
+
             if (carActiveOrders.length > 0) {
                 showError('Нельзя создать заказ: у этого автомобиля уже есть активный заказ.');
                 return;
@@ -495,38 +563,63 @@ async function createOrder() {
     } catch (error) {
         console.error('Ошибка проверки заказов:', error);
     }
-    
+
+    // Читаем дату записи, если указана
+    const appointmentInput = document.getElementById('orderAppointment');
+    const appointmentDatetime = appointmentInput?.value || null;
+
+    if (appointmentDatetime) {
+        const check = isWorkingTime(appointmentDatetime);
+        if (!check.valid) {
+            showError(check.message);
+            return;
+        }
+    }
+
+    const estimatedHoursInput = document.getElementById('orderEstimatedHours');
+    const estimatedHours = estimatedHoursInput?.value || null;
+
     const orderData = {
         client_id: parseInt(clientId),
         car_id: parseInt(carId),
         problem_description: problem,
-        mechanic_id: document.getElementById('orderMechanicSelect').value || null,
+        mechanic_id: parseInt(mechanicId),
         total_price: document.getElementById('orderPrice').value || null,
-        status: document.getElementById('orderStatus').value
+        status: document.getElementById('orderStatus').value,
+        appointment_datetime: appointmentDatetime,
+        estimated_hours: estimatedHours ? parseFloat(estimatedHours) : null
     };
-    
+
     try {
         const response = await fetch(`${API_URL}/orders`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(orderData)
         });
-        
+
         if (response.ok) {
             const data = await response.json();
             showSuccess(`Заказ-наряд #${data.order.order_id} создан!`);
-            
+
+            // --- Обработка предупреждения о будущей бессрочной записи ---
+            if (data.warning) {
+                setTimeout(() => {
+                    showInfo(data.warning);   // или alert(data.warning)
+                }, 300);
+            }
+            // -----------------------------------------------------------
+
             document.getElementById('orderProblem').value = '';
             document.getElementById('orderPrice').value = '';
-            
+            if (appointmentInput) appointmentInput.value = '';
+
             loadOrders('active');
             loadAllCarsInService();
             showTab('orders');
-            
+
         } else {
             const errorData = await response.json();
             if (errorData.busy_mechanic) {
-                // Подсветим поле механика
                 const mechSelect = document.getElementById('orderMechanicSelect');
                 if (mechSelect) mechSelect.classList.add('is-invalid');
             }
@@ -741,6 +834,22 @@ function handlePriceInput() {
     if (formatted) {
         formatted.textContent = (!isNaN(val) && this.value.trim() !== '') ? formatMoney(val) : '';
     }
+}
+
+function isWorkingTime(datetimeStr) {
+    if (!datetimeStr) return { valid: true }; // без даты разрешено
+    const dt = new Date(datetimeStr);
+    if (isNaN(dt.getTime())) return { valid: false, message: 'Неверная дата' };
+    const day = dt.getDay(); // 0 = вс, 6 = сб
+    if (day === 0) {
+        return { valid: false, message: 'Воскресенье — выходной день. Выберите другой день.' };
+    }
+    const hours = dt.getHours();
+    const minutes = dt.getMinutes();
+    if (hours < 8 || hours >= 20 || (hours === 20 && minutes > 0)) {
+        return { valid: false, message: 'Время записи должно быть с 08:00 до 20:00 (пн-сб).' };
+    }
+    return { valid: true };
 }
 
 // Обработчик двойного клика для быстрого просмотра заказа

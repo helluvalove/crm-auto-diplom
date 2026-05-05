@@ -57,6 +57,9 @@ async function loadClients() {
         // Формируем HTML
         let html = '<div class="list-group">';
         clientsWithCarCount.forEach(client => {
+            const safeName = client.name || 'Без имени';            // защита от null
+            const safePhone = formatPhone(client.phone || '');      // защита от null
+
             let carIconClass = 'bi-car-front';
             let carIconColor = 'text-primary';
             let carStatusBadge = '';
@@ -80,7 +83,7 @@ async function loadClients() {
             html += `
                 <div class="list-group-item list-group-item-action" id="client-${client.client_id}">
                     <div class="d-flex w-100 justify-content-between">
-                        <h6 class="mb-1">${client.name}</h6>
+                        <h6 class="mb-1">${safeName}</h6>
                         <div>
                             <small class="text-muted me-2">ID: ${client.client_id}</small>
                             <button class="btn btn-sm btn-outline-primary me-1" onclick="editClient(${client.client_id})" title="Редактировать">
@@ -92,14 +95,14 @@ async function loadClients() {
                         </div>
                     </div>
                     <p class="mb-1">
-                        <i class="bi bi-telephone"></i> ${formatPhone(client.phone)}
+                        <i class="bi bi-telephone"></i> ${safePhone}
                         ${client.telegram_chat_id ? `<br><i class="bi bi-telegram"></i> Chat ID: ${client.telegram_chat_id}` : ''}
                     </p>
                     <div class="mt-2">
-                        <button class="btn btn-sm btn-outline-primary" onclick="showClientCarsModal(${client.client_id}, '${client.name.replace(/'/g, "\\'")}')">
+                        <button class="btn btn-sm btn-outline-primary" onclick="showClientCarsModal(${client.client_id}, '${safeName.replace(/'/g, "\\'")}')">
                             <i class="bi ${carIconClass} ${carIconColor}"></i> Авто (${client.car_count || 0}) ${carStatusBadge}
                         </button>
-                        <button class="btn btn-sm btn-outline-success" onclick="createOrderForClient(${client.client_id}, '${client.name.replace(/'/g, "\\'")}')">
+                        <button class="btn btn-sm btn-outline-success" onclick="createOrderForClient(${client.client_id}, '${safeName.replace(/'/g, "\\'")}')">
                             <i class="bi bi-plus-circle"></i> Новый заказ
                         </button>
                     </div>
@@ -340,8 +343,8 @@ async function editClient(clientId) {
         document.getElementById('editClientName').value = client.name || '';
         
         const phoneField = document.getElementById('editClientPhone');
-        // Устанавливаем отформатированное значение сразу
-        phoneField.value = formatPhone(client.phone) || '+7 ';
+        // Устанавливаем отформатированное значение, даже если phone = null
+        phoneField.value = formatPhone(client.phone || '') || '+7 ';
         
         // Удаляем старые обработчики (чтобы не дублировались)
         phoneField.removeEventListener('input', formatPhoneInputHandler);

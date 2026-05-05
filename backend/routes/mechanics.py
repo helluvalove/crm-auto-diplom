@@ -1,14 +1,16 @@
 from flask import Blueprint, request, jsonify
 from models import db, User, Role, WorkOrder
-from crypto import hash_phone            # <-- добавлен импорт
+from crypto import hash_phone     
+from datetime import datetime, timedelta
 
 mechanics_bp = Blueprint('mechanics', __name__, url_prefix='/api/mechanics')
+
+REST_MINUTES = 30   # технологический перерыв после работы
 
 # Вспомогательная функция для получения роли "mechanic"
 def get_mechanic_role():
     role = Role.query.filter_by(role_name='mechanic').first()
     if not role:
-        # На случай, если роль не создана (должна быть при миграции)
         role = Role(role_name='mechanic')
         db.session.add(role)
         db.session.commit()
@@ -33,7 +35,6 @@ def handle_mechanic(mechanic_id):
 def get_mechanics():
     """Получить всех механиков"""
     try:
-        # Фильтрация через JOIN с таблицей roles
         mechanics = User.query.join(Role).filter(Role.role_name == 'mechanic').all()
         mechanics_list = [mechanic.to_dict() for mechanic in mechanics]
         return jsonify(mechanics_list)
@@ -76,9 +77,7 @@ def create_mechanic():
             specialization=data.get('specialization')
         )
         
-        # Устанавливаем роль через свойство role_name
-        mechanic.role_name = 'mechanic'   # сеттер сам найдёт роль по имени
-        
+        mechanic.role_name = 'mechanic'   # сеттер назначит роль
         mechanic.set_password(data['password'])
         
         db.session.add(mechanic)
@@ -111,7 +110,7 @@ def update_mechanic(mechanic_id):
                     'duplicate_phone': True
                 }), 400
         
-        # Проверка уникальности логина (логин не шифруется, оставляем как есть)
+        # Проверка уникальности логина
         if 'login' in data and data['login'] != mechanic.login:
             existing = User.query.filter_by(login=data['login']).first()
             if existing and existing.user_id != mechanic_id:
@@ -167,3 +166,77 @@ def delete_mechanic(mechanic_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+    
+@mechanics_bp.route('/availability', methods=['GET'])
+def get_mechanics_availability():
+    date_str = request.args.get('date')
+    if not date_str:
+        return jsonify({'error': 'Параметр date обязателен (YYYY-MM-DD)'}), 400
+    try:
+        target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({'error': 'Неверный формат даты. Используйте YYYY-MM-DD'}), 400
+
+    mechanics = User.query.join(Role).filter(Role.role_name == 'mechanic').all()
+    busy_statuses = ['Забронирован', 'Создан', 'На диагностике', 'В работе']
+    start_of_day = datetime.combine(target_date, datetime.min.time())
+    end_of_day = datetime.combine(target_date, datetime.max.time())
+
+    all_orders = WorkOrder.query.filter(
+        WorkOrder.status.in_(busy_statuses),
+        WorkOrder.mechanic_id.isnot(None)
+    ).all()
+
+    busy_intervals = []
+
+    for order in all_orders:
+        est = order.estimated_hours
+        is_indefinite = (est is None or est <= 0)
+
+        if is_indefinite:
+            if order.appointment_datetime is None:
+                # Бессрочный без даты – сразу действует, показываем всегда
+                start = start_of_day.replace(hour=8, minute=0)
+                end = start_of_day.replace(hour=20, minute=0)
+                no_date = True
+            else:
+                order_date = order.appointment_datetime.date()
+                if target_date < order_date:
+                    continue    # Заказ ещё не начался
+                # Показываем занятость на весь рабочий день начиная с даты заказа
+                start = max(start_of_day.replace(hour=8, minute=0), order.appointment_datetime)
+                end = start_of_day.replace(hour=20, minute=0)
+                if start >= end:
+                    continue
+                no_date = False
+        else:
+            if order.appointment_datetime is None or order.appointment_datetime.date() != target_date:
+                continue
+            start = order.appointment_datetime
+            end = start + timedelta(hours=est) + timedelta(minutes=REST_MINUTES)
+            no_date = False
+
+        if start < end_of_day and end > start_of_day:
+            busy_intervals.append({
+                'mechanic_id': order.mechanic_id,
+                'start': start.isoformat(),
+                'end': end.isoformat(),
+                'order_id': order.order_id,
+                'status': order.status,
+                'time_range': f"{start.strftime('%H:%M')} – {end.strftime('%H:%M')}",
+                'indefinite': is_indefinite,
+                'no_date': no_date
+            })
+
+    result = []
+    for m in mechanics:
+        slots = [i for i in busy_intervals if i['mechanic_id'] == m.user_id]
+        result.append({
+            'user_id': m.user_id,
+            'full_name': m.full_name,
+            'phone': m.phone,
+            'is_available': len(slots) == 0,
+            'busy_slots': slots
+        })
+
+    return jsonify(result)

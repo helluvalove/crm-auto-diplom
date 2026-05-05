@@ -78,7 +78,8 @@ htmlcov/
 
 # ПРОЧЕЕ     
 test_api.py
-new_structure1.txt        
+new_structure1.txt      
+struct.txt  
 dump_data.py
 crypto_data_to_now.py
 password.py

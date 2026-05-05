@@ -362,7 +362,7 @@
                     </div>
                 </div>
 
-                <!-- Вкладка Новый заказ (оригинал) -->
+                <!-- Вкладка Новый заказ -->
                 <div id="newOrderTab" class="tab-pane" style="display: none;">
                     <div class="card">
                         <div class="card-header">
@@ -401,12 +401,25 @@
                                     <div class="mb-3">
                                         <label class="form-label">Статус</label>
                                         <select class="form-select" id="orderStatus">
+                                            <option value="Забронирован">Забронирован</option>
                                             <option value="Создан">Создан</option>
                                             <option value="На диагностике">На диагностике</option>
                                             <option value="В работе">В работе</option>
                                             <option value="Готов к выдаче">Готов к выдаче</option>
                                             <option value="Отменен">Отменен</option>
                                         </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Дата и время записи</label>
+                                        <input type="datetime-local" class="form-control" id="orderAppointment">
+                                        <div class="form-text">Оставьте пустым, если без предварительной записи</div>
+                                        <div class="form-text">Часы работы: пн-сб 08:00–20:00. Воскресенье — выходной.</div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Примерное время (часов)</label>
+                                        <input type="number" class="form-control" id="orderEstimatedHours"
+                                               placeholder="1.5" step="0.5" min="0" max="24">
+                                        <div class="form-text">Оставьте пустым, если точное время неизвестно</div>
                                     </div>
                                 </div>
                             </div>
@@ -577,9 +590,30 @@
                     </div>
                 </div>
 
-                <!-- Вкладка Автомеханики (оригинал) -->
+                <!-- Вкладка Автомеханики -->
                 <div id="mechanicsTab" class="tab-pane" style="display: none;">
+                    <!-- График занятости – теперь на самом верху -->
+                    <div class="card border-primary mb-4">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0"><i class="bi bi-calendar-week"></i> График занятости механиков</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2 align-items-center mb-3">
+                                <div class="col-auto">
+                                    <input type="date" class="form-control" id="availabilityDate">
+                                </div>
+                                <div class="col-auto">
+                                    <button class="btn btn-outline-primary" onclick="loadAvailability()">
+                                        <i class="bi bi-search"></i> Показать занятость
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="availabilityContainer"></div>
+                        </div>
+                    </div>
+
                     <div class="row">
+                        <!-- Левая колонка: список механиков -->
                         <div class="col-md-8">
                             <div class="card">
                                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -598,7 +632,8 @@
                                 </div>
                             </div>
                         </div>
-                        
+
+                        <!-- Правая колонка: форма добавления -->
                         <div class="col-md-4">
                             <div class="card">
                                 <div class="card-header">
@@ -608,18 +643,18 @@
                                     <div class="mb-3">
                                         <label class="form-label">ФИО *</label>
                                         <input type="text" class="form-control" id="newMechanicName" 
-                                               placeholder="Петров Алексей" 
-                                               pattern="[A-Za-zА-Яа-яёЁ\s\-]{2,100}"
-                                               title="Только буквы, пробелы и дефисы (2-100 символов)"
-                                               required>
+                                            placeholder="Петров Алексей" 
+                                            pattern="[A-Za-zА-Яа-яёЁ\s\-]{2,100}"
+                                            title="Только буквы, пробелы и дефисы (2-100 символов)"
+                                            required>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label">Телефон *</label>
                                         <input type="tel" class="form-control" id="newMechanicPhone" 
-                                               placeholder="+7 (999) 123-45-67"
-                                               pattern="^[\+\s\-\(\)\d]{10,20}$"
-                                               title="Российский формат: +7XXX, 8XXX или 7XXX"
-                                               required>
+                                            placeholder="+7 (999) 123-45-67"
+                                            pattern="^[\+\s\-\(\)\d]{10,20}$"
+                                            title="Российский формат: +7XXX, 8XXX или 7XXX"
+                                            required>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label">Специализация *</label>

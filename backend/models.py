@@ -91,30 +91,37 @@ class Client(db.Model):
     __tablename__ = 'clients'
 
     client_id = db.Column(db.Integer, primary_key=True)
-    _name = db.Column('name', db.String(255), nullable=False)          # шифрованное
-    _phone = db.Column('phone', db.String(255), nullable=False)        # шифрованное, длина увеличена
-    phone_hash = db.Column(db.String(64), unique=True, nullable=False) # хэш для поиска
-    vk_user_id = db.Column(db.BigInteger)                              # идентификатор VK
+    _name = db.Column('name', db.String(255), nullable=True)          # было nullable=False
+    _phone = db.Column('phone', db.String(255), nullable=True)        # было nullable=False
+    phone_hash = db.Column(db.String(64), unique=True, nullable=True) # было nullable=False
+    vk_user_id = db.Column(db.BigInteger)
     date_reg = db.Column(db.DateTime, nullable=False, default=datetime.now)
-    accepted_rules = db.Column(db.DateTime)
+    accepted_rules = db.Column(db.DateTime, nullable=True)            # уже было True
 
     # ------- шифрованные свойства -------
     @property
     def name(self):
-        return decrypt_data(self._name)
+        return decrypt_data(self._name) if self._name else None
 
     @name.setter
     def name(self, value):
-        self._name = encrypt_data(value)
+        if value is None:
+            self._name = None
+        else:
+            self._name = encrypt_data(value)
 
     @property
     def phone(self):
-        return decrypt_data(self._phone)
+        return decrypt_data(self._phone) if self._phone else None
 
     @phone.setter
     def phone(self, value):
-        self._phone = encrypt_data(value)
-        self.phone_hash = hash_phone(value)  # автоматически обновляем хэш
+        if value is None:
+            self._phone = None
+            self.phone_hash = None
+        else:
+            self._phone = encrypt_data(value)
+            self.phone_hash = hash_phone(value)
 
     # Отношения
     cars = db.relationship('Car', backref='client', lazy=True)
@@ -178,6 +185,8 @@ class WorkOrder(db.Model):
     created_date = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     completed_date = db.Column(db.DateTime)
     pdf_url = db.Column(db.String(500))
+    appointment_datetime = db.Column(db.DateTime, nullable=True)
+    estimated_hours = db.Column(db.Float, nullable=True)
 
     # Отношения к пользователям (менеджер и механик)
     manager = db.relationship('User', foreign_keys=[manager_id], backref='managed_orders')
@@ -196,7 +205,9 @@ class WorkOrder(db.Model):
             'total_price': float(self.total_price) if self.total_price else None,
             'created_date': self.created_date.isoformat() if self.created_date else None,
             'completed_date': self.completed_date.isoformat() if self.completed_date else None,
-            'pdf_url': self.pdf_url
+            'pdf_url': self.pdf_url,
+            'appointment_datetime': self.appointment_datetime.isoformat() if self.appointment_datetime else None,
+            'estimated_hours': self.estimated_hours,
         }
 
 

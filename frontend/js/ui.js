@@ -58,6 +58,7 @@ function showTab(tabName, event = null, options = {}) {
             break;
         case 'mechanics':
             loadMechanicsList();
+            setDefaultAvailabilityDate();
             break;
         case 'statistics':
             updateStatistics();
