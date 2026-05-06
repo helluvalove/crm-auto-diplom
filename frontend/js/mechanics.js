@@ -703,7 +703,10 @@ function renderAvailability(mechanics, date) {
             if (int.type === 'free') {
                 blocksHtml += `<div class="timeline-free" style="left:${left}%;width:${width}%;">${width > 10 ? int.label : ''}</div>`;
             } else {
-                blocksHtml += `<div class="timeline-busy" style="left:${left}%;width:${width}%;" title="Заказ #${int.orderId}: ${int.timeLabel} (${int.status})">${width > 10 ? int.timeLabel : ''}</div>`;
+                blocksHtml += `<div class="timeline-busy" 
+                    style="left:${left}%;width:${width}%;" 
+                    title="Заказ #${int.orderId}: ${int.timeLabel} (${int.status})"
+                    data-order-id="${int.orderId}">${width > 10 ? int.timeLabel : ''}</div>`;
             }
         });
 
@@ -716,6 +719,16 @@ function renderAvailability(mechanics, date) {
     });
 
     container.innerHTML = html;
+
+    // Делегированный обработчик двойного клика на занятые полоски
+    container.querySelectorAll('.timeline-busy').forEach(el => {
+        el.addEventListener('dblclick', function(e) {
+            const orderId = this.dataset.orderId;
+            if (orderId) {
+                showOrderDetails(orderId);
+            }
+        });
+    });
 }
 
 // Вспомогательная функция форматирования времени (часы:минуты)
