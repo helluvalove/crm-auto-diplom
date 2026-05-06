@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from models import db, User, Role, WorkOrder
 from crypto import hash_phone     
+from .orders import add_working_hours
 from datetime import datetime, timedelta
 
 mechanics_bp = Blueprint('mechanics', __name__, url_prefix='/api/mechanics')
@@ -73,8 +74,7 @@ def create_mechanic():
         mechanic = User(
             full_name=data['full_name'],
             phone=data['phone'],
-            login=data['login'],
-            specialization=data.get('specialization')
+            login=data['login']
         )
         
         mechanic.role_name = 'mechanic'   # сеттер назначит роль
@@ -119,7 +119,7 @@ def update_mechanic(mechanic_id):
                     'duplicate_login': True
                 }), 400
         
-        update_fields = ['full_name', 'phone', 'specialization']
+        update_fields = ['full_name', 'phone']
         for field in update_fields:
             if field in data:
                 setattr(mechanic, field, data[field])
@@ -195,25 +195,28 @@ def get_mechanics_availability():
 
         if is_indefinite:
             if order.appointment_datetime is None:
-                # Бессрочный без даты – сразу действует, показываем всегда
-                start = start_of_day.replace(hour=8, minute=0)
+                # Бессрочный без даты – на весь рабочий день
+                start = start_of_day.replace(hour=10, minute=0)
                 end = start_of_day.replace(hour=20, minute=0)
                 no_date = True
             else:
                 order_date = order.appointment_datetime.date()
                 if target_date < order_date:
-                    continue    # Заказ ещё не начался
-                # Показываем занятость на весь рабочий день начиная с даты заказа
-                start = max(start_of_day.replace(hour=8, minute=0), order.appointment_datetime)
+                    continue
+                start = max(start_of_day.replace(hour=10, minute=0), order.appointment_datetime)
                 end = start_of_day.replace(hour=20, minute=0)
                 if start >= end:
                     continue
                 no_date = False
         else:
-            if order.appointment_datetime is None or order.appointment_datetime.date() != target_date:
-                continue
-            start = order.appointment_datetime
-            end = start + timedelta(hours=est) + timedelta(minutes=REST_MINUTES)
+            # Заказ с оценкой времени
+            if order.appointment_datetime is not None:
+                start = order.appointment_datetime
+            else:
+                if not order.created_date:
+                    continue
+                start = order.created_date
+            _, end = add_working_hours(start, est, REST_MINUTES)
             no_date = False
 
         if start < end_of_day and end > start_of_day:

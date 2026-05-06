@@ -194,10 +194,17 @@ async function loadAllCarsInService() {
 
         let html = '<div class="list-group">';
         validCars.forEach(({ car, client, orders, active_orders_count }) => {
-            let statusBadge = '<span class="badge bg-secondary">В сервисе</span>';
-            if (orders.some(o => o.status === 'В работе')) statusBadge = '<span class="badge bg-warning">В работе</span>';
-            else if (orders.some(o => o.status === 'Готов к выдаче')) statusBadge = '<span class="badge bg-success">Готов</span>';
-            else if (orders.some(o => o.status === 'На диагностике' || o.status === 'Создан')) statusBadge = '<span class="badge bg-info">Диагностика</span>';
+            // Новый приоритет статусов: Забронирован → В работе → Готов → Диагностика/Создан → остальное
+            let statusBadge = '<span class="badge status-service">В сервисе</span>';
+            if (orders.some(o => o.status === 'В работе')) {
+                statusBadge = '<span class="badge status-in-progress">В работе</span>';
+            } else if (orders.some(o => o.status === 'Забронирован')) {
+                statusBadge = '<span class="badge status-booked">Забронирован</span>';
+            } else if (orders.some(o => o.status === 'Готов к выдаче')) {
+                statusBadge = '<span class="badge status-ready">Готов</span>';
+            } else if (orders.some(o => o.status === 'На диагностике' || o.status === 'Создан')) {
+                statusBadge = '<span class="badge status-diagnostic">Диагностика</span>';
+            }
 
             let ordersInfo = '';
             if (orders.length) {
@@ -295,12 +302,25 @@ async function loadClientCars(clientId) {
 
         cars.forEach(car => {
             const carOrders = activeOrders.filter(o => o.car_id === car.car_id);
-            const hasOrderInWork = carOrders.some(o => o.status === 'В работе');
+            const hasActiveOrder = carOrders.length > 0;   // любой активный заказ (включая бронь)
+            const hasBookedOrder = carOrders.some(o => o.status === 'Забронирован');
 
-            let carStatus = hasOrderInWork ? 'В работе' : (carOrders.length > 0 ? 'В сервисе' : 'Нет активных заказов');
-            let statusBadge = hasOrderInWork
-                ? '<span class="badge bg-warning ms-1">В работе</span>'
-                : (carOrders.length > 0 ? '<span class="badge bg-secondary ms-1">В сервисе</span>' : '');
+            // Определяем текст и бейдж статуса
+            let carStatus = 'Нет активных заказов';
+            let statusBadge = '';
+            if (carOrders.some(o => o.status === 'В работе')) {
+                carStatus = 'В работе';
+                statusBadge = '<span class="badge status-in-progress ms-1">В работе</span>';
+            } else if (hasBookedOrder) {
+                carStatus = 'Забронирован по заказу';
+                statusBadge = '<span class="badge status-booked ms-1">Забронирован</span>';
+            } else if (carOrders.some(o => o.status === 'Готов к выдаче')) {
+                carStatus = 'Готов к выдаче';
+                statusBadge = '<span class="badge status-ready ms-1">Готов</span>';
+            } else if (carOrders.length > 0) {
+                carStatus = 'В сервисе';
+                statusBadge = '<span class="badge status-service ms-1">В сервисе</span>';
+            }
 
             html += `
                 <div class="list-group-item" id="car-${car.car_id}">
@@ -322,10 +342,10 @@ async function loadClientCars(clientId) {
                     </p>
                     <div class="mt-2">
                         <button class="btn btn-sm btn-outline-success" onclick="createOrderForCar(${car.car_id}, ${car.client_id})"
-                                ${hasOrderInWork ? 'disabled' : ''}>
+                                ${hasActiveOrder ? 'disabled' : ''}>
                             <i class="bi bi-plus-circle"></i> Новый заказ
                         </button>
-                        ${hasOrderInWork ? '<small class="text-danger ms-2">Автомобиль уже в работе!</small>' : ''}
+                        ${hasActiveOrder ? `<small class="text-danger ms-2">Автомобиль имеет активный заказ${hasBookedOrder ? ' (в т.ч. бронь)' : ''}</small>` : ''}
                     </div>
                 </div>
             `;
@@ -702,6 +722,7 @@ async function showClientCarsModal(clientId, clientName) {
                 const hasOrderInWork = carOrders.some(o => o.status === 'В работе');
                 const hasOrderReady = carOrders.some(o => o.status === 'Готов к выдаче');
                 const hasOrderDiagnostic = carOrders.some(o => o.status === 'На диагностике');
+                const hasBookedOrder = carOrders.some(o => o.status === 'Забронирован');
 
                 let carStatus = 'Свободен';
                 let statusBadge = '<span class="badge bg-success">Свободен</span>';
@@ -709,19 +730,23 @@ async function showClientCarsModal(clientId, clientName) {
 
                 if (hasOrderInWork) {
                     carStatus = 'В работе';
-                    statusBadge = '<span class="badge bg-warning">В работе</span>';
+                    statusBadge = '<span class="badge status-in-progress">В работе</span>';
                     statusIcon = '<i class="bi bi-tools text-warning"></i>';
+                } else if (hasBookedOrder) {
+                    carStatus = 'Забронирован по заказу';
+                    statusBadge = '<span class="badge status-booked">Забронирован</span>';
+                    statusIcon = '<i class="bi bi-calendar-check" style="color: #6f42c1;"></i>';
                 } else if (hasOrderReady) {
                     carStatus = 'Готов к выдаче';
-                    statusBadge = '<span class="badge bg-success">Готов</span>';
+                    statusBadge = '<span class="badge status-ready">Готов</span>';
                     statusIcon = '<i class="bi bi-check-circle-fill text-success"></i>';
                 } else if (hasOrderDiagnostic) {
                     carStatus = 'На диагностике';
-                    statusBadge = '<span class="badge bg-info">Диагностика</span>';
+                    statusBadge = '<span class="badge status-diagnostic">Диагностика</span>';
                     statusIcon = '<i class="bi bi-clipboard-pulse text-info"></i>';
                 } else if (carOrders.length > 0) {
                     carStatus = 'В сервисе';
-                    statusBadge = '<span class="badge bg-secondary">В сервисе</span>';
+                    statusBadge = '<span class="badge status-service">В сервисе</span>';
                     statusIcon = '<i class="bi bi-clock-history text-secondary"></i>';
                 }
 
@@ -734,6 +759,8 @@ async function showClientCarsModal(clientId, clientName) {
                     });
                     ordersInfo += '</div>';
                 }
+
+                const hasActiveOrder = carOrders.length > 0; // блокируем кнопку при любой активности
 
                 carsHtml += `
                     <div class="list-group-item">
@@ -752,10 +779,10 @@ async function showClientCarsModal(clientId, clientName) {
                         ${ordersInfo}
                         <div class="mt-2">
                             <button class="btn btn-sm btn-outline-success" onclick="createOrderForCar(${car.car_id}, ${clientId})"
-                                    title="Создать заказ" ${hasOrderInWork ? 'disabled' : ''}>
+                                    title="Создать заказ" ${hasActiveOrder ? 'disabled' : ''}>
                                 <i class="bi bi-plus-circle"></i> Новый заказ
                             </button>
-                            ${hasOrderInWork ? '<small class="text-danger ms-2">Автомобиль уже в работе!</small>' : ''}
+                            ${hasActiveOrder ? `<small class="text-danger ms-2">Автомобиль имеет активный заказ${hasBookedOrder ? ' (в т.ч. бронь)' : ''}</small>` : ''}
                         </div>
                     </div>
                 `;

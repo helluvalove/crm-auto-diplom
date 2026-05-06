@@ -78,6 +78,112 @@
         .is-invalid { border-color: #dc3545 !important; }
         .invalid-feedback { display: block; color: #dc3545; font-size: 0.875em; margin-top: 0.25rem; }
 
+/* ---- Компактный график занятости (без правого индикатора) ---- */
+        .timeline-header-row,
+        .mechanic-row {
+            display: flex;
+            align-items: center;
+            padding: 4px 0;
+        }
+        .mechanic-row {
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .mechanic-row:last-child {
+            border-bottom: none;
+        }
+
+        .mechanic-name,
+        .mechanic-name-placeholder {
+            width: 220px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        .mechanic-name-placeholder {
+            visibility: hidden;
+        }
+
+        .timeline-marks {
+            flex: 1;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            color: #6c757d;
+            padding: 0 2px;
+            min-width: 150px;
+        }
+
+        .timeline {
+            flex: 1;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+            cursor: default;
+            min-width: 150px;
+        }
+
+        .timeline-busy {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            background: #ffc107;
+            border-radius: 10px;
+            opacity: 0.85;
+            transition: opacity 0.2s;
+            font-size: 0.65rem;
+            color: #212529;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+            padding: 0 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        .timeline-busy:hover {
+            opacity: 1;
+            z-index: 2;
+            box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
+        }
+
+        .timeline-free {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            background: #28a745;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 0.65rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            opacity: 0.9;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            padding: 0 4px;
+        }
+
+        @media (max-width: 576px) {
+            .mechanic-name,
+            .mechanic-name-placeholder {
+                width: 140px;
+                font-size: 0.8rem;
+            }
+            .timeline-marks {
+                font-size: 0.65rem;
+            }
+        }
+
         /* Дополнительные стили для мобильной навигации */
         @media (max-width: 768px) {
             #tabContent {
@@ -229,10 +335,10 @@
 
             <!-- КОНТЕНТ ВСЕХ ВКЛАДОК -->
             <div id="tabContent">
-                <!-- Вкладка Клиенты (оригинал) -->
+                <!-- Вкладка Клиенты (список – 7, форма – 5) -->
                 <div id="clientsTab" class="tab-pane">
                     <div class="row">
-                        <div class="col-md-8">
+                        <div class="col-md-7">
                             <div class="card">
                                 <div class="card-header d-flex justify-content-between align-items-center">
                                     <h5 class="mb-0"><i class="bi bi-people"></i> Список клиентов</h5>
@@ -251,7 +357,7 @@
                             </div>
                         </div>
                         
-                        <div class="col-md-4">
+                        <div class="col-md-5">
                             <div class="card">
                                 <div class="card-header">
                                     <h5 class="mb-0"><i class="bi bi-person-plus"></i> Новый клиент</h5>
@@ -260,20 +366,20 @@
                                     <div class="mb-3">
                                         <label class="form-label">Имя *</label>
                                         <input type="text" class="form-control" id="newClientName" 
-                                               placeholder="Иван Иванов" 
-                                               pattern="[A-Za-zА-Яа-яёЁ\s\-]{2,100}"
-                                               title="Только буквы, пробелы и дефисы (2-100 символов)"
-                                               required>
+                                            placeholder="Иван Иванов" 
+                                            pattern="[A-Za-zА-Яа-яёЁ\s\-]{2,100}"
+                                            title="Только буквы, пробелы и дефисы (2-100 символов)"
+                                            required>
                                         <div class="form-text">Только буквы, пробелы и дефисы. От 2 до 100 символов.</div>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label">Телефон *</label>
                                         <input type="tel" class="form-control" id="newClientPhone" 
-                                               placeholder="+7 (999) 123-45-67"
-                                               pattern="^[\+\s\-\(\)\d]{10,20}$"
-                                               title="Российский формат: +7XXX, 8XXX или 7XXX"
-                                               required
-                                               value="+7 ">
+                                            placeholder="+7 (999) 123-45-67"
+                                            pattern="^[\+\s\-\(\)\d]{10,20}$"
+                                            title="Российский формат: +7XXX, 8XXX или 7XXX"
+                                            required
+                                            value="+7 ">
                                         <div class="form-text">Пример: +7 (123) 456-78-90</div>
                                     </div>
                                     
@@ -289,9 +395,9 @@
                                                 <div class="mb-3">
                                                     <label class="form-label">VIN номер *</label>
                                                     <input type="text" class="form-control" id="newClientCarVin" 
-                                                           placeholder="XTA210990Y2765432" 
-                                                           pattern="[A-HJ-NPR-Z0-9]{17}"
-                                                           title="Ровно 17 символов: цифры и заглавные латинские буквы (кроме I, O, Q)">
+                                                        placeholder="XTA210990Y2765432" 
+                                                        pattern="[A-HJ-NPR-Z0-9]{17}"
+                                                        title="Ровно 17 символов: цифры и заглавные латинские буквы (кроме I, O, Q)">
                                                     <div class="form-text">17 символов, без букв I, O, Q</div>
                                                 </div>
                                             </div>
@@ -299,9 +405,9 @@
                                                 <div class="mb-3">
                                                     <label class="form-label">Госномер *</label>
                                                     <input type="text" class="form-control" id="newClientCarGosNumber" 
-                                                           placeholder="А123БВ77"
-                                                           pattern="[А-Я][0-9]{3}[А-Я]{2}[0-9]{2,3}|[А-Я]{2}[0-9]{3}[0-9]{2,3}"
-                                                           title="Примеры: А123БВ77, ВС12345">
+                                                        placeholder="А123БВ77"
+                                                        pattern="[А-Я][0-9]{3}[А-Я]{2}[0-9]{2,3}|[А-Я]{2}[0-9]{3}[0-9]{2,3}"
+                                                        title="Примеры: А123БВ77, ВС12345">
                                                     <div class="form-text">Пример: А123БВ77</div>
                                                 </div>
                                             </div>
@@ -311,7 +417,7 @@
                                                 <div class="mb-3">
                                                     <label class="form-label">Год выпуска *</label>
                                                     <input type="number" class="form-control" id="newClientCarYear"
-                                                           placeholder="2020" min="1900" max="2026">
+                                                        placeholder="2020" min="1900" max="2026">
                                                     <div class="form-text">От 1900 до 2026</div>
                                                 </div>
                                             </div>
@@ -319,7 +425,7 @@
                                                 <div class="mb-3">
                                                     <label class="form-label">Пробег (км) *</label>
                                                     <input type="number" class="form-control" id="newClientCarMileage" 
-                                                           placeholder="45000" min="0" max="1000000">
+                                                        placeholder="45000" min="0" max="1000000">
                                                     <div class="form-text">От 0 до 1,000,000 км</div>
                                                 </div>
                                             </div>
@@ -335,7 +441,7 @@
                     </div>
                 </div>
 
-                <!-- Вкладка Заказы (оригинал) -->
+                <!-- Вкладка Заказы (с обновлёнными фильтрами) -->
                 <div id="ordersTab" class="tab-pane" style="display: none;">
                     <div class="card">
                         <div class="card-header d-flex justify-content-between align-items-center">
@@ -344,8 +450,9 @@
                                 <span class="me-2 small text-muted">Фильтры:</span>
                                 <div class="btn-group" role="group">
                                     <button class="btn btn-sm btn-outline-primary active" onclick="filterOrders('active')">Активные</button>
-                                    <button class="btn btn-sm btn-outline-primary" onclick="filterOrders('all')">Все</button>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="filterOrders('Забронирован')">Забронированы</button>
                                     <button class="btn btn-sm btn-outline-primary" onclick="filterOrders('Создан')">Созданы</button>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="filterOrders('На диагностике')">На диагностике</button>
                                     <button class="btn btn-sm btn-outline-primary" onclick="filterOrders('В работе')">В работе</button>
                                     <button class="btn btn-sm btn-outline-primary" onclick="filterOrders('Готов к выдаче')">Готовы</button>
                                 </div>
@@ -410,10 +517,20 @@
                                         </select>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="form-label">Дата и время записи</label>
-                                        <input type="datetime-local" class="form-control" id="orderAppointment">
-                                        <div class="form-text">Оставьте пустым, если без предварительной записи</div>
-                                        <div class="form-text">Часы работы: пн-сб 08:00–20:00. Воскресенье — выходной.</div>
+                                        <label class="form-label"><i class="bi bi-calendar-check"></i> Дата и время записи</label>
+                                        <input type="date" class="form-control mb-2" id="orderAppointmentDate">
+                                        
+                                        <div class="time-slots-grid" id="timeSlotsContainer">
+                                            <!-- Сюда будут отрисованы слоты -->
+                                        </div>
+                                        
+                                        <div class="form-text small">
+                                            <span class="text-muted">■</span> Занято &nbsp;
+                                            <span class="text-primary">■</span> Ваш выбор
+                                        </div>
+                                                                                
+                                        <!-- Скрытое поле для отправки полной даты-времени -->
+                                        <input type="hidden" id="orderAppointmentTime">
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label">Примерное время (часов)</label>
@@ -655,10 +772,6 @@
                                             pattern="^[\+\s\-\(\)\d]{10,20}$"
                                             title="Российский формат: +7XXX, 8XXX или 7XXX"
                                             required>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label class="form-label">Специализация *</label>
-                                        <input type="text" class="form-control" id="newMechanicSpecialization" placeholder="Двигатель, ходовая часть" required>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label">Логин для входа *</label>
@@ -953,6 +1066,7 @@
     <script src="js/auth.js"></script>
     <script src="js/cars.js"></script>
     <script src="js/clients.js"></script>
+    <script src="js/order-render.js"></script>
     <script src="js/orders.js"></script>
     <script src="js/mechanics.js"></script>
     <script src="js/backup.js"></script>

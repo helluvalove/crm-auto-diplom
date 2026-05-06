@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 from models import db, WorkOrder, Client, Car, User, Role
 import pdfkit, os, sys, platform
 
+NON_BUSY_STATUSES = {'Выполнен', 'Отменен', 'Готов к выдаче'}
+
 # ---------- Конфигурация pdfkit для Windows ----------
 if platform.system() == 'Windows':
     PDFKIT_CONFIG = pdfkit.configuration(
@@ -125,7 +127,8 @@ def get_orders():
                 'created_date': order.created_date.isoformat() if order.created_date else None,
                 'completed_date': order.completed_date.isoformat() if order.completed_date else None,
                 'pdf_url': order.pdf_url,
-                'appointment_datetime': order.appointment_datetime.isoformat() if order.appointment_datetime else None
+                'appointment_datetime': order.appointment_datetime.isoformat() if order.appointment_datetime else None,
+                'estimated_hours': order.estimated_hours if order.estimated_hours else None
             }
 
             if order.client:
@@ -162,7 +165,8 @@ def get_order(order_id):
             'created_date': order.created_date.isoformat() if order.created_date else None,
             'completed_date': order.completed_date.isoformat() if order.completed_date else None,
             'pdf_url': order.pdf_url,
-            'appointment_datetime': order.appointment_datetime.isoformat() if order.appointment_datetime else None
+            'appointment_datetime': order.appointment_datetime.isoformat() if order.appointment_datetime else None,
+            'estimated_hours': order.estimated_hours if order.estimated_hours else None
         }
         
         if order.client:
@@ -192,8 +196,7 @@ def get_order(order_id):
                 order_data['mechanic'] = {
                     'user_id': mechanic.user_id,
                     'full_name': mechanic.full_name,
-                    'phone': mechanic.phone,
-                    'specialization': mechanic.specialization
+                    'phone': mechanic.phone
                 }
         
         return jsonify(order_data)
@@ -240,8 +243,8 @@ def create_order():
 
             if appointment_dt.weekday() == 6:
                 return jsonify({'error': 'Запись невозможна: воскресенье выходной.'}), 400
-            if appointment_dt.hour < 8 or appointment_dt.hour >= 20:
-                return jsonify({'error': 'Время записи должно быть с 08:00 до 20:00.'}), 400
+            if appointment_dt.hour < 10 or appointment_dt.hour >= 20:
+                return jsonify({'error': 'Время записи должно быть с 10:00 до 20:00.'}), 400
 
             if not data.get('status') or data.get('status') == 'Создан':
                 status = 'Забронирован'
@@ -270,6 +273,18 @@ def create_order():
                         return jsonify({'error': 'Оценка времени не может быть отрицательной'}), 400
                 except (ValueError, TypeError):
                     return jsonify({'error': 'Некорректное значение estimated_hours'}), 400
+
+        # --- Запрет нескольких активных заказов (кроме брони) ---
+        if status != 'Забронирован':
+            active_statuses = ['Создан', 'На диагностике', 'В работе', 'Готов к выдаче']
+            existing_active = WorkOrder.query.filter(
+                WorkOrder.mechanic_id == mechanic_id,
+                WorkOrder.status.in_(active_statuses)
+            ).first()
+            if existing_active:
+                return jsonify({
+                    'error': 'У механика уже есть активный заказ (не бронь). Новый заказ можно создать только со статусом «Забронирован».'
+                }), 409
 
         # --- Проверка доступности механика ---
         is_available, error_msg = check_mechanic_availability(
@@ -322,7 +337,7 @@ def create_order():
                 'problem_description': order.problem_description,
                 'pdf_url': order.pdf_url
             },
-            'warning': warning_msg          # None, если нет
+            'warning': warning_msg
         }), 201
     except Exception as e:
         db.session.rollback()
@@ -338,19 +353,26 @@ def update_order(order_id):
         # --- Обработка даты/времени записи ---
         if 'appointment_datetime' in data:
             appointment_str = data['appointment_datetime']
+            old_appointment = order.appointment_datetime   # текущее значение из БД
+
             if appointment_str:
                 try:
                     new_dt = datetime.fromisoformat(appointment_str)
                 except:
                     return jsonify({'error': 'Неверный формат даты/времени записи'}), 400
-                if new_dt < datetime.now():
-                    return jsonify({'error': 'Дата записи не может быть в прошлом'}), 400
-                if new_dt.weekday() == 6:
-                    return jsonify({'error': 'Запись невозможна: воскресенье выходной.'}), 400
-                if new_dt.hour < 8 or new_dt.hour >= 20:
-                    return jsonify({'error': 'Время записи должно быть с 08:00 до 20:00.'}), 400
+
+                # Проверки на прошлое, воскресенье и рабочие часы выполняем ТОЛЬКО если дата изменилась
+                if old_appointment is None or new_dt != old_appointment:
+                    if new_dt < datetime.now():
+                        return jsonify({'error': 'Дата записи не может быть в прошлом'}), 400
+                    if new_dt.weekday() == 6:
+                        return jsonify({'error': 'Запись невозможна: воскресенье выходной.'}), 400
+                    if new_dt.hour < 10 or new_dt.hour >= 20:
+                        return jsonify({'error': 'Время записи должно быть с 10:00 до 20:00.'}), 400
+
                 order.appointment_datetime = new_dt
             else:
+                # Если прислали пустую строку или null — сбрасываем дату записи
                 order.appointment_datetime = None
 
         # --- Статус ---
@@ -415,7 +437,6 @@ def update_order(order_id):
                     if not mechanic:
                         order.mechanic_id = None
                     else:
-                        # не проверяем здесь доступность, сделаем в конце
                         order.mechanic_id = mechanic_id
                 except (ValueError, TypeError):
                     return jsonify({'error': 'Некорректный ID механика.'}), 400
@@ -423,10 +444,24 @@ def update_order(order_id):
                 order.mechanic_id = None
 
         # ========== ИТОГОВАЯ ПРОВЕРКА ДОСТУПНОСТИ МЕХАНИКА ==========
-        if order.status not in ['Выполнен', 'Отменен']:
+        if order.status not in NON_BUSY_STATUSES:
             if not order.mechanic_id:
                 db.session.rollback()
                 return jsonify({'error': 'Механик обязателен для активного заказа.'}), 400
+
+            # --- Запрет нескольких активных заказов (кроме брони) ---
+            if order.status != 'Забронирован':
+                active_statuses = ['Создан', 'На диагностике', 'В работе', 'Готов к выдаче']
+                other_active = WorkOrder.query.filter(
+                    WorkOrder.mechanic_id == order.mechanic_id,
+                    WorkOrder.status.in_(active_statuses),
+                    WorkOrder.order_id != order_id
+                ).first()
+                if other_active:
+                    db.session.rollback()
+                    return jsonify({
+                        'error': 'У механика уже есть другой активный заказ (не бронь). Можно перевести только в «Забронирован».'
+                    }), 409
 
             is_available, error_msg = check_mechanic_availability(
                 order.mechanic_id,
@@ -584,6 +619,48 @@ def get_indefinite_warning(mechanic_id, appointment_dt, estimated_hours, exclude
                 f"Текущий заказ необходимо завершить до этого времени.")
     return None
 
+def add_working_hours(start, hours, rest_minutes=30):
+    """
+    Прибавляет к start указанное количество рабочих часов,
+    пропуская нерабочие интервалы (ночь, воскресенье).
+    Возвращает (конец_работы, конец_с_перерывом).
+    """
+    remaining_minutes = int(hours * 60)
+    current = start
+
+    while remaining_minutes > 0:
+        # --- Воскресенье пропускаем ---
+        if current.weekday() == 6:
+            current += timedelta(days=1)
+            current = current.replace(hour=10, minute=0, second=0, microsecond=0)
+            continue
+
+        day_start = current.replace(hour=10, minute=0, second=0, microsecond=0)
+        day_end = day_start.replace(hour=20)
+
+        # Если мы до начала рабочего дня, переводим на 10:00
+        if current < day_start:
+            current = day_start
+        # Если мы после/в точности в 20:00, переходим на следующий рабочий день
+        if current >= day_end:
+            current = day_start + timedelta(days=1)
+            continue
+
+        # Сколько минут осталось работать сегодня
+        minutes_left = (day_end - current).total_seconds() / 60.0
+
+        if remaining_minutes <= minutes_left:
+            # Работа завершается в этот же день
+            work_end = current + timedelta(minutes=remaining_minutes)
+            return work_end, work_end + timedelta(minutes=rest_minutes)
+        else:
+            # Используем весь сегодняшний день и переходим на следующий
+            remaining_minutes -= minutes_left
+            current = day_start + timedelta(days=1)  # завтра в 10:00
+
+    # Защита от нулевого остатка (теоретически не должно срабатывать)
+    return current, current + timedelta(minutes=rest_minutes)
+
 REST_MINUTES = 30  # окно отдыха/уборки рабочего места после окончания работы
 
 def build_interval(order, next_order_start=None):
@@ -593,20 +670,21 @@ def build_interval(order, next_order_start=None):
     if order.appointment_datetime:
         start = order.appointment_datetime
     else:
-        start = now
+        start = order.created_date if order.created_date else now
 
     # --- конец ---
     if order.estimated_hours and order.estimated_hours > 0:
-        end = start + timedelta(hours=order.estimated_hours) + timedelta(minutes=REST_MINUTES)
+        # Используем рабочие часы
+        work_end, real_end = add_working_hours(start, order.estimated_hours, REST_MINUTES)
+        # Для проверки доступности важен реальный конец (с учётом перерыва)
+        end = real_end
     else:
         # бессрочный заказ
         if next_order_start:
             end = next_order_start
         else:
-            end = datetime(2100, 1, 1)  # вместо datetime.max (безопаснее)
-
+            end = datetime(2100, 1, 1)
     return start, end
-
 
 def intervals_overlap(a_start, a_end, b_start, b_end):
     return a_start < b_end and a_end > b_start
@@ -622,6 +700,7 @@ def check_mechanic_availability(mechanic_id, appointment_dt, estimated_hours, ex
     new_order = TempOrder()
     new_order.appointment_datetime = appointment_dt
     new_order.estimated_hours = estimated_hours
+    new_order.created_date = datetime.now()   # для новых заказов без даты бронирования
 
     # --- получаем все активные заказы механика ---
     query = WorkOrder.query.filter(

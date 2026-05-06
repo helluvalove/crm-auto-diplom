@@ -87,6 +87,22 @@ function formatMoney(value) {
     return Number(value).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₽';
 }
 
+function enforceMaxPrice(input, maxVal) {
+    const val = parseFloat(input.value);
+    if (!isNaN(val) && val > maxVal) {
+        input.value = maxVal;
+    }
+}
+
+function handlePriceInput() {
+    enforceMaxPrice(this, 99999999.99);             
+    const val = parseFloat(this.value);
+    const formatted = document.getElementById('orderPriceFormatted');
+    if (formatted) {
+        formatted.textContent = (!isNaN(val) && this.value.trim() !== '') ? formatMoney(val) : '';
+    }
+}
+
 function generatePDF(orderId, docType, extraParams = {}) {
     let url = `${API_URL}/orders/${orderId}/pdf/${docType}`;
     if (extraParams && Object.keys(extraParams).length > 0) {
@@ -94,4 +110,20 @@ function generatePDF(orderId, docType, extraParams = {}) {
         url += '?' + qs;
     }
     window.open(url, '_blank');
+}
+
+function isWorkingTime(datetimeStr) {
+    if (!datetimeStr) return { valid: true };
+    const dt = new Date(datetimeStr);
+    if (isNaN(dt.getTime())) return { valid: false, message: 'Неверная дата' };
+    const day = dt.getDay();
+    if (day === 0) {
+        return { valid: false, message: 'Воскресенье — выходной день. Выберите другой день.' };
+    }
+    const hours = dt.getHours();
+    const minutes = dt.getMinutes();
+    if (hours < 10 || hours >= 20 || (hours === 20 && minutes > 0)) {
+        return { valid: false, message: 'Время записи должно быть с 10:00 до 20:00 (пн-сб).' };
+    }
+    return { valid: true };
 }

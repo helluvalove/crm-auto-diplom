@@ -28,7 +28,6 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     _phone = db.Column('phone', db.String(255))                         # шифрованное, длина увеличена под base64
     phone_hash = db.Column(db.String(64), unique=True, nullable=True)   # хэш для поиска
-    specialization = db.Column(db.Text)
     role_id = db.Column(db.Integer, db.ForeignKey('roles.role_id'), nullable=False)
 
     # Отношение к роли
@@ -83,7 +82,6 @@ class User(db.Model):
             'login': self.login,
             'role': self.role_name,
             'phone': self.phone,           # расшифрованное
-            'specialization': self.specialization,
         }
 
 

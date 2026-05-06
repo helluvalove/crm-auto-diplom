@@ -10,7 +10,7 @@ async function loadMechanicsList() {
         } else {
             // Fallback для демо/теста
             mechanics = [
-                { user_id: 2, full_name: 'Петров Алексей', phone: '+79991234567', specialization: 'Двигатель', login: 'mechanic' }
+                { user_id: 2, full_name: 'Петров Алексей', phone: '+79991234567', login: 'mechanic' }
             ];
         }
 
@@ -26,7 +26,6 @@ async function loadMechanicsList() {
 async function createMechanic() {
     const fullName = document.getElementById('newMechanicName').value.trim();
     const phone = document.getElementById('newMechanicPhone').value.trim();
-    const specialization = document.getElementById('newMechanicSpecialization').value.trim();
     // const employeeNumber = document.getElementById('newMechanicEmployeeNumber').value.trim(); ← УДАЛИТЬ
     const login = document.getElementById('newMechanicLogin').value.trim();
     const password = document.getElementById('newMechanicPassword').value;
@@ -74,7 +73,6 @@ async function createMechanic() {
     const mechanicData = {
         full_name: fullName,
         phone: phoneValidation.phone || phone,
-        specialization: specialization || null,
         login: login,
         password: password
     };
@@ -93,8 +91,7 @@ async function createMechanic() {
         if (response.ok) {
             showSuccess(`Механик "${fullName}" добавлен!`);
 
-            // Очистка формы – уберите 'newMechanicEmployeeNumber' из этого списка
-            ['newMechanicName', 'newMechanicPhone', 'newMechanicSpecialization',
+            ['newMechanicName', 'newMechanicPhone',
              'newMechanicLogin', 'newMechanicPassword']
                 .forEach(id => {
                     const el = document.getElementById(id);
@@ -165,34 +162,24 @@ function renderMechanicsList(mechanics) {
 
     let html = '<div class="list-group">';
     mechanics.forEach(mechanic => {
-        const isBusy = ordersData?.some(order =>
-            order.mechanic_id === mechanic.user_id &&
-            order.status !== 'Выполнен' &&
-            order.status !== 'Отменен'
-        );
-
-        const badgeText = isBusy ? 'Занят' : 'Свободен';
-        const badgeClass = isBusy ? 'bg-warning' : 'bg-success';
-
+        // Бейдж занятости убран, теперь просто карточка с ФИО и действиями
         html += `
             <div class="list-group-item" id="mechanic-${mechanic.user_id}">
-                <div class="d-flex w-100 justify-content-between">
-                    <h6 class="mb-1">${mechanic.full_name}</h6>
+                <div class="d-flex w-100 justify-content-between align-items-center">
                     <div>
-                        <span class="badge ${badgeClass} me-2">${badgeText}</span>
+                        <h6 class="mb-1">${mechanic.full_name}</h6>
+                        <small class="text-muted">
+                            <i class="bi bi-telephone"></i> ${formatPhone(mechanic.phone)}
+                        </small>
+                    </div>
+                    <div>
+                        <button class="btn btn-sm btn-outline-warning me-1" onclick="editMechanic(${mechanic.user_id})" title="Редактировать">
+                            <i class="bi bi-pencil"></i>
+                        </button>
                         <button class="btn btn-sm btn-outline-danger" onclick="deleteMechanic(${mechanic.user_id})" title="Удалить">
                             <i class="bi bi-trash"></i>
                         </button>
                     </div>
-                </div>
-                <p class="mb-1">
-                    <i class="bi bi-telephone"></i> ${formatPhone(mechanic.phone)}<br>
-                    <i class="bi bi-wrench"></i> ${mechanic.specialization || 'Не указана'}<br>
-                </p>
-                <div class="mt-2">
-                    <button class="btn btn-sm btn-outline-warning" onclick="editMechanic(${mechanic.user_id})">
-                        <i class="bi bi-pencil"></i> Редактировать
-                    </button>
                 </div>
             </div>
         `;
@@ -214,7 +201,7 @@ function updateMechanicSelect(mechanics) {
 
 // Очистка ошибок при создании механика
 function clearMechanicCreationErrors() {
-    const fields = ['newMechanicName', 'newMechanicPhone', 'newMechanicSpecialization', 
+    const fields = ['newMechanicName', 'newMechanicPhone',
                     'newMechanicLogin', 'newMechanicPassword'];
     fields.forEach(fieldId => {
         showFieldError(fieldId, null);
@@ -269,12 +256,6 @@ async function editMechanic(mechanicId) {
                                            value="${formatPhone(mechanic.phone)}" required>
                                     <div class="invalid-feedback" id="editMechanicPhoneError"></div>
                                     <div class="form-text">В формате: +7(XXX) XXX-XX-XX</div>
-                                </div>
-                                
-                                <div class="mb-3">
-                                    <label class="form-label">Специализация</label>
-                                    <input type="text" class="form-control" id="editMechanicSpecialization" 
-                                           value="${mechanic.specialization || ''}">
                                 </div>
                                 
                                 <div class="mb-3">
@@ -376,7 +357,6 @@ async function editMechanic(mechanicId) {
 async function validateAndUpdateMechanic(mechanicId) {
     const name = document.getElementById('editMechanicName').value.trim();
     const phone = document.getElementById('editMechanicPhone').value.trim();
-    const specialization = document.getElementById('editMechanicSpecialization').value.trim();
     const login = document.getElementById('editMechanicLogin').value.trim();
     const password = document.getElementById('editMechanicPassword').value;
     
@@ -429,7 +409,6 @@ async function validateAndUpdateMechanic(mechanicId) {
     const mechanicData = {
         full_name: name,
         phone: phoneValidation.isValid ? phoneValidation.phone : phone,
-        specialization: specialization || null,
         login: login
     };
     
@@ -622,43 +601,124 @@ async function loadAvailability() {
 function renderAvailability(mechanics, date) {
     const container = document.getElementById('availabilityContainer');
     if (!container) return;
+
     if (!mechanics || mechanics.length === 0) {
         container.innerHTML = `<div class="alert alert-info">Нет данных о механиках</div>`;
         return;
     }
-    let html = `<h6 class="mb-3">Занятость механиков на ${date}</h6><div class="list-group">`;
+
+    // Параметры рабочего дня
+    const dayStartHour = 10, dayEndHour = 20;
+    const dayStartMin = dayStartHour * 60;   // 600
+    const dayEndMin   = dayEndHour * 60;     // 1200
+    const totalMin    = dayEndMin - dayStartMin; // 600
+
+    // Преобразуем выбранную дату в объекты начала и конца рабочего дня
+    const selectedDate = new Date(date + 'T00:00:00'); // YYYY-MM-DD
+    const dayBegin = new Date(selectedDate);
+    dayBegin.setHours(dayStartHour, 0, 0, 0);
+    const dayFinish = new Date(selectedDate);
+    dayFinish.setHours(dayEndHour, 0, 0, 0);
+
+    // Часовые метки для шапки
+    const hourMarks = [];
+    for (let h = 10; h <= 20; h++) hourMarks.push(`${h}:00`);
+
+    let html = `
+        <h6 class="mb-2"><i class="bi bi-calendar-week"></i> Занятость на ${date}</h6>
+        <div class="timeline-header-row">
+            <div class="mechanic-name-placeholder">placeholder</div>
+            <div class="timeline-marks">
+                ${hourMarks.map(m => `<span>${m}</span>`).join('')}
+            </div>
+        </div>
+    `;
+
     mechanics.forEach(m => {
-        const hasSlots = m.busy_slots && m.busy_slots.length > 0;
-        let badge = hasSlots
-            ? '<span class="badge bg-warning">Занят</span>'
-            : '<span class="badge bg-success">Свободен</span>';
-        let slotsHtml = '';
-        if (hasSlots) {
-            slotsHtml = '<ul class="list-unstyled small mt-1 mb-0">';
-            m.busy_slots.forEach(slot => {
-                let start, end, label = '';
-                if (slot.no_date) {
-                    start = '--:--';
-                    end = '--:--';
-                    label = ' (бессрочно, без даты)';
-                } else if (slot.indefinite) {
-                    start = new Date(slot.start).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-                    end = 'конец дня';
-                    label = ' (бессрочно)';
-                } else {
-                    start = new Date(slot.start).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-                    end = new Date(slot.end).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-                }
-                slotsHtml += `<li class="text-muted">Заказ #${slot.order_id}: ${start} – ${end} (${slot.status})${label}</li>`;
+        // Фильтруем слоты: пересечение с рабочим днём (dayBegin, dayFinish)
+        const relevantSlots = (m.busy_slots || [])
+            .map(slot => ({
+                start: new Date(slot.start),
+                end: new Date(slot.end),
+                order_id: slot.order_id,
+                status: slot.status,
+                indefinite: slot.indefinite
+            }))
+            .filter(s => s.start < dayFinish && s.end > dayBegin)
+            .map(s => {
+                // Обрезаем до границ дня
+                const clippedStart = s.start < dayBegin ? dayBegin : s.start;
+                const clippedEnd   = s.end   > dayFinish ? dayFinish : s.end;
+                return {
+                    ...s,
+                    clippedStart,
+                    clippedEnd,
+                    startMin: (clippedStart.getHours() * 60 + clippedStart.getMinutes()) - dayStartMin,
+                    endMin:   (clippedEnd.getHours()   * 60 + clippedEnd.getMinutes())   - dayStartMin
+                };
+            })
+            .filter(s => s.startMin < s.endMin)  // исключаем нулевые интервалы
+            .sort((a, b) => a.startMin - b.startMin);
+
+        // Строим интервалы (занятые / свободные)
+        const intervals = [];
+        let cursor = 0; // минуты от начала дня (0..600)
+
+        relevantSlots.forEach(s => {
+            if (s.startMin > cursor) {
+                intervals.push({
+                    type: 'free',
+                    start: cursor,
+                    end: s.startMin,
+                    label: 'Свободно'
+                });
+            }
+            intervals.push({
+                type: 'busy',
+                start: s.startMin,
+                end: s.endMin,
+                orderId: s.order_id,
+                status: s.status,
+                timeLabel: s.indefinite
+                    ? 'бессрочно'
+                    : `${formatTime(s.clippedStart)}–${formatTime(s.clippedEnd)}`
             });
-            slotsHtml += '</ul>';
+            cursor = Math.max(cursor, s.endMin);
+        });
+
+        if (cursor < totalMin) {
+            intervals.push({
+                type: 'free',
+                start: cursor,
+                end: totalMin,
+                label: 'Свободно'
+            });
         }
+
+        // Генерация блоков на временной шкале
+        let blocksHtml = '';
+        intervals.forEach(int => {
+            const left = (int.start / totalMin) * 100;
+            const width = ((int.end - int.start) / totalMin) * 100;
+            if (int.type === 'free') {
+                blocksHtml += `<div class="timeline-free" style="left:${left}%;width:${width}%;">${width > 10 ? int.label : ''}</div>`;
+            } else {
+                blocksHtml += `<div class="timeline-busy" style="left:${left}%;width:${width}%;" title="Заказ #${int.orderId}: ${int.timeLabel} (${int.status})">${width > 10 ? int.timeLabel : ''}</div>`;
+            }
+        });
+
         html += `
-            <div class="list-group-item d-flex justify-content-between align-items-start">
-                <div> <strong>${m.full_name}</strong> ${slotsHtml} </div>
-                <div class="ms-2">${badge}</div>
-            </div>`;
+            <div class="mechanic-row">
+                <div class="mechanic-name" title="${m.full_name}">${m.full_name}</div>
+                <div class="timeline">${blocksHtml}</div>
+            </div>
+        `;
     });
-    html += '</div>';
+
     container.innerHTML = html;
+}
+
+// Вспомогательная функция форматирования времени (часы:минуты)
+function formatTime(date) {
+    return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }

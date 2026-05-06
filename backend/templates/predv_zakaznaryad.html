@@ -22,7 +22,7 @@
         <tr><td><strong>Заказчик</strong></td><td>{{ client.name or client.phone }}<br>Телефон: {{ client.phone }}<br>{% if client.vk_user_id %}VK ID: {{ client.vk_user_id }}{% endif %}</td></tr>
         <tr><td><strong>Менеджер (принимающий)</strong></td><td>{{ manager.full_name }}, должность: менеджер</td></tr>
         {% if mechanic %}
-        <tr><td><strong>Механик</strong></td><td>{{ mechanic.full_name }}{% if mechanic.specialization %} ({{ mechanic.specialization }}){% endif %}</td></tr>
+        <tr><td><strong>Механик</strong></td><td>{{ mechanic.full_name }}</td></tr>
         {% endif %}
     </table>
 

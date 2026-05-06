@@ -1,23 +1,56 @@
-/* frontend/style.css */
+/* ============================================================
+   ✅ ЕДИНАЯ ЦВЕТОВАЯ СХЕМА СТАТУСОВ
+   ============================================================ */
 
-/* Статусы заказов */
-.status-created { color: #6c757d; }
-.status-booked { color: #ffa200; }
-.status-в-работе { color: #0d6efd; }
-.status-готов-к-выдаче { color: #ffc107; }
-.status-выполнен { color: #198754; }
-.status-completed { color: #198754; }
-.status-cancelled { color: #dc3545; } 
-.status-in-progress { color: #0d6efd; } 
-.status-diagnostic { color: #0dcaf0; } 
-.status-ready { color: #ffc107; } 
+/* ---------- Точка + текст для заказов ---------- */
+.status-created      { color: #6c757d; }
+.status-booked       { color: #647cdd; }
+.status-in-progress  { color: #ffc107; }
+.status-diagnostic   { color: #0dcaf0; }
+.status-ready        { color: #83cc30d1; }
+.status-completed    { color: #198754; }
+.status-cancelled    { color: #dc3545; }
 
-/* Статусы автомобилей */
-.status-free { color: #198754; }
-.status-work { color: #ffc107; }
-.status-ready { color: #20c997; }
+/* ---------- Бейджи для статусов автомобилей ---------- */
+.badge.status-booked {
+    background-color: #647cdd;
+    color: #ffffff;
+}
+.badge.status-created {
+    background-color: #6c757d;
+    color: #ffffff;
+}
+.badge.status-diagnostic {
+    background-color: #0dcaf0;
+    color: #ffffff;        /* чёрный текст на светлом фоне */
+}
+.badge.status-in-progress {
+    background-color: #ffc107;
+    color: #ffffff;
+}
+.badge.status-ready {
+    background-color: #83cc30d1;
+    color: #ffffff;
+}
+.badge.status-completed {
+    background-color: #198754;
+    color: #ffffff;
+}
+.badge.status-cancelled {
+    background-color: #dc3545;
+    color: #ffffff;
+}
+.badge.status-service {
+    background-color: #adb5bd;   /* светло-серый для "В сервисе" */
+    color: #ffffff;
+}
+
+/* ---------- Статусы автомобилей (если где-то используются старые классы) ---------- */
+.status-free       { color: #198754; }
+.status-work       { color: #ffc107; }
+.status-ready      { color: #83cc30d1; }
 .status-diagnostic { color: #0dcaf0; }
-.status-service { color: #6c757d; }
+.status-service    { color: #adb5bd; }
 
 /* Иконки статусов автомобилей */
 .car-status-icon {
@@ -32,7 +65,9 @@
     border-radius: 4px;
 }
 
-/* Основные стили */
+/* ============================================================
+   🎨 ОСНОВНЫЕ СТИЛИ
+   ============================================================ */
 .card {
     transition: transform 0.2s, box-shadow 0.2s;
     border: none;
@@ -104,7 +139,9 @@
     font-weight: 600;
 }
 
-/* Стили для валидации */
+/* ============================================================
+   🔍 ВАЛИДАЦИЯ ФОРМ
+   ============================================================ */
 .form-control.is-valid {
     border-color: #198754;
     padding-right: calc(1.5em + 0.75rem);
@@ -155,7 +192,9 @@
     animation: fadeIn 0.3s ease;
 }
 
-/* Стили для уведомлений */
+/* ============================================================
+   💬 УВЕДОМЛЕНИЯ
+   ============================================================ */
 .alert-notification {
     position: fixed;
     top: 20px;
@@ -184,7 +223,9 @@
     }
 }
 
-/* Стили для кнопок */
+/* ============================================================
+   🎯 КНОПКИ
+   ============================================================ */
 .btn {
     border-radius: 8px;
     font-weight: 500;
@@ -262,7 +303,9 @@
     border: none;
 }
 
-/* Стили для вкладок с контентом */
+/* ============================================================
+   🧩 ВКЛАДКИ И КОНТЕНТ
+   ============================================================ */
 .tab-pane {
     padding: 25px 0;
     animation: fadeIn 0.3s ease;
@@ -279,7 +322,9 @@
     }
 }
 
-/* Стили для карточек статистики */
+/* ============================================================
+   📊 СТАТИСТИКА
+   ============================================================ */
 .stat-card {
     text-align: center;
     border: none;
@@ -303,7 +348,7 @@
     background: linear-gradient(135deg, #0d6efd, #198754);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    background-clip: text; /* Исправлено: добавлено стандартное свойство */
+    background-clip: text;
 }
 
 .stat-card .card-text {
@@ -312,7 +357,9 @@
     font-size: 0.95rem;
 }
 
-/* Стили для форм */
+/* ============================================================
+   📝 ФОРМЫ
+   ============================================================ */
 .form-label {
     font-weight: 600;
     color: #495057;
@@ -348,7 +395,9 @@
     transform: translateY(-1px);
 }
 
-/* Стили для навигации */
+/* ============================================================
+   🚀 НАВИГАЦИЯ
+   ============================================================ */
 .navbar {
     box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     padding: 15px 0;
@@ -365,7 +414,9 @@
     color: rgba(255,255,255,0.9);
 }
 
-/* Стили для модальных окон */
+/* ============================================================
+   🪟 МОДАЛЬНЫЕ ОКНА
+   ============================================================ */
 .modal-content {
     border-radius: 15px;
     border: none;
@@ -399,7 +450,9 @@
     background: #f8f9fa;
 }
 
-/* Стили для модального окна автомобилей клиента */
+/* ============================================================
+   🚗 МОДАЛЬНОЕ ОКНО АВТОМОБИЛЕЙ КЛИЕНТА
+   ============================================================ */
 .car-modal-item {
     padding: 15px;
     border-radius: 10px;
@@ -432,7 +485,7 @@
 
 .car-status-indicator.work {
     background: rgba(255, 193, 7, 0.1);
-    color: #ffc107;
+    color: #fd7e14;
 }
 
 .car-status-indicator.ready {
@@ -447,7 +500,7 @@
 
 .car-status-indicator.service {
     background: rgba(108, 117, 125, 0.1);
-    color: #6c757d;
+    color: #adb5bd;
 }
 
 .car-info-grid {
@@ -473,7 +526,9 @@
     font-size: 1.1em;
 }
 
-/* Стили для клиентских карточек */
+/* ============================================================
+   👥 КЛИЕНТСКИЕ КАРТОЧКИ
+   ============================================================ */
 .client-card {
     padding: 15px;
     border-radius: 10px;
@@ -518,7 +573,9 @@
     flex-wrap: wrap;
 }
 
-/* Адаптивность */
+/* ============================================================
+   📱 АДАПТИВНОСТЬ
+   ============================================================ */
 @media (max-width: 768px) {
     .nav-tabs .nav-link {
         padding: 10px 15px;
@@ -572,7 +629,9 @@
     }
 }
 
-/* Стили для скролла */
+/* ============================================================
+   📜 СКРОЛЛ
+   ============================================================ */
 ::-webkit-scrollbar {
     width: 10px;
 }
@@ -607,7 +666,9 @@
     border-radius: 4px;
 }
 
-/* Анимации */
+/* ============================================================
+   ✨ АНИМАЦИИ
+   ============================================================ */
 @keyframes pulse {
     0% {
         transform: scale(1);
@@ -638,7 +699,7 @@
     background: linear-gradient(135deg, #0d6efd, #198754);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    background-clip: text; /* Исправлено: добавлено стандартное свойство */
+    background-clip: text;
 }
 
 /* Тени */
@@ -702,7 +763,9 @@
     }
 }
 
-/* Скрываем полосу прокрутки в выпадающем списке поиска клиента */
+/* ============================================================
+   🔍 ПОИСК КЛИЕНТА (СКРЫТИЕ СКРОЛЛА)
+   ============================================================ */
 #clientSearchResults {
     scrollbar-width: none;          /* Firefox */
     -ms-overflow-style: none;       /* IE и старый Edge */
@@ -712,7 +775,9 @@
     display: none;                  /* Chrome, Safari, Opera */
 }
 
-/* Жёлтое предупреждение о дубликате */
+/* ============================================================
+   ⚠️ ДУБЛИКАТЫ И ПРЕДУПРЕЖДЕНИЯ
+   ============================================================ */
 .is-duplicate {
     border-color: #ffc107 !important;
     box-shadow: 0 0 0 0.25rem rgba(255, 193, 7, 0.25) !important;
@@ -730,7 +795,9 @@
     border-color: #ffc107 !important;
 }
 
-/* === Кнопки выбора периода — убираем дёргание и лишнюю подсветку === */
+/* ============================================================
+   📊 КНОПКИ ВЫБОРА ПЕРИОДА (БЕЗ ДЁРГАНИЯ)
+   ============================================================ */
 #periodMainGroup .btn,
 #periodSubGroup .btn {
     transition: none !important;
@@ -755,4 +822,61 @@
 #periodSubGroup .btn.active {
     box-shadow: none !important;
     outline: none !important;
+}
+
+.time-slots-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 12px;
+    max-height: 250px;
+    overflow-y: auto;
+    margin-bottom: 8px;
+}
+
+.time-slot {
+    width: calc(25% - 6px);  /* 4 колонки */
+    text-align: center;
+    padding: 8px 4px;
+    border-radius: 6px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    border: 1px solid #d1d1d1;
+    background: #ffffff;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.time-slot:hover:not(.occupied):not(.selected) {
+    background: #e6f2ff;
+    border-color: #0d6efd;
+}
+
+.time-slot.occupied {
+    background: #e9ecef;
+    color: #adb5bd;
+    border-color: #dee2e6;
+    cursor: not-allowed;
+    text-decoration: line-through;
+    pointer-events: none;  /* нельзя кликнуть занятое */
+}
+
+.time-slot.selected {
+    background: #0d6efd;
+    color: #fff;
+    border-color: #0a58ca;
+    box-shadow: 0 0 0 3px rgba(13,110,253,0.2);
+}
+
+/* Адаптив для мобильных */
+@media (max-width: 576px) {
+    .time-slot {
+        width: calc(33.333% - 6px);
+        font-size: 0.8rem;
+        padding: 6px 2px;
+    }
 }
