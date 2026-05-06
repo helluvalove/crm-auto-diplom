@@ -39,8 +39,7 @@ if __name__ == '__main__':
                     login='mechanic',
                     full_name='Петров Алексей Иванович',
                     role_name='mechanic',
-                    phone='+79991234567',
-                    specialization='Двигатели'
+                    phone='+79991234567'
                 )
                 mechanic.password_hash = generate_password_hash('mechanic123')
                 db.session.add(mechanic)
