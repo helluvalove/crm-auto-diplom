@@ -38,13 +38,27 @@ def kb_main_menu():
                         "label": "Запись"
                     },
                     "color": "positive"
+                },
+                {
+                    "action": {
+                        "type": "text",
+                        "label": "Мои заявки"
+                    },
+                    "color": "primary"
                 }
             ],
             [
                 {
                     "action": {
                         "type": "text",
-                        "label": "Статус"
+                        "label": "Мои авто"
+                    },
+                    "color": "primary"
+                },
+                {
+                    "action": {
+                        "type": "text",
+                        "label": "Профиль"
                     },
                     "color": "secondary"
                 }
@@ -65,4 +79,23 @@ def kb_main_menu():
 def kb_empty():
     return json.dumps({
         "buttons": []
+    })
+
+
+def kb_inline_add_car():
+    """Inline-кнопка «Добавить авто» для экранов с машинами."""
+    return json.dumps({
+        "inline": True,
+        "buttons": [
+            [
+                {
+                    "action": {
+                        "type": "callback",
+                        "label": "Добавить авто",
+                        "payload": "{\"command\":\"add_car\"}"
+                    },
+                    "color": "positive"
+                }
+            ]
+        ]
     })

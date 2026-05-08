@@ -17,6 +17,15 @@ def get_or_create_client(vk_user_id):
 
     return client
 
+def has_contact_info(client):
+    return bool(client.name and client.phone)
+
+def update_client_info(client, name=None, phone=None):
+    if name:
+        client.name = name
+    if phone:
+        client.phone = phone
+    db.session.commit()
 
 def has_accepted_rules(client):
     return client.accepted_rules is not None
