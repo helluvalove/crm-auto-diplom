@@ -98,9 +98,13 @@ def get_archive():
         return jsonify({'error': str(e)}), 500
 
 def get_orders():
-    """Получить все заказы"""
+    """Получить все заказы (можно фильтровать по status)"""
     try:
-        orders = WorkOrder.query.all()
+        status_filter = request.args.get('status')          # <-- новое
+        query = WorkOrder.query
+        if status_filter:
+            query = query.filter(WorkOrder.status == status_filter)
+        orders = query.all()
 
         mechanic_ids = list(set(o.mechanic_id for o in orders if o.mechanic_id))
         mechanic_names = {}

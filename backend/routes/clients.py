@@ -162,7 +162,10 @@ def handle_client(client_id):
 
 def get_clients():
     try:
-        clients = Client.query.all()
+        # Не показываем клиентов, у которых нет ни имени, ни телефона (пустые из ВК)
+        clients = Client.query.filter(
+            db.or_(Client._name != None, Client._phone != None)
+        ).all()
         clients_list = [client.to_dict() for client in clients]
         return jsonify(clients_list)
     except Exception as e:

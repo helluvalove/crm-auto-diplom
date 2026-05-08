@@ -1,49 +1,68 @@
 import json
 
-def kb_accept_rules():
-    """Кнопка для принятия ПД (показывается только до принятия)"""
+
+def kb_inline_accept_decline():
     return json.dumps({
-        "one_time": False,
+        "inline": True,
         "buttons": [
-            [{
-                "action": {
-                    "type": "text",
-                    "label": "Принять"
+            [
+                {
+                    "action": {
+                        "type": "callback",
+                        "label": "Принять",
+                        "payload": "{\"command\":\"accept_rules\"}"
+                    },
+                    "color": "positive"
                 },
-                "color": "positive"
-            }]
+                {
+                    "action": {
+                        "type": "callback",
+                        "label": "Отклонить",
+                        "payload": "{\"command\":\"decline_rules\"}"
+                    },
+                    "color": "negative"
+                }
+            ]
         ]
     })
+
 
 def kb_main_menu():
-    """Основное меню после принятия ПД"""
     return json.dumps({
         "one_time": False,
         "buttons": [
-            [{
-                "action": {
-                    "type": "text",
-                    "label": "Запись"
-                },
-                "color": "positive"
-            }],
-            [{
-                "action": {
-                    "type": "text",
-                    "label": "Статус"
-                },
-                "color": "secondary"
-            }],
-            [{
-                "action": {
-                    "type": "text",
-                    "label": "Помощь"
-                },
-                "color": "primary"
-            }]
+            [
+                {
+                    "action": {
+                        "type": "text",
+                        "label": "Запись"
+                    },
+                    "color": "positive"
+                }
+            ],
+            [
+                {
+                    "action": {
+                        "type": "text",
+                        "label": "Статус"
+                    },
+                    "color": "secondary"
+                }
+            ],
+            [
+                {
+                    "action": {
+                        "type": "text",
+                        "label": "Помощь"
+                    },
+                    "color": "primary"
+                }
+            ]
         ]
     })
 
+
 def kb_empty():
-    """Пустая клавиатура (убирает текущую)"""
-    return json.dumps({"buttons": []})
+    return json.dumps({
+        "buttons": []
+    })

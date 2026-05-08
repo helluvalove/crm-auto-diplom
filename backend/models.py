@@ -95,6 +95,7 @@ class Client(db.Model):
     vk_user_id = db.Column(db.BigInteger)
     date_reg = db.Column(db.DateTime, nullable=False, default=datetime.now)
     accepted_rules = db.Column(db.DateTime, nullable=True)            # уже было True
+    declined_rules = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # ------- шифрованные свойства -------
     @property
@@ -173,7 +174,7 @@ class WorkOrder(db.Model):
 
     order_id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey('clients.client_id', ondelete='CASCADE'), nullable=False)
-    car_id = db.Column(db.Integer, db.ForeignKey('cars.car_id', ondelete='CASCADE'), nullable=False)
+    car_id = db.Column(db.Integer, db.ForeignKey('cars.car_id', ondelete='CASCADE'), nullable=True)
     manager_id = db.Column(db.Integer, db.ForeignKey('users.user_id', ondelete='SET NULL'))
     mechanic_id = db.Column(db.Integer, db.ForeignKey('users.user_id', ondelete='SET NULL'))
     status = db.Column(db.String(30), nullable=False, default='Создан')
