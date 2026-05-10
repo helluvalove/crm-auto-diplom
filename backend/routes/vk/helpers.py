@@ -18,10 +18,11 @@ def clear_inline_buttons(vk, peer_id, event):
     cmid = event.get('conversation_message_id')
     if cmid:
         try:
+            msg_text = event.get('text') or '\u200b'   # ← невидимый символ
             vk.messages.edit(
                 peer_id=peer_id,
                 conversation_message_id=cmid,
-                message=event.get('text', ''),
+                message=msg_text,
                 keyboard=kb_empty()
             )
         except Exception as e:

@@ -100,6 +100,42 @@ def kb_inline_add_car():
         ]
     })
 
+def kb_inline_my_cars(cars):
+    """Клавиатура для экрана 'Мои авто': кнопка «Добавить авто» и кнопки удаления для каждого авто."""
+    buttons = [
+        [
+            {
+                "action": {
+                    "type": "callback",
+                    "label": "➕ Добавить авто",
+                    "payload": "{\"command\":\"add_car\"}"
+                },
+                "color": "positive"
+            }
+        ]
+    ]
+    for car in cars:
+        model = car.model or 'без модели'
+        gos = car.gos_number or ''
+        label = f"🗑 {model} ({gos})" if gos else f"🗑 {model}"
+        buttons.append([
+            {
+                "action": {
+                    "type": "callback",
+                    "label": label,
+                    "payload": json.dumps({
+                        "command": "delete_car",
+                        "car_id": car.car_id
+                    })
+                },
+                "color": "negative"
+            }
+        ])
+    return json.dumps({
+        "inline": True,
+        "buttons": buttons
+    })
+
 def kb_inline_cancel_and_new(order_id, car_id):
     """Кнопки: 'Отменить заявку и продолжить', 'Назад в меню'."""
     return json.dumps({
@@ -155,6 +191,23 @@ def kb_inline_cancel_orders(orders):
         "buttons": buttons
     })
 
+def kb_inline_cancel_process():
+    """Inline-кнопка возврата в главное меню (серая)."""
+    return json.dumps({
+        "inline": True,
+        "buttons": [
+            [
+                {
+                    "action": {
+                        "type": "callback",
+                        "label": "Назад в меню",
+                        "payload": "{\"command\":\"cancel_process\"}"
+                    },
+                    "color": "secondary"
+                }
+            ]
+        ]
+    })
 
 def kb_inline_back_to_menu():
     """Просто кнопка 'Назад в меню'."""

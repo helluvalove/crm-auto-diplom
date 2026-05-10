@@ -5,16 +5,22 @@ import logging
 from ..vk_api_client import get_vk
 from ..helpers import clear_inline_buttons
 from ..utils import send_message
-from ..keyboards import kb_main_menu, kb_empty
-from ..state import _AWAITING_PROBLEM_DESC, _CAR_DATA, _AWAITING_CAR_STEP
+from ..keyboards import kb_main_menu, kb_empty, kb_inline_cancel_process, kb_inline_my_cars, kb_inline_add_car
+from ..state import ( 
+    _AWAITING_PROBLEM_DESC, _CAR_DATA, _AWAITING_CAR_STEP,
+    _AWAITING_NAME, _AWAITING_PHONE, _AWAITING_CAR_SELECTION
+)
 from ..services import (
     get_or_create_client,
     accept_rules,
     has_accepted_rules,
     decline_rules,
-    cancel_order
+    cancel_order,
+    get_active_order_for_car
 )
 from .message_handler import process_message, show_orders
+
+from models import db, Car, WorkOrder
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +89,8 @@ def process_event(event):
             return 'ok'
         _CAR_DATA[user_id] = {'context': 'add'}
         _AWAITING_CAR_STEP[user_id] = 'model'
-        send_message(user_id, "🚙 Введите модель автомобиля (например, Lada Granta):", keyboard=kb_empty())
+        send_message(user_id, "🚙 Введите модель автомобиля (например, Lada Granta):",
+                     keyboard=kb_inline_cancel_process())
 
     elif command == 'cancel_and_create_new':
         order_id = payload.get('order_id')
@@ -94,7 +101,7 @@ def process_event(event):
             send_message(user_id,
                          "📝 Кратко опишите проблему (например, «не заводится», «стук в подвеске»)\n"
                          "Или напишите «Пропустить», чтобы оставить без описания.",
-                         keyboard=kb_empty())
+                         keyboard=kb_inline_cancel_process())
         except Exception as e:
             logger.error(f"Cancel order error: {e}")
             send_message(user_id, "⚠ Не удалось отменить заявку. Возможно, она уже обработана.", keyboard=kb_main_menu())
@@ -112,4 +119,77 @@ def process_event(event):
     elif command == 'to_menu':
         send_message(user_id, "Главное меню:", keyboard=kb_main_menu())
 
-    return 'ok'
+    elif command == 'delete_car':
+        car_id = payload.get('car_id')
+        if not car_id:
+            send_message(user_id, "⚠ Ошибка: не указан автомобиль.", keyboard=kb_main_menu())
+            return 'ok'
+
+        car = Car.query.filter_by(car_id=car_id, client_id=client.client_id).first()
+        if not car:
+            send_message(user_id, "⚠ Автомобиль не найден или уже удалён.", keyboard=kb_main_menu())
+            return 'ok'
+
+        car_model = car.model or 'без модели'
+        car_gos = car.gos_number or 'без номера'
+
+        active_order = get_active_order_for_car(car_id)
+        if active_order:
+            send_message(
+                user_id,
+                f"❌ Нельзя удалить автомобиль {car_model} ({car_gos}) — "
+                f"на него есть активная заявка №{active_order.order_id}.\n"
+                "Сначала отмените или завершите заявку.",
+                keyboard=kb_main_menu()
+            )
+            return 'ok'
+
+        try:
+            # Удаляем все заявки по этому авто
+            WorkOrder.query.filter_by(car_id=car_id, client_id=client.client_id).delete()
+            db.session.delete(car)
+            db.session.commit()
+
+            # Формируем итоговое сообщение
+            message = f"✅ Автомобиль {car_model} ({car_gos}) успешно удалён из профиля."
+
+            # Если остались другие машины, покажем их краткий список
+            remaining_cars = client.cars  # связь обновлена
+            if remaining_cars:
+                lines = []
+                for i, c in enumerate(remaining_cars, 1):
+                    lines.append(f"{i}. {c.model or '—'} ({c.gos_number or 'без номера'})")
+                message += "\n\n🚗 Оставшиеся авто:\n" + "\n".join(lines)
+            else:
+                message += "\n\n🚘 Теперь у вас нет добавленных автомобилей."
+
+            send_message(user_id, message, keyboard=kb_main_menu())
+
+        except Exception as e:
+            logger.error(f"Delete car error: {e}")
+            db.session.rollback()
+            send_message(user_id, "⚠ Ошибка при удалении автомобиля.", keyboard=kb_main_menu())
+
+    elif command == 'cancel_process':
+        # Проверяем, есть ли только что созданная машина без заявки
+        car_id = _AWAITING_PROBLEM_DESC.get(user_id)
+        if car_id:
+            car = Car.query.filter_by(car_id=car_id, client_id=client.client_id).first()
+            if car:
+                # Если на эту машину ещё нет ни одной заявки — удаляем её
+                has_orders = WorkOrder.query.filter_by(car_id=car_id).first()
+                if not has_orders:
+                    try:
+                        db.session.delete(car)
+                        db.session.commit()
+                    except Exception as e:
+                        logger.warning(f"Не удалось удалить машину {car_id} при отмене: {e}")
+                        db.session.rollback()
+
+        # Сброс всех состояний пользователя
+        for d in (_AWAITING_NAME, _AWAITING_PHONE, _AWAITING_CAR_SELECTION,
+                  _CAR_DATA, _AWAITING_CAR_STEP, _AWAITING_PROBLEM_DESC):
+            d.pop(user_id, None)
+        send_message(user_id,
+                     "❌ Процесс отменён. Вы вернулись в главное меню.",
+                     keyboard=kb_main_menu())

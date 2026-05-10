@@ -42,33 +42,6 @@ def decline_rules(client):
     client.declined_rules = datetime.now(timezone.utc)
     db.session.commit()
 
-
-def get_or_create_car_for_client(client, gos_number):
-    car = Car.query.filter_by(client_id=client.client_id, gos_number=gos_number).first()
-
-    if car:
-        return car
-
-    car = Car.query.filter_by(gos_number=gos_number).first()
-
-    if car:
-        return car
-
-    car = Car(
-        client_id=client.client_id,
-        model="Не указана",
-        vin=None,
-        gos_number=gos_number,
-        year=datetime.now(timezone.utc).year,
-        mileage=0
-    )
-
-    db.session.add(car)
-    db.session.commit()
-
-    return car
-
-
 def is_valid_gos_number(gos_number: str) -> bool:
     pattern = r'^[АВЕКМНОРСТУХ]\d{3}[АВЕКМНОРСТУХ]{2}\d{2,3}$'
     return bool(re.match(pattern, gos_number.upper()))

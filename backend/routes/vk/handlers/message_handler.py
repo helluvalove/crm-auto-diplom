@@ -1,12 +1,14 @@
 # backend/routes/vk/handlers/message_handler.py
 import logging
+import re
 from datetime import datetime, timezone
 
 from ..middleware import require_rules
 from ..utils import send_message
 from ..keyboards import (
-    kb_main_menu, kb_empty, kb_inline_add_car,
-    kb_inline_cancel_and_new
+    kb_main_menu, kb_inline_add_car,
+    kb_inline_cancel_and_new, kb_inline_cancel_process,
+    kb_inline_my_cars
 )
 from ..state import (
     _AWAITING_NAME, _AWAITING_PHONE, _AWAITING_CAR_SELECTION,
@@ -28,11 +30,33 @@ def process_message(user_id, text, client):
 
     # -------- waiting name --------
     if user_id in _AWAITING_NAME:
-        name = text.strip()
+        raw_name = text.strip()
+        words = raw_name.split()
+
+        if len(words) != 3:
+            send_message(user_id,
+                        "❌ Введите ФИО полностью (три слова через пробел): Фамилия Имя Отчество.",
+                        keyboard=kb_inline_cancel_process())
+            return
+
+        valid_pattern = re.compile(r'^[а-яё-]+$', re.IGNORECASE)
+        for word in words:
+            if not valid_pattern.match(word):
+                send_message(user_id,
+                            "❌ ФИО должно содержать только русские буквы и дефисы. Например: Иванов-Петров Иван Иванович.",
+                            keyboard=kb_inline_cancel_process())
+                return
+            if word.startswith('-') or word.endswith('-') or '--' in word:
+                send_message(user_id,
+                            "❌ Дефис в фамилии/имени/отчестве используется некорректно.",
+                            keyboard=kb_inline_cancel_process())
+                return
+
+        formatted_name = raw_name.title()
         _AWAITING_NAME.pop(user_id)
-        update_client_info(client, name=name)
+        update_client_info(client, name=formatted_name)
         _AWAITING_PHONE[user_id] = True
-        send_message(user_id, "📞 Введите ваш номер телефона (например, +79123456789):", keyboard=kb_empty())
+        send_message(user_id, "📞 Введите ваш номер телефона (например, +79123456789):", keyboard=kb_inline_cancel_process())
         return
 
     # -------- waiting phone --------
@@ -46,7 +70,7 @@ def process_message(user_id, text, client):
                 user_id,
                 "❌ Введите корректный российский номер:\n"
                 "• +7XXXXXXXXXX (11 цифр) или 8XXXXXXXXXX",
-                keyboard=kb_empty()
+                keyboard=kb_inline_cancel_process()
             )
             return
         _AWAITING_PHONE.pop(user_id)
@@ -57,7 +81,7 @@ def process_message(user_id, text, client):
         else:
             _CAR_DATA[user_id] = {'context': 'order'}
             _AWAITING_CAR_STEP[user_id] = 'model'
-            send_message(user_id, "🚙 Введите модель автомобиля (например, Lada Granta):", keyboard=kb_empty())
+            send_message(user_id, "🚙 Введите модель автомобиля (например, Lada Granta):", keyboard=kb_inline_cancel_process())
         return
 
     # -------- waiting car selection --------
@@ -67,7 +91,7 @@ def process_message(user_id, text, client):
         if choice.lower() == 'новая':
             _CAR_DATA[user_id] = {'context': 'order'}
             _AWAITING_CAR_STEP[user_id] = 'model'
-            send_message(user_id, "🚙 Введите модель автомобиля (например, Lada Granta):", keyboard=kb_empty())
+            send_message(user_id, "🚙 Введите модель автомобиля (например, Lada Granta):", keyboard=kb_inline_cancel_process())
             return
         try:
             idx = int(choice) - 1
@@ -88,15 +112,15 @@ def process_message(user_id, text, client):
                     user_id,
                     "📝 Кратко опишите проблему (например, «не заводится», «стук в подвеске»)\n"
                     "Или напишите «Пропустить», чтобы оставить без описания.",
-                    keyboard=kb_empty()
+                    keyboard=kb_inline_cancel_process()
                 )
                 return
             else:
-                send_message(user_id, "❌ Неверный номер. Выберите число из списка или напишите «Новая».", keyboard=kb_empty())
+                send_message(user_id, "❌ Неверный номер. Выберите число из списка или напишите «Новая».", keyboard=kb_inline_cancel_process())
                 _AWAITING_CAR_SELECTION[user_id] = car_ids
                 return
         except ValueError:
-            send_message(user_id, "❌ Введите число, соответствующее автомобилю, или слово «Новая».", keyboard=kb_empty())
+            send_message(user_id, "❌ Введите число, соответствующее автомобилю, или слово «Новая».", keyboard=kb_inline_cancel_process())
             _AWAITING_CAR_SELECTION[user_id] = car_ids
             return
 
@@ -109,23 +133,23 @@ def process_message(user_id, text, client):
             model = text.strip()
             data['model'] = model
             _AWAITING_CAR_STEP[user_id] = 'gos_number'
-            send_message(user_id, "🚘 Введите госномер автомобиля (например, А123БВ77):", keyboard=kb_empty())
+            send_message(user_id, "🚘 Введите госномер автомобиля (например, А123БВ77):", keyboard=kb_inline_cancel_process())
             return
 
         elif step == 'gos_number':
             gos_number = text.strip().upper()
             if not is_valid_gos_number(gos_number):
-                send_message(user_id, "❌ Неверный формат госномера.\nПример: А123БВ77", keyboard=kb_empty())
+                send_message(user_id, "❌ Неверный формат госномера.\nПример: А123БВ77", keyboard=kb_inline_cancel_process())
                 return
             data['gos_number'] = gos_number
             _AWAITING_CAR_STEP[user_id] = 'year'
-            send_message(user_id, "📅 Введите год выпуска (например, 2020):", keyboard=kb_empty())
+            send_message(user_id, "📅 Введите год выпуска (например, 2020):", keyboard=kb_inline_cancel_process())
             return
 
         elif step == 'year':
             year_str = text.strip()
             if not year_str.isdigit():
-                send_message(user_id, "❌ Введите год числом, например: 2020", keyboard=kb_empty())
+                send_message(user_id, "❌ Введите год числом, например: 2020", keyboard=kb_inline_cancel_process())
                 return
             year_val = int(year_str)
             current_year = datetime.now(timezone.utc).year
@@ -133,18 +157,18 @@ def process_message(user_id, text, client):
                 send_message(
                     user_id,
                     f"❌ Год должен быть от 1900 до {current_year + 1}. Попробуйте ещё раз.",
-                    keyboard=kb_empty()
+                    keyboard=kb_inline_cancel_process()
                 )
                 return
             data['year'] = year_val
             _AWAITING_CAR_STEP[user_id] = 'mileage'
-            send_message(user_id, "🛞 Введите пробег в километрах (например, 45000):", keyboard=kb_empty())
+            send_message(user_id, "🛞 Введите пробег в километрах (например, 45000):", keyboard=kb_inline_cancel_process())
             return
 
         elif step == 'mileage':
             mileage_str = text.strip()
             if not mileage_str.isdigit():
-                send_message(user_id, "❌ Введите число (только цифры), например: 45000", keyboard=kb_empty())
+                send_message(user_id, "❌ Введите число (только цифры), например: 45000", keyboard=kb_inline_cancel_process())
                 return
             mileage_val = int(mileage_str)
             MAX_MILEAGE = 1_000_000
@@ -152,15 +176,15 @@ def process_message(user_id, text, client):
                 send_message(
                     user_id,
                     f"❌ Пробег не может быть больше {MAX_MILEAGE:,} км. Пожалуйста, введите корректное значение.",
-                    keyboard=kb_empty()
+                    keyboard=kb_inline_cancel_process()
                 )
                 return
             if mileage_val < 0:
-                send_message(user_id, "❌ Пробег не может быть отрицательным. Введите ещё раз.", keyboard=kb_empty())
+                send_message(user_id, "❌ Пробег не может быть отрицательным. Введите ещё раз.", keyboard=kb_inline_cancel_process())
                 return
             data['mileage'] = mileage_val
             _AWAITING_CAR_STEP[user_id] = 'vin'
-            send_message(user_id, "🔢 Введите VIN (17 символов) или напишите «Пропустить»:", keyboard=kb_empty())
+            send_message(user_id, "🔢 Введите VIN (17 символов) или напишите «Пропустить»:", keyboard=kb_inline_cancel_process())
             return
 
         elif step == 'vin':
@@ -168,7 +192,7 @@ def process_message(user_id, text, client):
             if vin.lower() in ['пропустить', 'нет', '-']:
                 vin = None
             if vin and len(vin) != 17:
-                send_message(user_id, "❌ VIN должен содержать ровно 17 символов. Попробуйте ещё раз или напишите «Пропустить».", keyboard=kb_empty())
+                send_message(user_id, "❌ VIN должен содержать ровно 17 символов. Попробуйте ещё раз или напишите «Пропустить».", keyboard=kb_inline_cancel_process())
                 return
 
             try:
@@ -203,7 +227,7 @@ def process_message(user_id, text, client):
                         user_id,
                         "📝 Кратко опишите проблему (например, «не заводится», «стук в подвеске»)\n"
                         "Или напишите «Пропустить», чтобы оставить без описания.",
-                        keyboard=kb_empty()
+                        keyboard=kb_inline_cancel_process()
                     )
                 else:
                     send_message(user_id, "✅ Автомобиль успешно добавлен!", keyboard=kb_main_menu())
@@ -266,7 +290,7 @@ def process_message(user_id, text, client):
     elif text_lower == 'запись':
         if not has_contact_info(client):
             _AWAITING_NAME[user_id] = True
-            send_message(user_id, "📝 Для создания заявки нам нужны ваши контактные данные.\nВведите ваше ФИО полностью:", keyboard=kb_empty())
+            send_message(user_id, "📝 Для создания заявки нам нужны ваши контактные данные.\nВведите ваше ФИО полностью:", keyboard=kb_inline_cancel_process())
             return
         cars = client.cars
         if cars:
@@ -274,7 +298,7 @@ def process_message(user_id, text, client):
         else:
             _CAR_DATA[user_id] = {'context': 'order'}
             _AWAITING_CAR_STEP[user_id] = 'model'
-            send_message(user_id, "🚙 Введите модель автомобиля (например, Lada Granta):", keyboard=kb_empty())
+            send_message(user_id, "🚙 Введите модель автомобиля (например, Lada Granta):", keyboard=kb_inline_cancel_process())
         return
 
     elif text_lower == 'мои заявки':
@@ -301,7 +325,7 @@ def process_message(user_id, text, client):
             send_message(
                 user_id,
                 "🚗 Ваши автомобили:\n\n" + "\n\n".join(lines),
-                keyboard=kb_inline_add_car()
+                keyboard=kb_inline_my_cars(cars)   # <-- замена
             )
         return
 
@@ -332,7 +356,7 @@ def show_car_selection(user_id, client):
     send_message(
         user_id,
         "🚗 Выберите автомобиль, введя его номер, или напишите «Новая» для добавления нового:\n\n" + "\n".join(lines),
-        keyboard=kb_empty()
+        keyboard=kb_inline_cancel_process()
     )
 
 
@@ -357,7 +381,15 @@ def show_orders(user_id, client):
             icon = "❌"
         else:
             icon = "✅"
-        lines.append(f"{icon} Заявка №{o.order_id} от {dt} — {status}")
+
+        # Информация об автомобиле
+        car_info = ""
+        if o.car:
+            model = o.car.model or 'модель не указана'
+            gos = o.car.gos_number or 'без номера'
+            car_info = f"\n   🚘 {model} ({gos})"
+
+        lines.append(f"{icon} Заявка №{o.order_id} от {dt} — {status}{car_info}")
 
     message_text = "📋 Ваши заявки:\n\n" + "\n".join(lines)
     keyboard = kb_inline_cancel_orders(cancel_orders) if cancel_orders else kb_main_menu()
