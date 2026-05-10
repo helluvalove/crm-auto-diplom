@@ -1,4 +1,4 @@
-from models import db, Client, Car
+from models import db, Client, Car, WorkOrder
 from datetime import datetime, timezone
 import re
 
@@ -72,3 +72,19 @@ def get_or_create_car_for_client(client, gos_number):
 def is_valid_gos_number(gos_number: str) -> bool:
     pattern = r'^[АВЕКМНОРСТУХ]\d{3}[АВЕКМНОРСТУХ]{2}\d{2,3}$'
     return bool(re.match(pattern, gos_number.upper()))
+
+def get_active_order_for_car(car_id):
+    """Возвращает активную заявку (статус 'Заявка') для указанного авто или None."""
+    return WorkOrder.query.filter_by(car_id=car_id, status='Заявка').first()
+
+
+def cancel_order(order_id, user_id):
+    """Отменяет заявку, если она принадлежит user_id и статус 'Заявка'."""
+    client = get_or_create_client(user_id)
+    order = WorkOrder.query.filter_by(order_id=order_id, client_id=client.client_id).first()
+    if not order:
+        raise ValueError("Заявка не найдена или не принадлежит вам.")
+    if order.status != 'Заявка':
+        raise ValueError("Заявку нельзя отменить, статус уже изменён.")
+    order.status = 'Отменена'
+    db.session.commit()
