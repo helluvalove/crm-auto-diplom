@@ -8,7 +8,8 @@ from ..utils import send_message
 from ..keyboards import kb_main_menu, kb_empty, kb_inline_cancel_process, kb_inline_my_cars, kb_inline_add_car
 from ..state import ( 
     _AWAITING_PROBLEM_DESC, _CAR_DATA, _AWAITING_CAR_STEP,
-    _AWAITING_NAME, _AWAITING_PHONE, _AWAITING_CAR_SELECTION
+    _AWAITING_NAME, _AWAITING_PHONE, _AWAITING_CAR_SELECTION,
+    _AWAITING_CONTACT_DATA, _AWAITING_PREFERRED_TIME
 )
 from ..services import (
     get_or_create_client,
@@ -18,7 +19,7 @@ from ..services import (
     cancel_order,
     get_active_order_for_car
 )
-from .message_handler import process_message, show_orders
+from .message_handler import process_message, show_orders, _create_order
 
 from models import db, Car, WorkOrder
 
@@ -106,6 +107,18 @@ def process_event(event):
             logger.error(f"Cancel order error: {e}")
             send_message(user_id, "⚠ Не удалось отменить заявку. Возможно, она уже обработана.", keyboard=kb_main_menu())
 
+    elif command == 'skip_datetime':
+        data = _AWAITING_PREFERRED_TIME.get(user_id)
+        if data:
+            step = data.get('step')
+            if step == 'time':
+                # Дата уже введена, передаём только дату
+                preferred_dt = data.get('date')
+            else:
+                preferred_dt = None
+            if _create_order(user_id, client, data['car_id'], data['desc'], preferred_dt=preferred_dt):
+                _AWAITING_PREFERRED_TIME.pop(user_id, None)
+
     elif command == 'cancel_order':
         order_id = payload.get('order_id')
         try:
@@ -188,8 +201,10 @@ def process_event(event):
 
         # Сброс всех состояний пользователя
         for d in (_AWAITING_NAME, _AWAITING_PHONE, _AWAITING_CAR_SELECTION,
-                  _CAR_DATA, _AWAITING_CAR_STEP, _AWAITING_PROBLEM_DESC):
+                  _CAR_DATA, _AWAITING_CAR_STEP, _AWAITING_PROBLEM_DESC,
+                  _AWAITING_CONTACT_DATA, _AWAITING_PREFERRED_TIME):
             d.pop(user_id, None)
         send_message(user_id,
                      "❌ Процесс отменён. Вы вернулись в главное меню.",
                      keyboard=kb_main_menu())
+    return 'ok'

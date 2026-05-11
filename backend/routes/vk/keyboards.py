@@ -226,3 +226,31 @@ def kb_inline_back_to_menu():
             ]
         ]
     })
+
+def kb_inline_skip_or_cancel():
+    """Кнопки: Пропустить шаг и Назад в меню."""
+    return json.dumps({
+        "inline": True,
+        "buttons": [
+            [
+                {
+                    "action": {
+                        "type": "callback",
+                        "label": "Пропустить",
+                        "payload": "{\"command\":\"skip_datetime\"}"
+                    },
+                    "color": "secondary"
+                }
+            ],
+            [
+                {
+                    "action": {
+                        "type": "callback",
+                        "label": "Назад в меню",
+                        "payload": "{\"command\":\"cancel_process\"}"
+                    },
+                    "color": "negative"
+                }
+            ]
+        ]
+    })

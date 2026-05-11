@@ -8,11 +8,12 @@ from ..utils import send_message
 from ..keyboards import (
     kb_main_menu, kb_inline_add_car,
     kb_inline_cancel_and_new, kb_inline_cancel_process,
-    kb_inline_my_cars
+    kb_inline_my_cars, kb_inline_skip_or_cancel
 )
 from ..state import (
     _AWAITING_NAME, _AWAITING_PHONE, _AWAITING_CAR_SELECTION,
-    _CAR_DATA, _AWAITING_CAR_STEP, _AWAITING_PROBLEM_DESC
+    _CAR_DATA, _AWAITING_CAR_STEP, _AWAITING_PROBLEM_DESC,
+    _AWAITING_CONTACT_DATA, _AWAITING_PREFERRED_TIME
 )
 from ..services import (
     is_valid_gos_number,
@@ -23,6 +24,41 @@ from ..services import (
 from models import db, WorkOrder, Car
 
 logger = logging.getLogger(__name__)
+
+
+def _create_order(user_id, client, car_id, desc, preferred_dt=None):
+    """Создаёт заявку в БД и отправляет подтверждение пользователю.
+    Возвращает True, если заявка успешно создана, иначе False."""
+    if get_active_order_for_car(car_id):
+        send_message(user_id, "❌ На этот автомобиль кто-то уже создал заявку. Операция отменена.", keyboard=kb_main_menu())
+        return False
+
+    contact_info = f"Клиент: {client.name or 'не указано'}, тел.: {client.phone or 'не указано'}"
+    dt_line = f"\nЖелаемая дата и время: {preferred_dt}" if preferred_dt else "\nВремя: не указано"
+    full_desc = f"{contact_info}\nVK ID {user_id}: {desc}{dt_line}"
+
+    try:
+        order = WorkOrder(
+            client_id=client.client_id,
+            car_id=car_id,
+            status='Заявка',
+            problem_description=full_desc,
+            created_date=datetime.now(timezone.utc)
+        )
+        db.session.add(order)
+        db.session.commit()
+
+        confirm_text = f"✅ Заявка №{order.order_id} принята!\n"
+        if preferred_dt:
+            confirm_text += f"📅 Желаемая дата/время: {preferred_dt}\n"
+        confirm_text += "\nМенеджер свяжется с вами для подтверждения."
+        send_message(user_id, confirm_text, keyboard=kb_main_menu())
+        return True
+    except Exception as e:
+        logger.error(f"Order error: {e}")
+        send_message(user_id, "⚠ Ошибка создания заявки", keyboard=kb_main_menu())
+        return False
+
 
 @require_rules
 def process_message(user_id, text, client):
@@ -54,7 +90,7 @@ def process_message(user_id, text, client):
 
         formatted_name = raw_name.title()
         _AWAITING_NAME.pop(user_id)
-        update_client_info(client, name=formatted_name)
+        _AWAITING_CONTACT_DATA[user_id] = {'name': formatted_name}
         _AWAITING_PHONE[user_id] = True
         send_message(user_id, "📞 Введите ваш номер телефона (например, +79123456789):", keyboard=kb_inline_cancel_process())
         return
@@ -74,7 +110,10 @@ def process_message(user_id, text, client):
             )
             return
         _AWAITING_PHONE.pop(user_id)
-        update_client_info(client, phone=clean_phone)
+        contact_data = _AWAITING_CONTACT_DATA.pop(user_id, {})
+        name = contact_data.get('name', client.name)
+        update_client_info(client, name=name, phone=clean_phone)
+
         cars = client.cars
         if cars:
             show_car_selection(user_id, client)
@@ -133,13 +172,13 @@ def process_message(user_id, text, client):
             model = text.strip()
             data['model'] = model
             _AWAITING_CAR_STEP[user_id] = 'gos_number'
-            send_message(user_id, "🚘 Введите госномер автомобиля (например, А123БВ77):", keyboard=kb_inline_cancel_process())
+            send_message(user_id, "🚘 Введите госномер автомобиля (например, А123ВВ77):", keyboard=kb_inline_cancel_process())
             return
 
         elif step == 'gos_number':
             gos_number = text.strip().upper()
             if not is_valid_gos_number(gos_number):
-                send_message(user_id, "❌ Неверный формат госномера.\nПример: А123БВ77", keyboard=kb_inline_cancel_process())
+                send_message(user_id, "❌ Неверный формат госномера.\nПример: А123ВВ77", keyboard=kb_inline_cancel_process())
                 return
             data['gos_number'] = gos_number
             _AWAITING_CAR_STEP[user_id] = 'year'
@@ -240,32 +279,86 @@ def process_message(user_id, text, client):
     if user_id in _AWAITING_PROBLEM_DESC:
         car_id = _AWAITING_PROBLEM_DESC.pop(user_id)
         desc = text.strip()
-
         if desc.lower() in ['пропустить', 'нет', '-']:
             desc = "Без описания"
 
-        contact_info = f"Клиент: {client.name or 'не указано'}, тел.: {client.phone or 'не указано'}"
-        full_desc = f"{contact_info}\nVK ID {user_id}: {desc}"
+        # Переходим к шагу выбора даты
+        _AWAITING_PREFERRED_TIME[user_id] = {'car_id': car_id, 'desc': desc, 'step': 'date'}
+        send_message(
+            user_id,
+            "📅 Укажите удобную дату записи в формате ДД.ММ.ГГГГ\n"
+            "Например: 20.06.2025\n"
+            "❕ Воскресенье — выходной день автосервиса.\n\n"
+            "Или нажмите «Пропустить» — менеджер согласует время с вами.",
+            keyboard=kb_inline_skip_or_cancel()
+        )
+        return
 
-        if get_active_order_for_car(car_id):
-            send_message(user_id, "❌ На этот автомобиль кто-то уже создал заявку. Операция отменена.", keyboard=kb_main_menu())
+    # -------- waiting preferred datetime --------
+    if user_id in _AWAITING_PREFERRED_TIME:
+        data = _AWAITING_PREFERRED_TIME[user_id]
+        step = data.get('step')
+
+        if step == 'date':
+            raw = text.strip()
+            try:
+                parsed_date = datetime.strptime(raw, '%d.%m.%Y')
+                # Проверка на прошлое
+                if parsed_date.date() < datetime.now().date():
+                    send_message(
+                        user_id,
+                        "❌ Дата не может быть в прошлом. Введите корректную дату (ДД.ММ.ГГГГ):",
+                        keyboard=kb_inline_skip_or_cancel()
+                    )
+                    return
+                # Проверка на воскресенье (weekday: понедельник=0, воскресенье=6)
+                if parsed_date.weekday() == 6:
+                    send_message(
+                        user_id,
+                        "❌ В воскресенье автосервис не работает. Пожалуйста, выберите другой день.",
+                        keyboard=kb_inline_skip_or_cancel()
+                    )
+                    return
+                data['date'] = parsed_date.strftime('%d.%m.%Y')
+                data['step'] = 'time'
+                send_message(
+                    user_id,
+                    "🕐 Теперь укажите удобное время в формате ЧЧ:ММ\n"
+                    "⏰ Время работы: с 10:00 до 20:00 (последняя запись в 19:00)\n"
+                    "Например: 10:00 или 15:30",
+                    keyboard=kb_inline_skip_or_cancel()
+                )
+            except ValueError:
+                send_message(
+                    user_id,
+                    "❌ Неверный формат даты. Введите в формате ДД.ММ.ГГГГ, например: 20.06.2025",
+                    keyboard=kb_inline_skip_or_cancel()
+                )
             return
 
-        try:
-            order = WorkOrder(
-                client_id=client.client_id,
-                car_id=car_id,
-                status='Заявка',
-                problem_description=full_desc,
-                created_date=datetime.now(timezone.utc)
-            )
-            db.session.add(order)
-            db.session.commit()
-            send_message(user_id, f"✅ Заявка №{order.order_id} принята!", keyboard=kb_main_menu())
-        except Exception as e:
-            logger.error(f"Order error: {e}")
-            send_message(user_id, "⚠ Ошибка создания заявки", keyboard=kb_main_menu())
-        return
+        if step == 'time':
+            raw = text.strip()
+            if not re.match(r'^\d{1,2}:\d{2}$', raw):
+                send_message(
+                    user_id,
+                    "❌ Неверный формат времени. Введите в формате ЧЧ:ММ, например: 10:00",
+                    keyboard=kb_inline_skip_or_cancel()
+                )
+                return
+            h, m = map(int, raw.split(':'))
+            # Проверка на допустимое рабочее время: 10:00 - 20:00 (последняя запись в 20:00)
+            if h < 10 or h > 20 or (h == 20 and m > 0):
+                send_message(
+                    user_id,
+                    "❌ Автосервис работает с 10:00 до 20:00 (последняя запись в 20:00). Пожалуйста, выберите время в этом промежутке.",
+                    keyboard=kb_inline_skip_or_cancel()
+                )
+                return
+            data['time'] = f"{h:02d}:{m:02d}"
+            preferred_dt = f"{data['date']} {data['time']}"
+            _AWAITING_PREFERRED_TIME.pop(user_id)
+            _create_order(user_id, client, data['car_id'], data['desc'], preferred_dt=preferred_dt)
+            return
 
     # -------- main menu --------
     if text_lower in ['начать', 'start']:
@@ -325,7 +418,7 @@ def process_message(user_id, text, client):
             send_message(
                 user_id,
                 "🚗 Ваши автомобили:\n\n" + "\n\n".join(lines),
-                keyboard=kb_inline_my_cars(cars)   # <-- замена
+                keyboard=kb_inline_my_cars(cars)
             )
         return
 
@@ -382,15 +475,27 @@ def show_orders(user_id, client):
         else:
             icon = "✅"
 
-        # Информация об автомобиле
         car_info = ""
         if o.car:
             model = o.car.model or 'модель не указана'
             gos = o.car.gos_number or 'без номера'
             car_info = f"\n   🚘 {model} ({gos})"
 
+        # Извлекаем желаемую дату и время из описания
+        desc = o.problem_description or ''
+        preferred_dt = None
+        if 'Желаемая дата и время:' in desc:
+            idx = desc.find('Желаемая дата и время:')
+            line = desc[idx:].split('\n')[0]
+            preferred_dt = line.replace('Желаемая дата и время:', '').strip()
+        elif 'Время: не указано' in desc:
+            preferred_dt = 'не указано'
+
+        if preferred_dt:
+            car_info += f"\n   📅 Желаемая дата/время: {preferred_dt}"
+
         lines.append(f"{icon} Заявка №{o.order_id} от {dt} — {status}{car_info}")
 
-    message_text = "📋 Ваши заявки:\n\n" + "\n".join(lines)
+    message_text = "📋 Ваши заявки:\n\n" + "\n\n".join(lines)
     keyboard = kb_inline_cancel_orders(cancel_orders) if cancel_orders else kb_main_menu()
     send_message(user_id, message_text, keyboard=keyboard)
