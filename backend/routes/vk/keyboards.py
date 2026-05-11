@@ -254,3 +254,31 @@ def kb_inline_skip_or_cancel():
             ]
         ]
     })
+
+def kb_inline_profile_actions():
+    """Кнопки в профиле: Отозвать согласие и Назад в меню."""
+    return json.dumps({
+        "inline": True,
+        "buttons": [
+            [
+                {
+                    "action": {
+                        "type": "callback",
+                        "label": "Отозвать согласие",
+                        "payload": "{\"command\":\"revoke_consent\"}"
+                    },
+                    "color": "negative"
+                }
+            ],
+            [
+                {
+                    "action": {
+                        "type": "callback",
+                        "label": "Назад в меню",
+                        "payload": "{\"command\":\"to_menu\"}"
+                    },
+                    "color": "secondary"
+                }
+            ]
+        ]
+    })

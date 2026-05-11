@@ -8,12 +8,14 @@ from ..utils import send_message
 from ..keyboards import (
     kb_main_menu, kb_inline_add_car,
     kb_inline_cancel_and_new, kb_inline_cancel_process,
-    kb_inline_my_cars, kb_inline_skip_or_cancel
+    kb_inline_my_cars, kb_inline_skip_or_cancel,
+    kb_inline_profile_actions, kb_empty
 )
 from ..state import (
     _AWAITING_NAME, _AWAITING_PHONE, _AWAITING_CAR_SELECTION,
     _CAR_DATA, _AWAITING_CAR_STEP, _AWAITING_PROBLEM_DESC,
-    _AWAITING_CONTACT_DATA, _AWAITING_PREFERRED_TIME
+    _AWAITING_CONTACT_DATA, _AWAITING_PREFERRED_TIME, 
+    _AWAITING_REVOKE_CONFIRMATION
 )
 from ..services import (
     is_valid_gos_number,
@@ -360,6 +362,44 @@ def process_message(user_id, text, client):
             _create_order(user_id, client, data['car_id'], data['desc'], preferred_dt=preferred_dt)
             return
 
+        # -------- подтверждение отзыва согласия --------
+    if user_id in _AWAITING_REVOKE_CONFIRMATION:
+        phone_input = text.strip()
+        clean_input = phone_input.replace(' ', '').replace('(', '').replace(')', '').replace('-', '')
+        if clean_input.startswith('8') and len(clean_input) == 11 and clean_input[1:].isdigit():
+            clean_input = '+7' + clean_input[1:]
+        if clean_input != client.phone:
+            send_message(user_id, "❌ Введённый номер не совпадает с номером в профиле. Отзыв согласия отменён.",
+                         keyboard=kb_main_menu())
+            _AWAITING_REVOKE_CONFIRMATION.pop(user_id, None)
+            return
+
+        # Удаление всех данных клиента
+        try:
+            WorkOrder.query.filter_by(client_id=client.client_id).delete()
+            Car.query.filter_by(client_id=client.client_id).delete()
+            db.session.delete(client)
+            db.session.commit()
+        except Exception as e:
+            logger.error(f"Revoke consent deletion error: {e}")
+            db.session.rollback()
+            send_message(user_id, "⚠ Произошла ошибка при удалении данных. Попробуйте позже.", keyboard=kb_main_menu())
+            _AWAITING_REVOKE_CONFIRMATION.pop(user_id, None)
+            return
+
+        # Сброс всех состояний
+        for d in (_AWAITING_NAME, _AWAITING_PHONE, _AWAITING_CAR_SELECTION,
+                  _CAR_DATA, _AWAITING_CAR_STEP, _AWAITING_PROBLEM_DESC,
+                  _AWAITING_CONTACT_DATA, _AWAITING_PREFERRED_TIME,
+                  _AWAITING_REVOKE_CONFIRMATION):
+            d.pop(user_id, None)
+
+        send_message(user_id,
+                     "✅ Ваши данные полностью удалены.\n"
+                     "Вы можете заново принять соглашение об обработке персональных данных, отправив «Начать».",
+                     keyboard=kb_empty())
+        return
+
     # -------- main menu --------
     if text_lower in ['начать', 'start']:
         send_message(
@@ -430,7 +470,7 @@ def process_message(user_id, text, client):
                f"ФИО: {name}\n"
                f"Телефон: {phone}\n"
                f"Дата регистрации: {reg_date}")
-        send_message(user_id, msg, keyboard=kb_main_menu())
+        send_message(user_id, msg, keyboard=kb_inline_profile_actions())
         return
 
     else:
