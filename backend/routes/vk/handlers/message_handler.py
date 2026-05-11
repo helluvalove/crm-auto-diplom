@@ -107,7 +107,7 @@ def process_message(user_id, text, client):
             send_message(
                 user_id,
                 "❌ Введите корректный российский номер:\n"
-                "• +7XXXXXXXXXX (11 цифр) или 8XXXXXXXXXX",
+                "+7XXXXXXXXXX (11 цифр) или 8XXXXXXXXXX",
                 keyboard=kb_inline_cancel_process()
             )
             return

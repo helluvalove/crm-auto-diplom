@@ -25,7 +25,7 @@ async function loadOrders(filter = 'active') {
         // Фильтрация заказов
         let filteredOrders = ordersData;
         if (filter === 'active') {
-            filteredOrders = ordersData.filter(o => o.status !== 'Выполнен' && o.status !== 'Отменен');
+            filteredOrders = ordersData.filter(o => o.status !== 'Выполнен' && o.status !== 'Отменен' && o.status !== 'Отменена' && o.status !== 'Заявка');
         } else if (filter === 'archive') {
             filteredOrders = ordersData.filter(o => o.status === 'Выполнен' || o.status === 'Отменен');
         } else if (filter !== 'all') {
