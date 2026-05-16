@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoCRM · Superadmin</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.7.0/dist/tabler-icons.min.css">
+<style>
+  :root {
+    --bg: #0d0d0d;
+    --bg2: #161616;
+    --bg3: #1e1e1e;
+    --border: #2a2a2a;
+    --border2: #333;
+    --text: #e8e8e8;
+    --text2: #888;
+    --text3: #555;
+    --accent: #e8e8e8;
+    --green: #22c55e;
+    --red: #ef4444;
+    --yellow: #eab308;
+    --blue: #3b82f6;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    --radius: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-mono); font-size: 13px; }
+
+  /* ── Login screen ─────────────────────────────────────── */
+  #loginScreen {
+    display: flex; align-items: center; justify-content: center;
+    height: 100vh; flex-direction: column; gap: 0;
+  }
+  .login-box {
+    background: var(--bg2); border: 0.5px solid var(--border2);
+    border-radius: var(--radius); padding: 32px 36px; width: 320px;
+  }
+  .login-box h1 { font-size: 13px; font-weight: 500; color: var(--text2); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 4px; }
+  .login-box p  { font-size: 11px; color: var(--text3); margin-bottom: 24px; }
+  .login-box label { display: block; font-size: 11px; color: var(--text2); margin-bottom: 5px; }
+  .login-box input {
+    width: 100%; background: var(--bg3); border: 0.5px solid var(--border2);
+    color: var(--text); font-family: var(--font-mono); font-size: 13px;
+    padding: 8px 10px; border-radius: var(--radius); outline: none;
+    transition: border-color .15s;
+  }
+  .login-box input:focus { border-color: var(--text3); }
+  .login-box .field { margin-bottom: 14px; }
+  .login-box .btn-login {
+    width: 100%; margin-top: 8px; padding: 9px;
+    background: var(--text); color: var(--bg); border: none;
+    font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+    border-radius: var(--radius); cursor: pointer; letter-spacing: .05em;
+    transition: opacity .15s;
+  }
+  .login-box .btn-login:hover { opacity: .85; }
+  .login-box .btn-login:disabled { opacity: .4; cursor: not-allowed; }
+  .login-error { font-size: 11px; color: var(--red); margin-top: 10px; min-height: 16px; }
+
+  /* ── Shell layout ─────────────────────────────────────── */
+  #shell { display: none; height: 100vh; }
+  #shell.visible { display: flex; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 196px; min-width: 196px;
+    background: var(--bg2); border-right: 0.5px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .sb-header {
+    padding: 16px; border-bottom: 0.5px solid var(--border);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .sb-header .brand { font-size: 12px; font-weight: 500; color: var(--text); letter-spacing: .04em; }
+  .sb-header .role  { font-size: 10px; color: var(--text3); }
+  .sb-section { font-size: 9px; color: var(--text3); letter-spacing: .12em; text-transform: uppercase; padding: 12px 16px 4px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 7px 16px; color: var(--text2); cursor: pointer;
+    border-left: 2px solid transparent; font-size: 12px;
+    transition: color .12s, background .12s; user-select: none;
+  }
+  .nav-item:hover { color: var(--text); background: var(--bg3); }
+  .nav-item.active { color: var(--text); background: var(--bg3); border-left-color: var(--text2); }
+  .nav-item i { font-size: 15px; width: 16px; flex-shrink: 0; }
+  .nav-item .dot-badge {
+    margin-left: auto; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--red); display: none;
+  }
+  .nav-item .dot-badge.visible { display: block; }
+  .sb-footer {
+    margin-top: auto; padding: 12px 16px; border-top: 0.5px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .sb-footer .info .u { font-size: 11px; color: var(--text2); }
+  .sb-footer .info .r { font-size: 10px; color: var(--text3); }
+  .btn-logout {
+    background: none; border: 0.5px solid var(--border2); border-radius: var(--radius);
+    color: var(--text3); font-size: 13px; padding: 4px 6px; cursor: pointer; line-height: 1;
+    transition: color .12s;
+  }
+  .btn-logout:hover { color: var(--red); border-color: var(--red); }
+
+  /* Main area */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .topbar {
+    padding: 11px 20px; border-bottom: 0.5px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  }
+  .topbar .page-title { font-size: 12px; color: var(--text); font-weight: 500; letter-spacing: .04em; }
+  .topbar .status-pill {
+    font-size: 10px; padding: 2px 10px; border-radius: 20px;
+    border: 0.5px solid var(--border2); color: var(--text3);
+    transition: all .2s;
+  }
+  .topbar .status-pill.ok    { color: var(--green); border-color: #22c55e44; }
+  .topbar .status-pill.warn  { color: var(--yellow); border-color: #eab30844; }
+  .topbar .status-pill.err   { color: var(--red); border-color: #ef444444; }
+  .content { flex: 1; overflow-y: auto; padding: 20px; }
+
+  /* Tabs */
+  .tab { display: none; }
+  .tab.active { display: block; }
+
+  /* Sections */
+  .section { margin-bottom: 24px; }
+  .section-label {
+    font-size: 9px; color: var(--text3); letter-spacing: .12em;
+    text-transform: uppercase; margin-bottom: 10px;
+  }
+
+  /* Config field rows */
+  .cfg-row {
+    display: grid; grid-template-columns: 170px 1fr auto;
+    align-items: center; gap: 8px;
+    padding: 6px 0; border-bottom: 0.5px solid var(--border);
+  }
+  .cfg-row:last-child { border-bottom: none; }
+  .cfg-key  { font-size: 11px; color: var(--text2); }
+  .cfg-input {
+    background: var(--bg3); border: 0.5px solid var(--border);
+    color: var(--text); font-family: var(--font-mono); font-size: 11px;
+    padding: 5px 8px; border-radius: var(--radius); outline: none; width: 100%;
+    transition: border-color .12s;
+  }
+  .cfg-input:focus { border-color: var(--border2); }
+  .cfg-input.masked { -webkit-text-security: disc; letter-spacing: .1em; }
+  .cfg-badge {
+    font-size: 9px; padding: 2px 7px; border-radius: 3px;
+    border: 0.5px solid var(--border); color: var(--text3);
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .cfg-badge.set   { color: var(--green); border-color: #22c55e44; }
+  .cfg-badge.unset { color: var(--red); border-color: #ef444444; }
+
+  /* Buttons */
+  .btn {
+    padding: 6px 14px; font-size: 11px; font-family: var(--font-mono);
+    border: 0.5px solid var(--border2); border-radius: var(--radius);
+    cursor: pointer; background: var(--bg3); color: var(--text2);
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: color .12s, border-color .12s; white-space: nowrap;
+  }
+  .btn:hover { color: var(--text); border-color: var(--text3); }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+  .btn.primary { background: var(--text); color: var(--bg); border-color: transparent; font-weight: 500; }
+  .btn.primary:hover { opacity: .85; }
+  .btn.danger { color: var(--red); border-color: #ef444433; }
+  .btn.danger:hover { border-color: var(--red); background: #ef444411; }
+  .btn.small { padding: 4px 8px; font-size: 10px; }
+  .btn i { font-size: 14px; }
+
+  .actions { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
+
+  /* Log box */
+  .log-box {
+    background: var(--bg); border: 0.5px solid var(--border);
+    border-radius: var(--radius); padding: 10px 12px;
+    font-size: 11px; line-height: 1.8; max-height: 160px;
+    overflow-y: auto; color: var(--text2); white-space: pre-wrap;
+  }
+  .log-ok   { color: var(--green); }
+  .log-err  { color: var(--red); }
+  .log-warn { color: var(--yellow); }
+  .log-dim  { color: var(--text3); }
+
+  /* Backup list */
+  .backup-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 0; border-bottom: 0.5px solid var(--border);
+    gap: 12px;
+  }
+  .backup-row:last-child { border-bottom: none; }
+  .backup-name { color: var(--text); font-size: 11px; }
+  .backup-meta { color: var(--text3); font-size: 10px; margin-top: 2px; }
+  .backup-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* Status indicators */
+  .status-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 0; border-bottom: 0.5px solid var(--border);
+    font-size: 12px;
+  }
+  .status-row:last-child { border-bottom: none; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .status-dot.ok   { background: var(--green); box-shadow: 0 0 6px #22c55e66; }
+  .status-dot.err  { background: var(--red); box-shadow: 0 0 6px #ef444466; }
+  .status-dot.warn { background: var(--yellow); box-shadow: 0 0 6px #eab30866; }
+  .status-key  { color: var(--text2); width: 160px; flex-shrink: 0; }
+  .status-val  { color: var(--text); }
+  .status-note { color: var(--text3); font-size: 10px; margin-left: auto; }
+
+  /* Users table */
+  .users-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .users-table th { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: .1em; font-weight: 400; text-align: left; padding: 0 0 8px; border-bottom: 0.5px solid var(--border); }
+  .users-table td { padding: 7px 0; border-bottom: 0.5px solid var(--border); color: var(--text2); vertical-align: middle; }
+  .users-table tr:last-child td { border-bottom: none; }
+  .users-table td:first-child { color: var(--text); }
+  .role-tag { font-size: 9px; padding: 2px 7px; border-radius: 3px; border: 0.5px solid var(--border2); color: var(--text3); }
+  .role-tag.su { color: var(--yellow); border-color: #eab30844; }
+
+  /* Progress */
+  .progress-wrap { margin-top: 10px; }
+  .progress-label { font-size: 11px; color: var(--text2); margin-bottom: 5px; }
+  .progress-bar { height: 2px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--text2); border-radius: 2px; transition: width .3s; width: 0%; }
+
+  /* Toast */
+  #toast {
+    position: fixed; bottom: 20px; right: 20px;
+    background: var(--bg2); border: 0.5px solid var(--border2);
+    border-radius: var(--radius); padding: 10px 16px;
+    font-size: 11px; color: var(--text2); display: none;
+    z-index: 999; max-width: 300px;
+  }
+  #toast.show { display: block; }
+  #toast.ok   { color: var(--green); border-color: #22c55e44; }
+  #toast.err  { color: var(--red); border-color: #ef444444; }
+
+  /* Icon button (no label) */
+  .btn-icon {
+    background: none; border: 0.5px solid var(--border);
+    border-radius: var(--radius); padding: 4px 6px; cursor: pointer;
+    color: var(--text3); font-size: 13px; line-height: 1;
+    transition: color .12s, border-color .12s;
+  }
+  .btn-icon:hover { color: var(--text); border-color: var(--border2); }
+  .btn-icon.danger:hover { color: var(--red); border-color: var(--red); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════ LOGIN ══════════════════════ -->
+<div id="loginScreen">
+  <div class="login-box">
+    <h1>AutoCRM</h1>
+    <p>System administration · superuser access</p>
+    <div class="field">
+      <label>Login</label>
+      <input type="text" id="saLogin" autocomplete="username" placeholder="superadmin" />
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="saPassword" autocomplete="current-password" placeholder="••••••••••••" />
+    </div>
+    <button class="btn-login" id="loginBtn" onclick="doLogin()">Sign in →</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════ SHELL ══════════════════════ -->
+<div id="shell">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sb-header">
+      <span class="brand">AutoCRM / sysadmin</span>
+      <span class="role">superuser · local session</span>
+    </div>
+
+    <div class="sb-section">Configuration</div>
+    <div class="nav-item active" data-tab="database" onclick="switchTab(this)">
+      <i class="ti ti-database"></i> Database
+    </div>
+    <div class="nav-item" data-tab="vk" onclick="switchTab(this)">
+      <i class="ti ti-brand-vk"></i> VK Bot
+      <span class="dot-badge" id="vkBadge"></span>
+    </div>
+    <div class="nav-item" data-tab="auth" onclick="switchTab(this)">
+      <i class="ti ti-lock"></i> Auth / JWT
+    </div>
+
+    <div class="sb-section">Operations</div>
+    <div class="nav-item" data-tab="backup" onclick="switchTab(this)">
+      <i class="ti ti-device-floppy"></i> Backup
+    </div>
+    <div class="nav-item" data-tab="status" onclick="switchTab(this)">
+      <i class="ti ti-activity"></i> Status
+    </div>
+    <div class="nav-item" data-tab="users" onclick="switchTab(this)">
+      <i class="ti ti-users"></i> Users
+    </div>
+
+    <div class="sb-footer">
+      <div class="info">
+        <div class="u" id="sbLogin">superadmin</div>
+        <div class="r">superuser</div>
+      </div>
+      <button class="btn-logout" title="Logout" onclick="doLogout()">
+        <i class="ti ti-logout"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="topbar">
+      <span class="page-title" id="pageTitle">Database connection</span>
+      <span class="status-pill" id="topPill">loading...</span>
+    </div>
+    <div class="content">
+
+      <!-- ── TAB: DATABASE ── -->
+      <div class="tab active" id="tab-database">
+        <div class="section">
+          <div class="section-label">PostgreSQL / SQLAlchemy</div>
+          <div id="cfg-database-fields">
+            <div style="color:var(--text3);font-size:11px">Loading...</div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Actions</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" onclick="testDb()"><i class="ti ti-plug"></i> Test connection</button>
+            <button class="btn primary" onclick="saveSection('database')"><i class="ti ti-check"></i> Save & apply</button>
+          </div>
+        </div>
+        <div class="log-box" id="db-log" style="display:none;margin-top:4px"></div>
+      </div>
+
+      <!-- ── TAB: VK ── -->
+      <div class="tab" id="tab-vk">
+        <div class="section">
+          <div class="section-label">VK API credentials</div>
+          <div id="cfg-vk-fields">
+            <div style="color:var(--text3);font-size:11px">Loading...</div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Actions</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" onclick="testVk()"><i class="ti ti-send"></i> Test API call</button>
+            <button class="btn primary" onclick="saveSection('vk')"><i class="ti ti-check"></i> Save</button>
+          </div>
+        </div>
+        <div class="log-box" id="vk-log" style="display:none;margin-top:4px"></div>
+      </div>
+
+      <!-- ── TAB: AUTH ── -->
+      <div class="tab" id="tab-auth">
+        <div class="section">
+          <div class="section-label">JWT / session keys</div>
+          <div id="cfg-auth-fields">
+            <div style="color:var(--text3);font-size:11px">Loading...</div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Rotate keys</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" onclick="rotateKey('SECRET_KEY')"><i class="ti ti-refresh"></i> Rotate SECRET_KEY</button>
+            <button class="btn" onclick="rotateKey('JWT_SECRET_KEY')"><i class="ti ti-refresh"></i> Rotate JWT_SECRET_KEY</button>
+          </div>
+          <p style="font-size:10px;color:var(--text3);margin-top:8px">
+            ⚠ Rotating keys will invalidate all active user sessions.
+          </p>
+        </div>
+        <div class="actions">
+          <button class="btn primary" onclick="saveSection('auth')"><i class="ti ti-check"></i> Save & apply</button>
+        </div>
+      </div>
+
+      <!-- ── TAB: BACKUP ── -->
+      <div class="tab" id="tab-backup">
+        <div class="section">
+          <div class="section-label">Create backup now</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" onclick="runBackup('quick')"><i class="ti ti-bolt"></i> Quick (main tables)</button>
+            <button class="btn" onclick="runBackup('full')"><i class="ti ti-database"></i> Full dump</button>
+          </div>
+          <div id="backup-progress" style="display:none;margin-top:12px">
+            <div class="progress-label" id="backup-progress-label">Running pg_dump...</div>
+            <div class="progress-bar"><div class="progress-fill" id="backup-fill"></div></div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Backup files</div>
+          <div id="backup-list">
+            <div style="color:var(--text3);font-size:11px">Loading...</div>
+          </div>
+          <div style="margin-top:10px">
+            <button class="btn small" onclick="loadBackups()"><i class="ti ti-refresh"></i> Refresh</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB: STATUS ── -->
+      <div class="tab" id="tab-status">
+        <div class="section">
+          <div class="section-label">Services</div>
+          <div id="status-list">
+            <div style="color:var(--text3);font-size:11px">Loading...</div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-label">Application log</div>
+          <div class="log-box" id="app-log" style="height:160px">
+            <span class="log-dim">No log data available.</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:14px">
+          <button class="btn" onclick="loadStatus()"><i class="ti ti-refresh"></i> Refresh</button>
+        </div>
+      </div>
+
+      <!-- ── TAB: USERS ── -->
+      <div class="tab" id="tab-users">
+        <div class="section">
+          <div class="section-label">System accounts</div>
+          <div id="users-table-wrap">
+            <div style="color:var(--text3);font-size:11px">Loading...</div>
+          </div>
+        </div>
+        <div class="section" style="margin-top:8px">
+          <div class="section-label">Superuser account</div>
+          <div style="font-size:11px;color:var(--text2);line-height:1.8">
+            Superuser credentials are stored in <code style="color:var(--text);background:var(--bg3);padding:1px 5px;border-radius:3px">.env</code> and cannot be changed here.<br>
+            Edit <code style="color:var(--text);background:var(--bg3);padding:1px 5px;border-radius:3px">SUPERADMIN_LOGIN</code> and <code style="color:var(--text);background:var(--bg3);padding:1px 5px;border-radius:3px">SUPERADMIN_PASSWORD</code> directly in the file.
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /shell -->
+
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+// Config
+// ══════════════════════════════════════════
+const BASE = '/superadmin/api';
+
+// Хранилище токена в памяти (не в localStorage — он не нужен для суперадмина)
+let SA_TOKEN = '';
+
+// Состояние полей (key → value введённый пользователем)
+const fieldValues = {};
+
+// ══════════════════════════════════════════
+// Auth
+// ══════════════════════════════════════════
+async function doLogin() {
+  const login    = document.getElementById('saLogin').value.trim();
+  const password = document.getElementById('saPassword').value;
+  const errEl    = document.getElementById('loginError');
+  const btn      = document.getElementById('loginBtn');
+
+  errEl.textContent = '';
+  if (!login || !password) { errEl.textContent = 'Enter login and password.'; return; }
+
+  btn.disabled = true; btn.textContent = 'Signing in...';
+
+  try {
+    const res  = await fetch(`${BASE}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ login, password })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.token) {
+      SA_TOKEN = data.token;
+      document.getElementById('sbLogin').textContent = login;
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('shell').classList.add('visible');
+      initPanel();
+    } else {
+      errEl.textContent = data.error || 'Authentication failed.';
+    }
+  } catch (e) {
+    errEl.textContent = 'Cannot reach the server.';
+  }
+
+  btn.disabled = false; btn.textContent = 'Sign in →';
+}
+
+function doLogout() {
+  SA_TOKEN = '';
+  document.getElementById('shell').classList.remove('visible');
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('saPassword').value = '';
+}
+
+// Enter key on login form
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && document.getElementById('loginScreen').style.display !== 'none') doLogin();
+});
+
+// ══════════════════════════════════════════
+// API helpers
+// ══════════════════════════════════════════
+async function api(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SA_TOKEN}` };
+  const res = await fetch(`${BASE}${path}`, { headers, ...opts });
+  if (res.status === 401) { doLogout(); throw new Error('Session expired'); }
+  return res;
+}
+
+// ══════════════════════════════════════════
+// Panel init — run once after login
+// ══════════════════════════════════════════
+function initPanel() {
+  loadConfig('database');
+  loadConfig('vk');
+  loadConfig('auth');
+  loadBackups();
+  loadStatus();
+  loadUsers();
+}
+
+// ══════════════════════════════════════════
+// Navigation
+// ══════════════════════════════════════════
+const TAB_TITLES = {
+  database: 'Database connection',
+  vk:       'VK Bot integration',
+  auth:     'Auth / JWT keys',
+  backup:   'Backup management',
+  status:   'System status',
+  users:    'User accounts'
+};
+
+function switchTab(el) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const id = el.dataset.tab;
+  document.getElementById('tab-' + id).classList.add('active');
+  document.getElementById('pageTitle').textContent = TAB_TITLES[id] || id;
+}
+
+// ══════════════════════════════════════════
+// Config sections — load & render
+// ══════════════════════════════════════════
+async function loadConfig(section) {
+  try {
+    const res  = await api(`/config/${section}`);
+    const data = await res.json();
+    renderConfigFields(section, data);
+  } catch (e) {
+    console.error('loadConfig error', section, e);
+  }
+}
+
+function renderConfigFields(section, data) {
+  const container = document.getElementById(`cfg-${section}-fields`);
+  if (!container) return;
+  container.innerHTML = '';
+
+  Object.entries(data).forEach(([key, info]) => {
+    fieldValues[key] = ''; // will be filled only when user types
+
+    const row = document.createElement('div');
+    row.className = 'cfg-row';
+
+    const label = document.createElement('span');
+    label.className = 'cfg-key';
+    label.textContent = key;
+
+    const input = document.createElement('input');
+    input.className = 'cfg-input' + (info.is_secret ? ' masked' : '');
+    input.type = info.is_secret ? 'password' : 'text';
+    input.placeholder = info.is_set ? '(currently set — type to change)' : '(not set)';
+    input.dataset.key = key;
+    // ✨ Вставка текущего значения, если оно передано сервером
+    if (info.value) {
+      input.value = info.value;
+    }
+    input.addEventListener('input', e => { fieldValues[key] = e.target.value; });
+
+    // Toggle visibility button for secrets
+    const ctrl = document.createElement('div');
+    ctrl.style.display = 'flex'; ctrl.style.gap = '5px'; ctrl.style.alignItems = 'center';
+
+    if (info.is_secret) {
+      const toggle = document.createElement('button');
+      toggle.className = 'btn-icon';
+      toggle.innerHTML = '<i class="ti ti-eye"></i>';
+      toggle.title = 'Toggle visibility';
+      toggle.onclick = () => {
+        const show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        input.classList.toggle('masked', !show);
+        toggle.innerHTML = show ? '<i class="ti ti-eye-off"></i>' : '<i class="ti ti-eye"></i>';
+      };
+      ctrl.appendChild(toggle);
+    }
+
+    const badge = document.createElement('span');
+    badge.className = 'cfg-badge ' + (info.is_set ? 'set' : 'unset');
+    badge.textContent = info.is_set ? 'set' : 'unset';
+    ctrl.appendChild(badge);
+
+    row.appendChild(label);
+    row.appendChild(input);
+    row.appendChild(ctrl);
+    container.appendChild(row);
+  });
+}
+
+// ══════════════════════════════════════════
+// Save section
+// ══════════════════════════════════════════
+async function saveSection(section) {
+  setPill('saving...', 'warn');
+
+  const inputs = document.querySelectorAll(`#cfg-${section}-fields .cfg-input`);
+  const tasks  = [];
+
+  inputs.forEach(input => {
+    const key = input.dataset.key;
+    const val = input.value.trim();
+    if (val) tasks.push({ key, value: val });
+  });
+
+  if (tasks.length === 0) {
+    toast('Nothing to save — no fields were changed.', 'warn');
+    setPill('no changes', '');
+    return;
+  }
+
+  let saved = 0;
+  for (const { key, value } of tasks) {
+    try {
+      const res = await api('/config', {
+        method: 'POST',
+        body: JSON.stringify({ key, value })
+      });
+      if (res.ok) saved++;
+      else {
+        const err = await res.json();
+        toast(`Error saving ${key}: ${err.error}`, 'err');
+      }
+    } catch (e) {
+      toast(`Network error saving ${key}`, 'err');
+    }
+  }
+
+  if (saved > 0) {
+    toast(`Saved ${saved} key(s). Restart Flask to apply.`, 'ok');
+    setPill('saved', 'ok');
+    // Reload config to update badges
+    loadConfig(section);
+  } else {
+    setPill('error', 'err');
+  }
+}
+
+// ══════════════════════════════════════════
+// Test DB
+// ══════════════════════════════════════════
+async function testDb() {
+  const log = document.getElementById('db-log');
+  log.style.display = 'block';
+  log.innerHTML = '<span class="log-dim">Connecting...</span>';
+
+  try {
+    const res  = await api('/status');
+    const data = await res.json();
+    if (data.database?.ok) {
+      log.innerHTML = '<span class="log-ok">✓ Connection OK — PostgreSQL responding</span>';
+    } else {
+      log.innerHTML = '<span class="log-err">✗ Connection failed — check DATABASE_URL</span>';
+    }
+  } catch (e) {
+    log.innerHTML = `<span class="log-err">✗ Error: ${e.message}</span>`;
+  }
+}
+
+// ══════════════════════════════════════════
+// Test VK
+// ══════════════════════════════════════════
+async function testVk() {
+  const log = document.getElementById('vk-log');
+  log.style.display = 'block';
+  log.innerHTML = '<span class="log-dim">Checking VK API...</span>';
+
+  try {
+    const res  = await api('/status');
+    const data = await res.json();
+    if (data.vk?.ok) {
+      log.innerHTML = '<span class="log-ok">✓ VK credentials are set</span>';
+    } else {
+      log.innerHTML = '<span class="log-err">✗ VK not configured — check VK_GROUP_ID and VK_ACCESS_TOKEN</span>';
+    }
+  } catch (e) {
+    log.innerHTML = `<span class="log-err">✗ Error: ${e.message}</span>`;
+  }
+}
+
+// ══════════════════════════════════════════
+// Rotate key
+// ══════════════════════════════════════════
+function rotateKey(key) {
+  if (!confirm(`Rotate ${key}?\n\nThis will invalidate all active user sessions.`)) return;
+
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let newKey = '';
+  for (let i = 0; i < 48; i++) newKey += chars[Math.floor(Math.random() * chars.length)];
+
+  // Fill the corresponding input
+  const input = document.querySelector(`[data-key="${key}"]`);
+  if (input) { input.value = newKey; input.type = 'text'; input.classList.remove('masked'); }
+
+  toast(`New ${key} generated — click "Save & apply" to write to .env`, 'ok');
+}
+
+// ══════════════════════════════════════════
+// Backups
+// ══════════════════════════════════════════
+async function loadBackups() {
+  const wrap = document.getElementById('backup-list');
+  try {
+    const res  = await api('/backups');
+    const data = await res.json();
+
+    if (!data.backups || data.backups.length === 0) {
+      wrap.innerHTML = '<span style="color:var(--text3);font-size:11px">No backup files found in /backend/backups/</span>';
+      return;
+    }
+
+    wrap.innerHTML = '';
+    data.backups.forEach(b => {
+      const row = document.createElement('div');
+      row.className = 'backup-row';
+
+      const info = document.createElement('div');
+      const d = new Date(b.modified * 1000);
+      info.innerHTML = `<div class="backup-name">${b.filename}</div>
+        <div class="backup-meta">${d.toLocaleString()} · ${b.size}</div>`;
+
+      const acts = document.createElement('div');
+      acts.className = 'backup-actions';
+
+      const dlBtn = document.createElement('button');
+      dlBtn.className = 'btn-icon';
+      dlBtn.title = 'Download';
+      dlBtn.innerHTML = '<i class="ti ti-download"></i>';
+      dlBtn.onclick = () => downloadBackup(b.filename);
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn-icon danger';
+      delBtn.title = 'Delete';
+      delBtn.innerHTML = '<i class="ti ti-trash"></i>';
+      delBtn.onclick = () => deleteBackup(b.filename, row);
+
+      acts.appendChild(dlBtn);
+      acts.appendChild(delBtn);
+      row.appendChild(info);
+      row.appendChild(acts);
+      wrap.appendChild(row);
+    });
+  } catch (e) {
+    wrap.innerHTML = `<span style="color:var(--red);font-size:11px">Error loading backups: ${e.message}</span>`;
+  }
+}
+
+async function runBackup(type) {
+  const prog  = document.getElementById('backup-progress');
+  const fill  = document.getElementById('backup-fill');
+  const label = document.getElementById('backup-progress-label');
+
+  prog.style.display = 'block';
+  fill.style.width = '0%';
+  label.textContent = `Running ${type === 'full' ? 'full dump' : 'quick backup'}...`;
+
+  // Fake progress bar while waiting for API
+  let pct = 0;
+  const iv = setInterval(() => {
+    pct = Math.min(pct + Math.random() * 12, 90);
+    fill.style.width = pct.toFixed(0) + '%';
+  }, 250);
+
+  try {
+    const res = await api('/backups/run', {
+      method: 'POST',
+      body: JSON.stringify({ type })
+    });
+    clearInterval(iv);
+    fill.style.width = '100%';
+
+    if (res.ok) {
+      const data = await res.json();
+      label.textContent = `✓ Done — ${data.filename || 'backup created'}`;
+      toast('Backup created successfully', 'ok');
+      setTimeout(() => { prog.style.display = 'none'; loadBackups(); }, 2000);
+    } else {
+      const err = await res.json();
+      label.textContent = `✗ Error: ${err.error || 'unknown'}`;
+      fill.style.width = '0%';
+    }
+  } catch (e) {
+    clearInterval(iv);
+    label.textContent = `✗ Network error: ${e.message}`;
+    fill.style.width = '0%';
+  }
+}
+
+function downloadBackup(filename) {
+  // Создаём временную ссылку с токеном в заголовке через fetch + blob
+  api(`/backups/download/${encodeURIComponent(filename)}`)
+    .then(r => { if (!r.ok) throw new Error('Download failed'); return r.blob(); })
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a   = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click();
+      URL.revokeObjectURL(url); document.body.removeChild(a);
+    })
+    .catch(e => toast('Download error: ' + e.message, 'err'));
+}
+
+async function deleteBackup(filename, rowEl) {
+  if (!confirm(`Delete ${filename}?`)) return;
+  try {
+    const res = await api(`/backups/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+    if (res.ok) { rowEl.remove(); toast(`Deleted ${filename}`, 'ok'); }
+    else { const err = await res.json(); toast(err.error, 'err'); }
+  } catch (e) { toast('Error: ' + e.message, 'err'); }
+}
+
+// ══════════════════════════════════════════
+// Status
+// ══════════════════════════════════════════
+async function loadStatus() {
+  const list = document.getElementById('status-list');
+  try {
+    const res  = await api('/status');
+    const data = await res.json();
+    list.innerHTML = '';
+
+    const items = [
+      { label: 'Flask API',      ok: true,           note: 'process running' },
+      { label: 'PostgreSQL',     ok: data.database?.ok,  note: data.database?.ok ? 'connected' : 'connection failed' },
+      { label: 'VK Bot webhook', ok: data.vk?.ok,    note: data.vk?.ok ? 'configured' : 'not configured — check VK tab' },
+      { label: 'Backup files',   ok: data.backup_count > 0, note: `${data.backup_count} file(s) in /backups` }
+    ];
+
+    // Update VK badge
+    document.getElementById('vkBadge').classList.toggle('visible', !data.vk?.ok);
+
+    // Update top pill
+    const allOk = items.every(i => i.ok);
+    setPill(allOk ? '● all systems ok' : '● issues detected', allOk ? 'ok' : 'warn');
+
+    items.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'status-row';
+      const cls = item.ok ? 'ok' : 'err';
+      row.innerHTML = `
+        <span class="status-dot ${cls}"></span>
+        <span class="status-key">${item.label}</span>
+        <span class="status-val" style="color:var(--${item.ok ? 'green' : 'red'})">${item.ok ? 'ok' : 'error'}</span>
+        <span class="status-note">${item.note}</span>
+      `;
+      list.appendChild(row);
+    });
+  } catch (e) {
+    list.innerHTML = `<span style="color:var(--red);font-size:11px">Status check failed: ${e.message}</span>`;
+  }
+}
+
+// ══════════════════════════════════════════
+// Users
+// ══════════════════════════════════════════
+async function loadUsers() {
+  const wrap = document.getElementById('users-table-wrap');
+  try {
+    const res  = await fetch('/api/users', {
+      headers: { 'Authorization': `Bearer ${SA_TOKEN}` }
+    });
+    if (!res.ok) throw new Error('Cannot load users from /api/users');
+    const users = await res.json();
+
+    const table = document.createElement('table');
+    table.className = 'users-table';
+    table.innerHTML = `<thead><tr>
+      <th>Login</th><th>Full name</th><th>Role</th>
+    </tr></thead>`;
+    const tbody = document.createElement('tbody');
+
+    // Superadmin row (virtual)
+    const suRow = tbody.insertRow();
+    suRow.innerHTML = `
+      <td>superadmin</td>
+      <td style="color:var(--text3)">System superuser</td>
+      <td><span class="role-tag su">superuser</span></td>
+    `;
+
+    users.forEach(u => {
+      const row = tbody.insertRow();
+      row.innerHTML = `
+        <td>${u.login}</td>
+        <td style="color:var(--text2)">${u.full_name || '—'}</td>
+        <td><span class="role-tag">${u.role || '—'}</span></td>
+      `;
+    });
+
+    table.appendChild(tbody);
+    wrap.innerHTML = '';
+    wrap.appendChild(table);
+  } catch (e) {
+    wrap.innerHTML = `<span style="color:var(--text3);font-size:11px">${e.message}</span>`;
+  }
+}
+
+// ══════════════════════════════════════════
+// UI helpers
+// ══════════════════════════════════════════
+function setPill(text, cls = '') {
+  const pill = document.getElementById('topPill');
+  pill.textContent = text;
+  pill.className = 'status-pill ' + cls;
+}
+
+let toastTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = 'toast'; }, 3500);
+}
+</script>
+</body>
+</html>

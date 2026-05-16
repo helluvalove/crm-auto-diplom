@@ -85,3 +85,6 @@ crypto_data_to_now.py
 password.py
 
 static
+
+backend\superadmin\__pycache__
+backend\__pycache__
