@@ -43,6 +43,8 @@ def vk_callback():
 
         if not msg_id or msg_id in _PROCESSED_MESSAGES:
             return 'ok', 200
+        if len(_PROCESSED_MESSAGES) > 5_000:
+            _PROCESSED_MESSAGES.clear()
         _PROCESSED_MESSAGES.add(msg_id)
 
         if user_id and text:
@@ -54,6 +56,8 @@ def vk_callback():
         event_id = event.get('event_id')
         if event_id in _PROCESSED_EVENTS:
             return 'ok', 200
+        if len(_PROCESSED_EVENTS) > 5_000:
+            _PROCESSED_EVENTS.clear()
         _PROCESSED_EVENTS.add(event_id)
         return process_event(event)
 

@@ -113,12 +113,12 @@ def process_event(event):
         if data:
             step = data.get('step')
             if step == 'time':
-                # Дата уже введена, передаём только дату
                 preferred_dt = data.get('date')
             else:
                 preferred_dt = None
-            if _create_order(user_id, client, data['car_id'], data['desc'], preferred_dt=preferred_dt):
-                _AWAITING_PREFERRED_TIME.pop(user_id, None)
+            # Сбрасываем состояние В ЛЮБОМ случае — и при успехе, и при ошибке
+            _AWAITING_PREFERRED_TIME.pop(user_id, None)
+            _create_order(user_id, client, data['car_id'], data['desc'], preferred_dt=preferred_dt)
 
     elif command == 'revoke_consent':
         if not client.phone:
