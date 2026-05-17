@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify, send_from_directory
 from .auth import check_superadmin_credentials, create_superadmin_token, require_superadmin
 from .config_manager import write_env_key, get_config_for_section, read_env
 
-superadmin_bp = Blueprint('superadmin', __name__, url_prefix='/superadmin')
+superadmin_bp = Blueprint('superadmin', __name__)
 
 FRONTEND_SUPERADMIN = os.path.join(
     os.path.dirname(__file__), '..', '..', 'frontend', 'superadmin'

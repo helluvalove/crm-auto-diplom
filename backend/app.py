@@ -34,7 +34,7 @@ def create_app():
     app.register_blueprint(orders_bp)
     app.register_blueprint(mechanics_bp)
     app.register_blueprint(backup_bp)
-    app.register_blueprint(superadmin_bp)
+    app.register_blueprint(superadmin_bp, url_prefix='/superadmin')
 
     # ========== НАСТРОЙКА ЛОГИРОВАНИЯ В ФАЙЛ ==========
     # Создаём папку logs в той же директории, где находится app.py (папка backend)
