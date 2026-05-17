@@ -1,952 +1,1654 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AutoCRM · Superadmin</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.7.0/dist/tabler-icons.min.css">
-<style>
-  :root {
-    --bg: #0d0d0d;
-    --bg2: #161616;
-    --bg3: #1e1e1e;
-    --border: #2a2a2a;
-    --border2: #333;
-    --text: #e8e8e8;
-    --text2: #888;
-    --text3: #555;
-    --accent: #e8e8e8;
-    --green: #22c55e;
-    --red: #ef4444;
-    --yellow: #eab308;
-    --blue: #3b82f6;
-    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-    --radius: 6px;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font-mono); font-size: 13px; }
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AutoCRM · System Administration</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.css">
+  <style>
+    body { background: #f8f9fa; }
+    code { color: #0d6efd; background: #e7f1ff; padding: 1px 5px; border-radius: 4px; font-size: .875em; }
 
-  /* ── Login screen ─────────────────────────────────────── */
-  #loginScreen {
-    display: flex; align-items: center; justify-content: center;
-    height: 100vh; flex-direction: column; gap: 0;
-  }
-  .login-box {
-    background: var(--bg2); border: 0.5px solid var(--border2);
-    border-radius: var(--radius); padding: 32px 36px; width: 320px;
-  }
-  .login-box h1 { font-size: 13px; font-weight: 500; color: var(--text2); letter-spacing: .12em; text-transform: uppercase; margin-bottom: 4px; }
-  .login-box p  { font-size: 11px; color: var(--text3); margin-bottom: 24px; }
-  .login-box label { display: block; font-size: 11px; color: var(--text2); margin-bottom: 5px; }
-  .login-box input {
-    width: 100%; background: var(--bg3); border: 0.5px solid var(--border2);
-    color: var(--text); font-family: var(--font-mono); font-size: 13px;
-    padding: 8px 10px; border-radius: var(--radius); outline: none;
-    transition: border-color .15s;
-  }
-  .login-box input:focus { border-color: var(--text3); }
-  .login-box .field { margin-bottom: 14px; }
-  .login-box .btn-login {
-    width: 100%; margin-top: 8px; padding: 9px;
-    background: var(--text); color: var(--bg); border: none;
-    font-family: var(--font-mono); font-size: 12px; font-weight: 500;
-    border-radius: var(--radius); cursor: pointer; letter-spacing: .05em;
-    transition: opacity .15s;
-  }
-  .login-box .btn-login:hover { opacity: .85; }
-  .login-box .btn-login:disabled { opacity: .4; cursor: not-allowed; }
-  .login-error { font-size: 11px; color: var(--red); margin-top: 10px; min-height: 16px; }
+    /* ── Login ── */
+    #loginScreen { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    #loginScreen .card { width: 380px; }
 
-  /* ── Shell layout ─────────────────────────────────────── */
-  #shell { display: none; height: 100vh; }
-  #shell.visible { display: flex; }
+    /* ── Shell ── */
+    #shell { display: none; }
+    #shell.visible { display: block; }
 
-  /* Sidebar */
-  .sidebar {
-    width: 196px; min-width: 196px;
-    background: var(--bg2); border-right: 0.5px solid var(--border);
-    display: flex; flex-direction: column; overflow: hidden;
-  }
-  .sb-header {
-    padding: 16px; border-bottom: 0.5px solid var(--border);
-    display: flex; flex-direction: column; gap: 2px;
-  }
-  .sb-header .brand { font-size: 12px; font-weight: 500; color: var(--text); letter-spacing: .04em; }
-  .sb-header .role  { font-size: 10px; color: var(--text3); }
-  .sb-section { font-size: 9px; color: var(--text3); letter-spacing: .12em; text-transform: uppercase; padding: 12px 16px 4px; }
-  .nav-item {
-    display: flex; align-items: center; gap: 9px;
-    padding: 7px 16px; color: var(--text2); cursor: pointer;
-    border-left: 2px solid transparent; font-size: 12px;
-    transition: color .12s, background .12s; user-select: none;
-  }
-  .nav-item:hover { color: var(--text); background: var(--bg3); }
-  .nav-item.active { color: var(--text); background: var(--bg3); border-left-color: var(--text2); }
-  .nav-item i { font-size: 15px; width: 16px; flex-shrink: 0; }
-  .nav-item .dot-badge {
-    margin-left: auto; width: 6px; height: 6px; border-radius: 50%;
-    background: var(--red); display: none;
-  }
-  .nav-item .dot-badge.visible { display: block; }
-  .sb-footer {
-    margin-top: auto; padding: 12px 16px; border-top: 0.5px solid var(--border);
-    display: flex; align-items: center; justify-content: space-between;
-  }
-  .sb-footer .info .u { font-size: 11px; color: var(--text2); }
-  .sb-footer .info .r { font-size: 10px; color: var(--text3); }
-  .btn-logout {
-    background: none; border: 0.5px solid var(--border2); border-radius: var(--radius);
-    color: var(--text3); font-size: 13px; padding: 4px 6px; cursor: pointer; line-height: 1;
-    transition: color .12s;
-  }
-  .btn-logout:hover { color: var(--red); border-color: var(--red); }
+    /* Sidebar layout */
+    .sa-layout { display: flex; min-height: calc(100vh - 60px); }
+    .sa-sidebar {
+      width: 220px; min-width: 220px; background: #fff;
+      border-right: 1px solid #dee2e6; flex-shrink: 0;
+      position: sticky; top: 60px; height: calc(100vh - 60px); overflow-y: auto;
+    }
+    .sa-main { flex: 1; padding: 24px; min-width: 0; }
 
-  /* Main area */
-  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-  .topbar {
-    padding: 11px 20px; border-bottom: 0.5px solid var(--border);
-    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
-  }
-  .topbar .page-title { font-size: 12px; color: var(--text); font-weight: 500; letter-spacing: .04em; }
-  .topbar .status-pill {
-    font-size: 10px; padding: 2px 10px; border-radius: 20px;
-    border: 0.5px solid var(--border2); color: var(--text3);
-    transition: all .2s;
-  }
-  .topbar .status-pill.ok    { color: var(--green); border-color: #22c55e44; }
-  .topbar .status-pill.warn  { color: var(--yellow); border-color: #eab30844; }
-  .topbar .status-pill.err   { color: var(--red); border-color: #ef444444; }
-  .content { flex: 1; overflow-y: auto; padding: 20px; }
+    /* Sidebar nav */
+    .sb-section {
+      font-size: 10px; font-weight: 600; color: #6c757d;
+      letter-spacing: .1em; text-transform: uppercase; padding: 16px 16px 6px;
+    }
+    .sb-item {
+      display: flex; align-items: center; gap: 9px;
+      padding: 8px 16px; color: #495057; font-size: 14px;
+      cursor: pointer; border-left: 3px solid transparent;
+      transition: background .12s, color .12s; user-select: none;
+    }
+    .sb-item:hover { background: #f8f9fa; color: #0d6efd; }
+    .sb-item.active { background: #e7f1ff; color: #0d6efd; border-left-color: #0d6efd; font-weight: 500; }
+    .sb-item i { font-size: 16px; width: 18px; flex-shrink: 0; }
+    .sb-divider { border-top: 1px solid #dee2e6; margin: 8px 0; }
 
-  /* Tabs */
-  .tab { display: none; }
-  .tab.active { display: block; }
+    /* Config rows */
+    .cfg-row {
+      display: grid; grid-template-columns: 200px 1fr auto;
+      align-items: center; gap: 10px;
+      padding: 8px 0; border-bottom: 1px solid #f0f0f0;
+    }
+    .cfg-row:last-child { border-bottom: none; }
+    .cfg-key { font-size: 13px; color: #495057; font-family: Consolas, monospace; }
+    .cfg-input { font-family: Consolas, monospace !important; font-size: 13px !important; }
 
-  /* Sections */
-  .section { margin-bottom: 24px; }
-  .section-label {
-    font-size: 9px; color: var(--text3); letter-spacing: .12em;
-    text-transform: uppercase; margin-bottom: 10px;
-  }
+    /* Backup list */
+    .backup-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid #f0f0f0; gap: 12px;
+    }
+    .backup-item:last-child { border-bottom: none; }
+    .backup-filename { font-family: monospace; font-size: 13px; color: #212529; }
+    .backup-meta { font-size: 12px; color: #6c757d; margin-top: 2px; }
 
-  /* Config field rows */
-  .cfg-row {
-    display: grid; grid-template-columns: 170px 1fr auto;
-    align-items: center; gap: 8px;
-    padding: 6px 0; border-bottom: 0.5px solid var(--border);
-  }
-  .cfg-row:last-child { border-bottom: none; }
-  .cfg-key  { font-size: 11px; color: var(--text2); }
-  .cfg-input {
-    background: var(--bg3); border: 0.5px solid var(--border);
-    color: var(--text); font-family: var(--font-mono); font-size: 11px;
-    padding: 5px 8px; border-radius: var(--radius); outline: none; width: 100%;
-    transition: border-color .12s;
-  }
-  .cfg-input:focus { border-color: var(--border2); }
-  .cfg-input.masked { -webkit-text-security: disc; letter-spacing: .1em; }
-  .cfg-badge {
-    font-size: 9px; padding: 2px 7px; border-radius: 3px;
-    border: 0.5px solid var(--border); color: var(--text3);
-    white-space: nowrap; flex-shrink: 0;
-  }
-  .cfg-badge.set   { color: var(--green); border-color: #22c55e44; }
-  .cfg-badge.unset { color: var(--red); border-color: #ef444444; }
+    /* Status rows */
+    .status-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 9px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px;
+    }
+    .status-row:last-child { border-bottom: none; }
+    .status-key { color: #495057; width: 180px; flex-shrink: 0; }
+    .status-note { color: #6c757d; font-size: 12px; margin-left: auto; }
 
-  /* Buttons */
-  .btn {
-    padding: 6px 14px; font-size: 11px; font-family: var(--font-mono);
-    border: 0.5px solid var(--border2); border-radius: var(--radius);
-    cursor: pointer; background: var(--bg3); color: var(--text2);
-    display: inline-flex; align-items: center; gap: 6px;
-    transition: color .12s, border-color .12s; white-space: nowrap;
-  }
-  .btn:hover { color: var(--text); border-color: var(--text3); }
-  .btn:disabled { opacity: .35; cursor: not-allowed; }
-  .btn.primary { background: var(--text); color: var(--bg); border-color: transparent; font-weight: 500; }
-  .btn.primary:hover { opacity: .85; }
-  .btn.danger { color: var(--red); border-color: #ef444433; }
-  .btn.danger:hover { border-color: var(--red); background: #ef444411; }
-  .btn.small { padding: 4px 8px; font-size: 10px; }
-  .btn i { font-size: 14px; }
+    /* Log box */
+    .log-box {
+      background: #f8f9fa; color: #212529; border-radius: 6px;
+      border: 1px solid #dee2e6;
+      padding: 12px 14px; font-family: Consolas, monospace;
+      font-size: 12px; line-height: 1.8; overflow-y: auto; white-space: pre-wrap;
+    }
+    .log-ok   { color: #198754; }
+    .log-err  { color: #dc3545; }
+    .log-warn { color: #856404; }
+    .log-dim  { color: #6c757d; }
 
-  .actions { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
+    /* ── API Monitor ── */
+    .api-endpoint-row {
+      border: 1px solid #dee2e6; border-radius: 8px; margin-bottom: 10px;
+      overflow: hidden; transition: box-shadow .15s;
+    }
+    .api-endpoint-row:hover { box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+    .api-endpoint-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; background: #fff; cursor: pointer;
+      user-select: none;
+    }
+    .api-endpoint-header:hover { background: #f8f9fa; }
+    .method-badge {
+      font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+      width: 46px; text-align: center; flex-shrink: 0; letter-spacing: .04em;
+    }
+    .method-GET    { background: #d1ecf1; color: #0c5460; }
+    .method-POST   { background: #d4edda; color: #155724; }
+    .method-PUT    { background: #fff3cd; color: #856404; }
+    .method-DELETE { background: #f8d7da; color: #721c24; }
+    .api-path { font-family: Consolas, monospace; font-size: 13px; color: #212529; flex: 1; }
+    .api-desc { font-size: 12px; color: #6c757d; }
+    .api-status-dot {
+      width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+      background: #dee2e6; transition: background .3s;
+    }
+    .api-status-dot.ok   { background: #198754; box-shadow: 0 0 6px #19875466; }
+    .api-status-dot.err  { background: #dc3545; box-shadow: 0 0 6px #dc354566; }
+    .api-status-dot.warn { background: #ffc107; box-shadow: 0 0 6px #ffc10766; }
+    .api-status-dot.checking { background: #0d6efd; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .api-status-text { font-size: 11px; color: #6c757d; width: 60px; text-align: right; flex-shrink: 0; }
+    .api-detail {
+      display: none; padding: 10px 14px 14px;
+      background: #f8f9fa; border-top: 1px solid #dee2e6;
+      font-size: 12px; color: #495057;
+    }
+    .api-detail.open { display: block; }
+    .api-response-box {
+      background: #f8f9fa; color: #212529; border-radius: 4px;
+      border: 1px solid #dee2e6;
+      padding: 8px 10px; font-family: Consolas, monospace; font-size: 11px;
+      line-height: 1.6; max-height: 160px; overflow-y: auto; white-space: pre-wrap;
+      margin-top: 8px;
+    }
+    .api-group-header {
+      font-size: 10px; font-weight: 600; color: #6c757d;
+      letter-spacing: .1em; text-transform: uppercase;
+      padding: 12px 0 6px; margin-bottom: 4px;
+      border-bottom: 1px solid #dee2e6;
+    }
 
-  /* Log box */
-  .log-box {
-    background: var(--bg); border: 0.5px solid var(--border);
-    border-radius: var(--radius); padding: 10px 12px;
-    font-size: 11px; line-height: 1.8; max-height: 160px;
-    overflow-y: auto; color: var(--text2); white-space: pre-wrap;
-  }
-  .log-ok   { color: var(--green); }
-  .log-err  { color: var(--red); }
-  .log-warn { color: var(--yellow); }
-  .log-dim  { color: var(--text3); }
+    /* ── Template editor ── */
+    .tpl-tabs { display: flex; gap: 0; border-bottom: 1px solid #dee2e6; margin-bottom: 0; }
+    .tpl-tab-btn {
+      padding: 8px 16px; font-size: 13px; color: #6c757d;
+      cursor: pointer; border-bottom: 2px solid transparent;
+      white-space: nowrap; transition: color .12s;
+      background: none; border-top: none; border-left: none; border-right: none;
+    }
+    .tpl-tab-btn:hover { color: #0d6efd; }
+    .tpl-tab-btn.active { color: #0d6efd; border-bottom-color: #0d6efd; font-weight: 500; }
+    .tpl-editor {
+      width: 100%; min-height: 420px; font-family: Consolas, monospace; font-size: 12px;
+      border: none; outline: none; padding: 14px; resize: vertical;
+      line-height: 1.6; color: #212529; background: #fff;
+    }
+    .tpl-preview-frame {
+      width: 100%; height: 420px; border: none; background: #fff;
+    }
+    .tpl-toolbar {
+      display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+      background: #f8f9fa; border-bottom: 1px solid #dee2e6;
+    }
+    .tpl-var-hint {
+      font-size: 11px; color: #6c757d;
+      font-family: Consolas, monospace;
+    }
+    .tpl-var-hint span {
+      display: inline-block; background: #e7f1ff; color: #0d6efd;
+      padding: 1px 5px; border-radius: 3px; margin: 1px 2px; font-size: 10px;
+    }
 
-  /* Backup list */
-  .backup-row {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 7px 0; border-bottom: 0.5px solid var(--border);
-    gap: 12px;
-  }
-  .backup-row:last-child { border-bottom: none; }
-  .backup-name { color: var(--text); font-size: 11px; }
-  .backup-meta { color: var(--text3); font-size: 10px; margin-top: 2px; }
-  .backup-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    /* Toast */
+    #saToast { position: fixed; bottom: 24px; right: 24px; z-index: 9999; min-width: 260px; }
+    .nav-pill-badge {
+      font-size: 11px; padding: 3px 10px; border-radius: 20px;
+      border: 1px solid rgba(255,255,255,.3); color: rgba(255,255,255,.85);
+    }
 
-  /* Status indicators */
-  .status-row {
-    display: flex; align-items: center; gap: 10px;
-    padding: 7px 0; border-bottom: 0.5px solid var(--border);
-    font-size: 12px;
-  }
-  .status-row:last-child { border-bottom: none; }
-  .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-  .status-dot.ok   { background: var(--green); box-shadow: 0 0 6px #22c55e66; }
-  .status-dot.err  { background: var(--red); box-shadow: 0 0 6px #ef444466; }
-  .status-dot.warn { background: var(--yellow); box-shadow: 0 0 6px #eab30866; }
-  .status-key  { color: var(--text2); width: 160px; flex-shrink: 0; }
-  .status-val  { color: var(--text); }
-  .status-note { color: var(--text3); font-size: 10px; margin-left: auto; }
+    /* Users table */
+    .users-table th { font-weight: 500; font-size: 12px; color: #6c757d; text-transform: uppercase; letter-spacing: .06em; }
+  </style>
+  </head>
+  <body>
 
-  /* Users table */
-  .users-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  .users-table th { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: .1em; font-weight: 400; text-align: left; padding: 0 0 8px; border-bottom: 0.5px solid var(--border); }
-  .users-table td { padding: 7px 0; border-bottom: 0.5px solid var(--border); color: var(--text2); vertical-align: middle; }
-  .users-table tr:last-child td { border-bottom: none; }
-  .users-table td:first-child { color: var(--text); }
-  .role-tag { font-size: 9px; padding: 2px 7px; border-radius: 3px; border: 0.5px solid var(--border2); color: var(--text3); }
-  .role-tag.su { color: var(--yellow); border-color: #eab30844; }
-
-  /* Progress */
-  .progress-wrap { margin-top: 10px; }
-  .progress-label { font-size: 11px; color: var(--text2); margin-bottom: 5px; }
-  .progress-bar { height: 2px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
-  .progress-fill { height: 100%; background: var(--text2); border-radius: 2px; transition: width .3s; width: 0%; }
-
-  /* Toast */
-  #toast {
-    position: fixed; bottom: 20px; right: 20px;
-    background: var(--bg2); border: 0.5px solid var(--border2);
-    border-radius: var(--radius); padding: 10px 16px;
-    font-size: 11px; color: var(--text2); display: none;
-    z-index: 999; max-width: 300px;
-  }
-  #toast.show { display: block; }
-  #toast.ok   { color: var(--green); border-color: #22c55e44; }
-  #toast.err  { color: var(--red); border-color: #ef444444; }
-
-  /* Icon button (no label) */
-  .btn-icon {
-    background: none; border: 0.5px solid var(--border);
-    border-radius: var(--radius); padding: 4px 6px; cursor: pointer;
-    color: var(--text3); font-size: 13px; line-height: 1;
-    transition: color .12s, border-color .12s;
-  }
-  .btn-icon:hover { color: var(--text); border-color: var(--border2); }
-  .btn-icon.danger:hover { color: var(--red); border-color: var(--red); }
-
-  /* Scrollbar */
-  ::-webkit-scrollbar { width: 4px; height: 4px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-</style>
-</head>
-<body>
-
-<!-- ══════════════════════ LOGIN ══════════════════════ -->
-<div id="loginScreen">
-  <div class="login-box">
-    <h1>AutoCRM</h1>
-    <p>System administration · superuser access</p>
-    <div class="field">
-      <label>Login</label>
-      <input type="text" id="saLogin" autocomplete="username" placeholder="superadmin" />
-    </div>
-    <div class="field">
-      <label>Password</label>
-      <input type="password" id="saPassword" autocomplete="current-password" placeholder="••••••••••••" />
-    </div>
-    <button class="btn-login" id="loginBtn" onclick="doLogin()">Sign in →</button>
-    <div class="login-error" id="loginError"></div>
-  </div>
-</div>
-
-<!-- ══════════════════════ SHELL ══════════════════════ -->
-<div id="shell">
-
-  <!-- Sidebar -->
-  <div class="sidebar">
-    <div class="sb-header">
-      <span class="brand">AutoCRM / sysadmin</span>
-      <span class="role">superuser · local session</span>
-    </div>
-
-    <div class="sb-section">Configuration</div>
-    <div class="nav-item active" data-tab="database" onclick="switchTab(this)">
-      <i class="ti ti-database"></i> Database
-    </div>
-    <div class="nav-item" data-tab="vk" onclick="switchTab(this)">
-      <i class="ti ti-brand-vk"></i> VK Bot
-      <span class="dot-badge" id="vkBadge"></span>
-    </div>
-    <div class="nav-item" data-tab="auth" onclick="switchTab(this)">
-      <i class="ti ti-lock"></i> Auth / JWT
-    </div>
-
-    <div class="sb-section">Operations</div>
-    <div class="nav-item" data-tab="backup" onclick="switchTab(this)">
-      <i class="ti ti-device-floppy"></i> Backup
-    </div>
-    <div class="nav-item" data-tab="status" onclick="switchTab(this)">
-      <i class="ti ti-activity"></i> Status
-    </div>
-    <div class="nav-item" data-tab="users" onclick="switchTab(this)">
-      <i class="ti ti-users"></i> Users
-    </div>
-
-    <div class="sb-footer">
-      <div class="info">
-        <div class="u" id="sbLogin">superadmin</div>
-        <div class="r">superuser</div>
+  <!-- ══════ LOGIN ══════ -->
+  <div id="loginScreen">
+    <div class="card shadow">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="bi bi-shield-lock"></i> System Administration</h5>
       </div>
-      <button class="btn-logout" title="Logout" onclick="doLogout()">
-        <i class="ti ti-logout"></i>
-      </button>
+      <div class="card-body p-4">
+        <p class="text-muted small mb-4">AutoCRM · Superuser access only</p>
+        <div class="mb-3">
+          <label class="form-label">Login</label>
+          <input type="text" class="form-control" id="saLogin" placeholder="" autocomplete="username">
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-control" id="saPassword" placeholder="" autocomplete="current-password">
+        </div>
+        <button class="btn btn-primary w-100" id="loginBtn" onclick="doLogin()">
+          <i class="bi bi-box-arrow-in-right"></i> Sign in
+        </button>
+        <div class="text-danger small mt-2" id="loginError" style="min-height:20px"></div>
+      </div>
     </div>
   </div>
 
-  <!-- Main -->
-  <div class="main">
-    <div class="topbar">
-      <span class="page-title" id="pageTitle">Database connection</span>
-      <span class="status-pill" id="topPill">loading...</span>
-    </div>
-    <div class="content">
+  <!-- ══════ SHELL ══════ -->
+  <div id="shell">
 
-      <!-- ── TAB: DATABASE ── -->
-      <div class="tab active" id="tab-database">
-        <div class="section">
-          <div class="section-label">PostgreSQL / SQLAlchemy</div>
-          <div id="cfg-database-fields">
-            <div style="color:var(--text3);font-size:11px">Loading...</div>
-          </div>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top" style="height:60px">
+      <div class="container-fluid px-4">
+        <span class="navbar-brand fw-semibold mb-0">
+          <i class="bi bi-tools"></i> CRM Автомастерская 43
+          <span class="badge bg-warning text-dark ms-2" style="font-size:10px">SYSADMIN</span>
+        </span>
+        <div class="ms-auto d-flex align-items-center gap-3">
+          <span class="nav-pill-badge" id="navPill">● checking...</span>
+          <span class="text-white-50 small" id="navUser">superadmin</span>
+          <button class="btn btn-sm btn-outline-light" onclick="doLogout()">
+            <i class="bi bi-box-arrow-right"></i> Logout
+          </button>
         </div>
-        <div class="section">
-          <div class="section-label">Actions</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn" onclick="testDb()"><i class="ti ti-plug"></i> Test connection</button>
-            <button class="btn primary" onclick="saveSection('database')"><i class="ti ti-check"></i> Save & apply</button>
-          </div>
-        </div>
-        <div class="log-box" id="db-log" style="display:none;margin-top:4px"></div>
       </div>
+    </nav>
 
-      <!-- ── TAB: VK ── -->
-      <div class="tab" id="tab-vk">
-        <div class="section">
-          <div class="section-label">VK API credentials</div>
-          <div id="cfg-vk-fields">
-            <div style="color:var(--text3);font-size:11px">Loading...</div>
-          </div>
-        </div>
-        <div class="section">
-          <div class="section-label">Actions</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn" onclick="testVk()"><i class="ti ti-send"></i> Test API call</button>
-            <button class="btn primary" onclick="saveSection('vk')"><i class="ti ti-check"></i> Save</button>
-          </div>
-        </div>
-        <div class="log-box" id="vk-log" style="display:none;margin-top:4px"></div>
-      </div>
+    <div class="sa-layout">
 
-      <!-- ── TAB: AUTH ── -->
-      <div class="tab" id="tab-auth">
-        <div class="section">
-          <div class="section-label">JWT / session keys</div>
-          <div id="cfg-auth-fields">
-            <div style="color:var(--text3);font-size:11px">Loading...</div>
-          </div>
+      <!-- ── Sidebar ── -->
+      <div class="sa-sidebar">
+        <div class="sb-section">Configuration</div>
+        <div class="sb-item active" data-tab="database" onclick="switchTab(this)">
+          <i class="bi bi-database"></i> Database
         </div>
-        <div class="section">
-          <div class="section-label">Rotate keys</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn" onclick="rotateKey('SECRET_KEY')"><i class="ti ti-refresh"></i> Rotate SECRET_KEY</button>
-            <button class="btn" onclick="rotateKey('JWT_SECRET_KEY')"><i class="ti ti-refresh"></i> Rotate JWT_SECRET_KEY</button>
-          </div>
-          <p style="font-size:10px;color:var(--text3);margin-top:8px">
-            ⚠ Rotating keys will invalidate all active user sessions.
+        <div class="sb-item" data-tab="vk" onclick="switchTab(this)">
+          <i class="bi bi-chat-dots"></i> VK Bot
+          <i class="bi bi-exclamation-circle text-danger ms-auto" id="vkAlert" style="display:none;font-size:13px"></i>
+        </div>
+        <div class="sb-item" data-tab="auth" onclick="switchTab(this)">
+          <i class="bi bi-key"></i> Auth / JWT
+        </div>
+        <div class="sb-divider"></div>
+        <div class="sb-section">Monitoring</div>
+        <div class="sb-item" data-tab="api" onclick="switchTab(this)">
+          <i class="bi bi-hdd-network"></i> API endpoints
+          <span class="badge bg-danger ms-auto" id="apiErrBadge" style="display:none;font-size:9px">!</span>
+        </div>
+        <div class="sb-item" data-tab="status" onclick="switchTab(this)">
+          <i class="bi bi-activity"></i> System status
+        </div>
+        <div class="sb-divider"></div>
+        <div class="sb-section">Operations</div>
+        <div class="sb-item" data-tab="templates" onclick="switchTab(this)">
+          <i class="bi bi-file-earmark-text"></i> Templates
+        </div>
+        <div class="sb-item" data-tab="privacy" onclick="switchTab(this)">
+          <i class="bi bi-shield-lock"></i> Privacy policy
+        </div>
+        <div class="sb-item" data-tab="backup" onclick="switchTab(this)">
+          <i class="bi bi-device-hdd"></i> Backup
+        </div>
+        <div class="sb-item" data-tab="users" onclick="switchTab(this)">
+          <i class="bi bi-people"></i> Users
+        </div>
+        <div class="sb-divider"></div>
+        <div class="px-3 pb-3">
+          <p class="text-muted mb-0" style="font-size:11px;line-height:1.6">
+            Changes to <code>.env</code> require Flask restart to take effect.
           </p>
         </div>
-        <div class="actions">
-          <button class="btn primary" onclick="saveSection('auth')"><i class="ti ti-check"></i> Save & apply</button>
-        </div>
       </div>
 
-      <!-- ── TAB: BACKUP ── -->
-      <div class="tab" id="tab-backup">
-        <div class="section">
-          <div class="section-label">Create backup now</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn" onclick="runBackup('quick')"><i class="ti ti-bolt"></i> Quick (main tables)</button>
-            <button class="btn" onclick="runBackup('full')"><i class="ti ti-database"></i> Full dump</button>
+      <!-- ── Main ── -->
+      <div class="sa-main">
+        <div class="mb-4">
+          <h5 class="fw-semibold mb-0" id="pageTitle">
+            <i class="bi bi-database me-2"></i>Database connection
+          </h5>
+        </div>
+
+        <!-- DATABASE -->
+        <div class="tab-sa" id="tab-database">
+          <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+              <h6 class="mb-0"><i class="bi bi-database-fill me-2"></i>PostgreSQL / SQLAlchemy</h6>
+            </div>
+            <div class="card-body">
+              <div id="cfg-database-fields"><p class="text-muted small mb-0">Loading...</p></div>
+            </div>
           </div>
-          <div id="backup-progress" style="display:none;margin-top:12px">
-            <div class="progress-label" id="backup-progress-label">Running pg_dump...</div>
-            <div class="progress-bar"><div class="progress-fill" id="backup-fill"></div></div>
+          <div class="card mb-3">
+            <div class="card-body d-flex gap-2 flex-wrap py-2">
+              <button class="btn btn-sm btn-outline-secondary" onclick="testDb()">
+                <i class="bi bi-plug me-1"></i>Test connection
+              </button>
+              <button class="btn btn-sm btn-primary" onclick="saveSection('database')">
+                <i class="bi bi-check-lg me-1"></i>Save &amp; apply
+              </button>
+            </div>
+          </div>
+          <div class="log-box" id="db-log" style="display:none;max-height:140px"></div>
+        </div>
+
+        <!-- VK -->
+        <div class="tab-sa" id="tab-vk" style="display:none">
+          <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+              <h6 class="mb-0"><i class="bi bi-chat-dots-fill me-2"></i>VK API credentials</h6>
+            </div>
+            <div class="card-body">
+              <div id="cfg-vk-fields"><p class="text-muted small mb-0">Loading...</p></div>
+            </div>
+          </div>
+          <div class="card mb-3">
+            <div class="card-body d-flex gap-2 flex-wrap py-2">
+              <button class="btn btn-sm btn-outline-secondary" onclick="testVk()">
+                <i class="bi bi-send me-1"></i>Test API access
+              </button>
+              <button class="btn btn-sm btn-primary" onclick="saveSection('vk')">
+                <i class="bi bi-check-lg me-1"></i>Save
+              </button>
+            </div>
+          </div>
+          <div class="log-box" id="vk-log" style="display:none;max-height:140px"></div>
+        </div>
+
+        <!-- AUTH -->
+        <div class="tab-sa" id="tab-auth" style="display:none">
+          <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+              <h6 class="mb-0"><i class="bi bi-key-fill me-2"></i>JWT / Session keys</h6>
+            </div>
+            <div class="card-body">
+              <div id="cfg-auth-fields"><p class="text-muted small mb-0">Loading...</p></div>
+            </div>
+          </div>
+          <div class="card mb-3">
+            <div class="card-header">
+              <h6 class="mb-0"><i class="bi bi-arrow-repeat me-2"></i>Rotate keys</h6>
+            </div>
+            <div class="card-body">
+              <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-sm btn-outline-warning" onclick="rotateKey('SECRET_KEY')">
+                  <i class="bi bi-arrow-repeat me-1"></i>Rotate SECRET_KEY
+                </button>
+                <button class="btn btn-sm btn-outline-warning" onclick="rotateKey('JWT_SECRET_KEY')">
+                  <i class="bi bi-arrow-repeat me-1"></i>Rotate JWT_SECRET_KEY
+                </button>
+              </div>
+              <div class="alert alert-warning py-2 mb-0 small">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                Rotating keys will <strong>invalidate all active user sessions</strong>.
+              </div>
+            </div>
+          </div>
+          <div class="d-flex justify-content-end">
+            <button class="btn btn-sm btn-primary" onclick="saveSection('auth')">
+              <i class="bi bi-check-lg me-1"></i>Save &amp; apply
+            </button>
           </div>
         </div>
-        <div class="section">
-          <div class="section-label">Backup files</div>
-          <div id="backup-list">
-            <div style="color:var(--text3);font-size:11px">Loading...</div>
+
+        <!-- ══════════════════════════════════════════════
+            API MONITOR
+        ══════════════════════════════════════════════ -->
+        <div class="tab-sa" id="tab-api" style="display:none">
+          <div class="card mb-3">
+            <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
+              <h6 class="mb-0"><i class="bi bi-hdd-network-fill me-2"></i>API endpoint health check</h6>
+              <div class="d-flex align-items-center gap-2">
+                <span class="text-white-50 small" id="apiLastCheck"></span>
+                <button class="btn btn-sm btn-outline-light" onclick="checkAllEndpoints()">
+                  <i class="bi bi-arrow-clockwise"></i> Check all
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <!-- Summary pills -->
+              <div class="d-flex gap-2 mb-4 flex-wrap">
+                <span class="badge bg-success fs-6 px-3 py-2" id="apiSummaryOk">— OK</span>
+                <span class="badge bg-danger fs-6 px-3 py-2" id="apiSummaryErr">— Error</span>
+                <span class="badge bg-secondary fs-6 px-3 py-2" id="apiSummaryPend">— Pending</span>
+              </div>
+
+              <!-- AUTH group -->
+              <div class="api-group-header">Authentication</div>
+              <div id="ep-auth-login" class="api-endpoint-row">
+                <div class="api-endpoint-header" onclick="toggleDetail('auth-login')">
+                  <span class="method-badge method-POST">POST</span>
+                  <span class="api-path">/api/auth/login</span>
+                  <span class="api-desc d-none d-md-inline">User authentication, JWT issue</span>
+                  <span class="api-status-dot ms-auto" id="dot-auth-login"></span>
+                  <span class="api-status-text" id="txt-auth-login">—</span>
+                  <i class="bi bi-chevron-down text-muted" style="font-size:11px" id="chev-auth-login"></i>
+                </div>
+                <div class="api-detail" id="detail-auth-login">
+                  <div class="d-flex gap-2 mb-2 flex-wrap">
+                    <button class="btn btn-sm btn-outline-primary" onclick="pingEndpoint('auth-login')">
+                      <i class="bi bi-play-fill me-1"></i>Run check
+                    </button>
+                  </div>
+                  <div class="text-muted small mb-1">Test: POST with demo credentials (will return 401 — that means the endpoint is alive)</div>
+                  <div class="api-response-box" id="resp-auth-login"><span style="color:#6c757d">No data yet</span></div>
+                </div>
+              </div>
+
+              <!-- CLIENTS group -->
+              <div class="api-group-header mt-3">Clients</div>
+              <div id="ep-clients-list" class="api-endpoint-row">
+                <div class="api-endpoint-header" onclick="toggleDetail('clients-list')">
+                  <span class="method-badge method-GET">GET</span>
+                  <span class="api-path">/api/clients</span>
+                  <span class="api-desc d-none d-md-inline">List all clients</span>
+                  <span class="api-status-dot ms-auto" id="dot-clients-list"></span>
+                  <span class="api-status-text" id="txt-clients-list">—</span>
+                  <i class="bi bi-chevron-down text-muted" style="font-size:11px" id="chev-clients-list"></i>
+                </div>
+                <div class="api-detail" id="detail-clients-list">
+                  <div class="d-flex gap-2 mb-2">
+                    <button class="btn btn-sm btn-outline-primary" onclick="pingEndpoint('clients-list')">
+                      <i class="bi bi-play-fill me-1"></i>Run check
+                    </button>
+                  </div>
+                  <div class="api-response-box" id="resp-clients-list"><span style="color:#6c757d">No data yet</span></div>
+                </div>
+              </div>
+
+              <!-- CARS group -->
+              <div class="api-group-header mt-3">Cars</div>
+              <div id="ep-cars-list" class="api-endpoint-row">
+                <div class="api-endpoint-header" onclick="toggleDetail('cars-list')">
+                  <span class="method-badge method-GET">GET</span>
+                  <span class="api-path">/api/cars</span>
+                  <span class="api-desc d-none d-md-inline">List all cars</span>
+                  <span class="api-status-dot ms-auto" id="dot-cars-list"></span>
+                  <span class="api-status-text" id="txt-cars-list">—</span>
+                  <i class="bi bi-chevron-down text-muted" style="font-size:11px" id="chev-cars-list"></i>
+                </div>
+                <div class="api-detail" id="detail-cars-list">
+                  <div class="d-flex gap-2 mb-2">
+                    <button class="btn btn-sm btn-outline-primary" onclick="pingEndpoint('cars-list')">
+                      <i class="bi bi-play-fill me-1"></i>Run check
+                    </button>
+                  </div>
+                  <div class="api-response-box" id="resp-cars-list"><span style="color:#6c757d">No data yet</span></div>
+                </div>
+              </div>
+
+              <!-- ORDERS group -->
+              <div class="api-group-header mt-3">Work orders</div>
+              <div id="ep-orders-list" class="api-endpoint-row">
+                <div class="api-endpoint-header" onclick="toggleDetail('orders-list')">
+                  <span class="method-badge method-GET">GET</span>
+                  <span class="api-path">/api/orders</span>
+                  <span class="api-desc d-none d-md-inline">Active work orders</span>
+                  <span class="api-status-dot ms-auto" id="dot-orders-list"></span>
+                  <span class="api-status-text" id="txt-orders-list">—</span>
+                  <i class="bi bi-chevron-down text-muted" style="font-size:11px" id="chev-orders-list"></i>
+                </div>
+                <div class="api-detail" id="detail-orders-list">
+                  <div class="d-flex gap-2 mb-2">
+                    <button class="btn btn-sm btn-outline-primary" onclick="pingEndpoint('orders-list')">
+                      <i class="bi bi-play-fill me-1"></i>Run check
+                    </button>
+                  </div>
+                  <div class="api-response-box" id="resp-orders-list"><span style="color:#6c757d">No data yet</span></div>
+                </div>
+              </div>
+              <div id="ep-orders-archive" class="api-endpoint-row">
+                <div class="api-endpoint-header" onclick="toggleDetail('orders-archive')">
+                  <span class="method-badge method-GET">GET</span>
+                  <span class="api-path">/api/orders/archive</span>
+                  <span class="api-desc d-none d-md-inline">Completed orders archive</span>
+                  <span class="api-status-dot ms-auto" id="dot-orders-archive"></span>
+                  <span class="api-status-text" id="txt-orders-archive">—</span>
+                  <i class="bi bi-chevron-down text-muted" style="font-size:11px" id="chev-orders-archive"></i>
+                </div>
+                <div class="api-detail" id="detail-orders-archive">
+                  <div class="d-flex gap-2 mb-2">
+                    <button class="btn btn-sm btn-outline-primary" onclick="pingEndpoint('orders-archive')">
+                      <i class="bi bi-play-fill me-1"></i>Run check
+                    </button>
+                  </div>
+                  <div class="api-response-box" id="resp-orders-archive"><span style="color:#6c757d">No data yet</span></div>
+                </div>
+              </div>
+
+              <!-- MECHANICS group -->
+              <div class="api-group-header mt-3">Mechanics</div>
+              <div id="ep-mechanics-list" class="api-endpoint-row">
+                <div class="api-endpoint-header" onclick="toggleDetail('mechanics-list')">
+                  <span class="method-badge method-GET">GET</span>
+                  <span class="api-path">/api/mechanics</span>
+                  <span class="api-desc d-none d-md-inline">Mechanics list</span>
+                  <span class="api-status-dot ms-auto" id="dot-mechanics-list"></span>
+                  <span class="api-status-text" id="txt-mechanics-list">—</span>
+                  <i class="bi bi-chevron-down text-muted" style="font-size:11px" id="chev-mechanics-list"></i>
+                </div>
+                <div class="api-detail" id="detail-mechanics-list">
+                  <div class="d-flex gap-2 mb-2">
+                    <button class="btn btn-sm btn-outline-primary" onclick="pingEndpoint('mechanics-list')">
+                      <i class="bi bi-play-fill me-1"></i>Run check
+                    </button>
+                  </div>
+                  <div class="api-response-box" id="resp-mechanics-list"><span style="color:#6c757d">No data yet</span></div>
+                </div>
+              </div>
+
+              <!-- VK group -->
+              <div class="api-group-header mt-3">VK Bot</div>
+              <div id="ep-vk-webhook" class="api-endpoint-row">
+                <div class="api-endpoint-header" onclick="toggleDetail('vk-webhook')">
+                  <span class="method-badge method-POST">POST</span>
+                  <span class="api-path">/vk/callback</span>
+                  <span class="api-desc d-none d-md-inline">VK webhook callback</span>
+                  <span class="api-status-dot ms-auto" id="dot-vk-webhook"></span>
+                  <span class="api-status-text" id="txt-vk-webhook">—</span>
+                  <i class="bi bi-chevron-down text-muted" style="font-size:11px" id="chev-vk-webhook"></i>
+                </div>
+                <div class="api-detail" id="detail-vk-webhook">
+                  <div class="d-flex gap-2 mb-2">
+                    <button class="btn btn-sm btn-outline-primary" onclick="pingEndpoint('vk-webhook')">
+                      <i class="bi bi-play-fill me-1"></i>Run check
+                    </button>
+                  </div>
+                  <div class="text-muted small mb-1">Test: GET request (405 = route registered, 404 = blueprint not mounted — check VK blueprint registration in app.py)</div>
+                  <div class="api-response-box" id="resp-vk-webhook"><span style="color:#6c757d">No data yet</span></div>
+                </div>
+              </div>
+
+            </div>
           </div>
-          <div style="margin-top:10px">
-            <button class="btn small" onclick="loadBackups()"><i class="ti ti-refresh"></i> Refresh</button>
+        </div>
+
+        <!-- STATUS -->
+        <div class="tab-sa" id="tab-status" style="display:none">
+          <div class="card mb-3">
+            <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
+              <h6 class="mb-0"><i class="bi bi-activity me-2"></i>Services</h6>
+              <button class="btn btn-sm btn-outline-light" onclick="loadStatus()">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+              </button>
+            </div>
+            <div class="card-body">
+              <div id="status-list"><p class="text-muted small mb-0">Loading...</p></div>
+            </div>
           </div>
+          <div class="card">
+            <div class="card-header">
+              <h6 class="mb-0"><i class="bi bi-terminal me-2"></i>Application log</h6>
+            </div>
+            <div class="card-body p-0">
+              <div class="log-box" id="app-log" style="max-height:200px;border-radius:0 0 .25rem .25rem">
+                <span class="log-dim">No log data available from this panel.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════
+            TEMPLATES
+        ══════════════════════════════════════════════ -->
+        <div class="tab-sa" id="tab-templates" style="display:none">
+          <div class="card">
+            <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
+              <h6 class="mb-0"><i class="bi bi-file-earmark-text-fill me-2"></i>Document templates (Jinja2 HTML)</h6>
+              <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-light" onclick="tplToggleView()" id="tplViewBtn">
+                  <i class="bi bi-eye me-1"></i>Preview
+                </button>
+                <button class="btn btn-sm btn-light text-primary fw-semibold" onclick="saveTpl()">
+                  <i class="bi bi-floppy me-1"></i>Save
+                </button>
+              </div>
+            </div>
+
+            <!-- Template selector tabs -->
+            <div class="tpl-tabs px-3 pt-1 bg-white border-bottom">
+              <button class="tpl-tab-btn active" onclick="loadTpl('predv_zakaznaryad', this)">
+                <i class="bi bi-file-earmark-plus me-1"></i>Предварительный заказ-наряд
+              </button>
+              <button class="tpl-tab-btn" onclick="loadTpl('itogoviy_zakaznaryad', this)">
+                <i class="bi bi-file-earmark-check me-1"></i>Итоговый заказ-наряд
+              </button>
+              <button class="tpl-tab-btn" onclick="loadTpl('akt_priema_peredachi', this)">
+                <i class="bi bi-file-earmark-ruled me-1"></i>Акт приёма-передачи
+              </button>
+            </div>
+
+            <!-- Variable hints -->
+            <div class="tpl-toolbar">
+              <span class="text-muted" style="font-size:11px;flex-shrink:0">Available variables:</span>
+              <div class="tpl-var-hint">
+                <span>{{ order.* }}</span>
+                <span>{{ client.* }}</span>
+                <span>{{ car.* }}</span>
+                <span>{{ manager.* }}</span>
+                <span>{{ mechanic.* }}</span>
+              </div>
+              <span class="ms-auto text-muted" style="font-size:10px" id="tplFilename">predv_zakaznaryad.html</span>
+            </div>
+
+            <!-- Editor -->
+            <div id="tplEditorWrap">
+              <textarea class="tpl-editor" id="tplEditor" spellcheck="false"></textarea>
+            </div>
+
+            <!-- Preview (hidden by default) -->
+            <div id="tplPreviewWrap" style="display:none">
+              <div class="alert alert-info py-2 mx-3 mt-2 small mb-2">
+                <i class="bi bi-info-circle me-1"></i>
+                Preview renders the raw template — Jinja2 variables like <code>{{ order.order_id }}</code> will show as-is (server renders the final PDF).
+              </div>
+              <iframe class="tpl-preview-frame" id="tplPreview"></iframe>
+            </div>
+
+            <div class="card-footer bg-white d-flex align-items-center justify-content-between">
+              <span class="text-muted small" id="tplSaveStatus">Not saved</span>
+              <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" onclick="resetTpl()">
+                  <i class="bi bi-arrow-counterclockwise me-1"></i>Reset changes
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="saveTpl()">
+                  <i class="bi bi-floppy me-1"></i>Save template
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BACKUP -->
+        <div class="tab-sa" id="tab-backup" style="display:none">
+          <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+              <h6 class="mb-0"><i class="bi bi-device-hdd-fill me-2"></i>Create backup</h6>
+            </div>
+            <div class="card-body">
+              <div class="d-flex gap-2 flex-wrap mb-3">
+                <button class="btn btn-sm btn-outline-primary" onclick="runBackup('quick')">
+                  <i class="bi bi-lightning me-1"></i>Quick (main tables)
+                </button>
+                <button class="btn btn-sm btn-outline-primary" onclick="runBackup('full')">
+                  <i class="bi bi-database me-1"></i>Full dump
+                </button>
+              </div>
+              <div id="backup-progress" style="display:none">
+                <div class="d-flex justify-content-between small text-muted mb-1">
+                  <span id="backup-progress-label">Running pg_dump...</span>
+                  <span id="backup-pct">0%</span>
+                </div>
+                <div class="progress" style="height:6px">
+                  <div class="progress-bar progress-bar-striped progress-bar-animated" id="backup-fill" style="width:0%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+              <h6 class="mb-0"><i class="bi bi-folder2-open me-2"></i>Backup files</h6>
+              <button class="btn btn-sm btn-outline-secondary" onclick="loadBackups()">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+              </button>
+            </div>
+            <div class="card-body">
+              <div id="backup-list"><p class="text-muted small mb-0">Loading...</p></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- USERS -->
+        <div class="tab-sa" id="tab-users" style="display:none">
+          <div class="card mb-3">
+            <div class="card-header bg-primary text-white">
+              <h6 class="mb-0"><i class="bi bi-people-fill me-2"></i>System accounts</h6>
+            </div>
+            <div class="card-body">
+              <div id="users-table-wrap"><p class="text-muted small mb-0">Loading...</p></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h6 class="mb-0"><i class="bi bi-shield-lock me-2"></i>Superuser account</h6>
+            </div>
+            <div class="card-body">
+              <p class="small text-muted mb-1">
+                Superuser credentials are stored in <code>.env</code> and cannot be changed from the panel.
+              </p>
+              <p class="small text-muted mb-0">
+                Edit <code>SUPERADMIN_LOGIN</code> and <code>SUPERADMIN_PASSWORD</code> directly in the file, then restart Flask.
+              </p>
+            </div>
+          </div>
+        </div>
+        
+              <!-- PRIVACY POLICY -->
+        <div class="tab-sa" id="tab-privacy" style="display:none">
+          <div class="card">
+            <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
+              <h6 class="mb-0"><i class="bi bi-shield-lock-fill me-2"></i>Соглашение о персональных данных (privacy.html)</h6>
+              <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-light" onclick="privacyToggleView()" id="privacyViewBtn">
+                  <i class="bi bi-eye me-1"></i>Preview
+                </button>
+                <button class="btn btn-sm btn-light text-primary fw-semibold" onclick="savePrivacy()">
+                  <i class="bi bi-floppy me-1"></i>Save
+                </button>
+              </div>
+            </div>
+
+            <!-- Toolbar with hints -->
+            <div class="tpl-toolbar">
+              <span class="text-muted" style="font-size:11px;flex-shrink:0">HTML document – full page</span>
+              <span class="ms-auto text-muted" style="font-size:10px" id="privacyFilename">privacy.html</span>
+            </div>
+
+            <!-- Editor panel -->
+            <div id="privacyEditorWrap">
+              <textarea class="tpl-editor" id="privacyEditor" spellcheck="false" rows="20"></textarea>
+            </div>
+
+            <!-- Preview panel (hidden by default) -->
+            <div id="privacyPreviewWrap" style="display:none">
+              <div class="alert alert-info py-2 mx-3 mt-2 small mb-2">
+                <i class="bi bi-info-circle me-1"></i>
+                Предварительный просмотр документа. Сохраните изменения, чтобы применить их на сайте.
+              </div>
+              <iframe class="tpl-preview-frame" id="privacyPreview" style="min-height:500px"></iframe>
+            </div>
+
+            <div class="card-footer bg-white d-flex align-items-center justify-content-between">
+              <span class="text-muted small" id="privacySaveStatus">Not saved</span>
+              <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" onclick="resetPrivacy()">
+                  <i class="bi bi-arrow-counterclockwise me-1"></i>Reset changes
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="savePrivacy()">
+                  <i class="bi bi-floppy me-1"></i>Save document
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /sa-main -->
+    </div><!-- /sa-layout -->
+  </div><!-- /shell -->
+
+  <!-- ══════ MODAL: Edit User ══════ -->
+  <div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:460px">
+      <div class="modal-content">
+        <div class="modal-header bg-primary text-white py-2">
+          <h6 class="modal-title mb-0" id="editUserModalLabel"><i class="bi bi-person-gear me-2"></i>Редактировать пользователя</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body pb-2">
+          <input type="hidden" id="editUserId">
+
+          <!-- Текущие данные (только просмотр) -->
+          <div class="alert alert-light border py-2 mb-3" style="font-size:12px">
+            <div class="fw-semibold text-muted mb-1" style="font-size:10px;text-transform:uppercase;letter-spacing:.07em">Текущие данные</div>
+            <div class="d-flex align-items-center gap-2 mb-1">
+              <span class="text-muted" style="width:80px;flex-shrink:0">Логин:</span>
+              <code id="viewUserLogin" class="text-primary">—</code>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <span class="text-muted" style="width:80px;flex-shrink:0">Пароль:</span>
+              <code id="viewUserPass" style="filter:blur(4px);transition:filter .2s;cursor:pointer;user-select:none"
+                title="Нажмите для просмотра"
+                onclick="this.style.filter=this.style.filter?'':'blur(4px)'">••••••••</code>
+              <button class="btn btn-sm btn-outline-secondary" style="padding:1px 6px;font-size:10px"
+                onclick="toggleViewPass()"><i class="bi bi-eye" id="viewPassIcon"></i></button>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Логин</label>
+            <input type="text" class="form-control form-control-sm" id="editUserLogin" autocomplete="off">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small fw-semibold">Полное имя</label>
+            <input type="text" class="form-control form-control-sm" id="editUserName">
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col">
+              <label class="form-label small fw-semibold">Роль</label>
+              <select class="form-select form-select-sm" id="editUserRole">
+                <option value="manager">manager</option>
+                <option value="mechanic">mechanic</option>
+              </select>
+            </div>
+            <div class="col">
+              <label class="form-label small fw-semibold">Телефон</label>
+              <input type="text" class="form-control form-control-sm" id="editUserPhone" placeholder="+7...">
+            </div>
+          </div>
+          <hr class="my-2">
+          <p class="small text-muted mb-2"><i class="bi bi-key me-1"></i>Новый пароль (оставьте пустым, чтобы не менять)</p>
+          <div class="row g-2 mb-2">
+            <div class="col">
+              <input type="password" class="form-control form-control-sm" id="editUserPass" placeholder="Новый пароль" autocomplete="new-password">
+            </div>
+            <div class="col">
+              <input type="password" class="form-control form-control-sm" id="editUserPass2" placeholder="Повторите пароль">
+            </div>
+          </div>
+          <div class="text-danger small" id="editUserErr" style="min-height:18px"></div>
+        </div>
+        <div class="modal-footer py-2">
+          <button class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
+          <button class="btn btn-sm btn-primary" onclick="saveUserEdit()">
+            <i class="bi bi-check-lg me-1"></i>Сохранить
+          </button>
         </div>
       </div>
+    </div>
+  </div>
 
-      <!-- ── TAB: STATUS ── -->
-      <div class="tab" id="tab-status">
-        <div class="section">
-          <div class="section-label">Services</div>
-          <div id="status-list">
-            <div style="color:var(--text3);font-size:11px">Loading...</div>
-          </div>
-        </div>
-        <div class="section">
-          <div class="section-label">Application log</div>
-          <div class="log-box" id="app-log" style="height:160px">
-            <span class="log-dim">No log data available.</span>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:14px">
-          <button class="btn" onclick="loadStatus()"><i class="ti ti-refresh"></i> Refresh</button>
-        </div>
+  <!-- Toast -->
+  <div id="saToast" style="display:none">
+    <div class="toast show align-items-center text-white border-0" id="toastEl" role="alert">
+      <div class="d-flex">
+        <div class="toast-body small fw-semibold" id="toastBody"></div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="hideToast()"></button>
       </div>
+    </div>
+  </div>
 
-      <!-- ── TAB: USERS ── -->
-      <div class="tab" id="tab-users">
-        <div class="section">
-          <div class="section-label">System accounts</div>
-          <div id="users-table-wrap">
-            <div style="color:var(--text3);font-size:11px">Loading...</div>
-          </div>
-        </div>
-        <div class="section" style="margin-top:8px">
-          <div class="section-label">Superuser account</div>
-          <div style="font-size:11px;color:var(--text2);line-height:1.8">
-            Superuser credentials are stored in <code style="color:var(--text);background:var(--bg3);padding:1px 5px;border-radius:3px">.env</code> and cannot be changed here.<br>
-            Edit <code style="color:var(--text);background:var(--bg3);padding:1px 5px;border-radius:3px">SUPERADMIN_LOGIN</code> and <code style="color:var(--text);background:var(--bg3);padding:1px 5px;border-radius:3px">SUPERADMIN_PASSWORD</code> directly in the file.
-          </div>
-        </div>
-      </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+  // ═══════════════════════════════════════════════════════════════
+  // Config
+  // ═══════════════════════════════════════════════════════════════
+  const BASE = '/superadmin/api';
+  let SA_TOKEN = '';
 
-    </div><!-- /content -->
-  </div><!-- /main -->
-</div><!-- /shell -->
+  const TAB_TITLES = {
+    database:  '<i class="bi bi-database me-2"></i>Database connection',
+    vk:        '<i class="bi bi-chat-dots me-2"></i>VK Bot integration',
+    auth:      '<i class="bi bi-key me-2"></i>Auth / JWT keys',
+    api:       '<i class="bi bi-hdd-network me-2"></i>API endpoint monitor',
+    status:    '<i class="bi bi-activity me-2"></i>System status',
+    templates: '<i class="bi bi-file-earmark-text me-2"></i>Document templates',
+    backup:    '<i class="bi bi-device-hdd me-2"></i>Backup management',
+    users:     '<i class="bi bi-people me-2"></i>User accounts',
+    privacy:  '<i class="bi bi-shield-lock me-2"></i>Privacy policy',
+  };
 
-<div id="toast"></div>
+  // ═══════════════════════════════════════════════════════════════
+  // Auth
+  // ═══════════════════════════════════════════════════════════════
+  async function doLogin() {
+    const login    = document.getElementById('saLogin').value.trim();
+    const password = document.getElementById('saPassword').value;
+    const errEl    = document.getElementById('loginError');
+    const btn      = document.getElementById('loginBtn');
 
-<script>
-// ══════════════════════════════════════════
-// Config
-// ══════════════════════════════════════════
-const BASE = '/superadmin/api';
+    errEl.textContent = '';
+    if (!login || !password) { errEl.textContent = 'Enter login and password.'; return; }
 
-// Хранилище токена в памяти (не в localStorage — он не нужен для суперадмина)
-let SA_TOKEN = '';
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Signing in...';
 
-// Состояние полей (key → value введённый пользователем)
-const fieldValues = {};
-
-// ══════════════════════════════════════════
-// Auth
-// ══════════════════════════════════════════
-async function doLogin() {
-  const login    = document.getElementById('saLogin').value.trim();
-  const password = document.getElementById('saPassword').value;
-  const errEl    = document.getElementById('loginError');
-  const btn      = document.getElementById('loginBtn');
-
-  errEl.textContent = '';
-  if (!login || !password) { errEl.textContent = 'Enter login and password.'; return; }
-
-  btn.disabled = true; btn.textContent = 'Signing in...';
-
-  try {
-    const res  = await fetch(`${BASE}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ login, password })
-    });
-    const data = await res.json();
-
-    if (res.ok && data.token) {
-      SA_TOKEN = data.token;
-      document.getElementById('sbLogin').textContent = login;
-      document.getElementById('loginScreen').style.display = 'none';
-      document.getElementById('shell').classList.add('visible');
-      initPanel();
-    } else {
-      errEl.textContent = data.error || 'Authentication failed.';
-    }
-  } catch (e) {
-    errEl.textContent = 'Cannot reach the server.';
-  }
-
-  btn.disabled = false; btn.textContent = 'Sign in →';
-}
-
-function doLogout() {
-  SA_TOKEN = '';
-  document.getElementById('shell').classList.remove('visible');
-  document.getElementById('loginScreen').style.display = 'flex';
-  document.getElementById('saPassword').value = '';
-}
-
-// Enter key on login form
-document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && document.getElementById('loginScreen').style.display !== 'none') doLogin();
-});
-
-// ══════════════════════════════════════════
-// API helpers
-// ══════════════════════════════════════════
-async function api(path, opts = {}) {
-  const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SA_TOKEN}` };
-  const res = await fetch(`${BASE}${path}`, { headers, ...opts });
-  if (res.status === 401) { doLogout(); throw new Error('Session expired'); }
-  return res;
-}
-
-// ══════════════════════════════════════════
-// Panel init — run once after login
-// ══════════════════════════════════════════
-function initPanel() {
-  loadConfig('database');
-  loadConfig('vk');
-  loadConfig('auth');
-  loadBackups();
-  loadStatus();
-  loadUsers();
-}
-
-// ══════════════════════════════════════════
-// Navigation
-// ══════════════════════════════════════════
-const TAB_TITLES = {
-  database: 'Database connection',
-  vk:       'VK Bot integration',
-  auth:     'Auth / JWT keys',
-  backup:   'Backup management',
-  status:   'System status',
-  users:    'User accounts'
-};
-
-function switchTab(el) {
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  el.classList.add('active');
-  const id = el.dataset.tab;
-  document.getElementById('tab-' + id).classList.add('active');
-  document.getElementById('pageTitle').textContent = TAB_TITLES[id] || id;
-}
-
-// ══════════════════════════════════════════
-// Config sections — load & render
-// ══════════════════════════════════════════
-async function loadConfig(section) {
-  try {
-    const res  = await api(`/config/${section}`);
-    const data = await res.json();
-    renderConfigFields(section, data);
-  } catch (e) {
-    console.error('loadConfig error', section, e);
-  }
-}
-
-function renderConfigFields(section, data) {
-  const container = document.getElementById(`cfg-${section}-fields`);
-  if (!container) return;
-  container.innerHTML = '';
-
-  Object.entries(data).forEach(([key, info]) => {
-    fieldValues[key] = ''; // will be filled only when user types
-
-    const row = document.createElement('div');
-    row.className = 'cfg-row';
-
-    const label = document.createElement('span');
-    label.className = 'cfg-key';
-    label.textContent = key;
-
-    const input = document.createElement('input');
-    input.className = 'cfg-input' + (info.is_secret ? ' masked' : '');
-    input.type = info.is_secret ? 'password' : 'text';
-    input.placeholder = info.is_set ? '(currently set — type to change)' : '(not set)';
-    input.dataset.key = key;
-    // ✨ Вставка текущего значения, если оно передано сервером
-    if (info.value) {
-      input.value = info.value;
-    }
-    input.addEventListener('input', e => { fieldValues[key] = e.target.value; });
-
-    // Toggle visibility button for secrets
-    const ctrl = document.createElement('div');
-    ctrl.style.display = 'flex'; ctrl.style.gap = '5px'; ctrl.style.alignItems = 'center';
-
-    if (info.is_secret) {
-      const toggle = document.createElement('button');
-      toggle.className = 'btn-icon';
-      toggle.innerHTML = '<i class="ti ti-eye"></i>';
-      toggle.title = 'Toggle visibility';
-      toggle.onclick = () => {
-        const show = input.type === 'password';
-        input.type = show ? 'text' : 'password';
-        input.classList.toggle('masked', !show);
-        toggle.innerHTML = show ? '<i class="ti ti-eye-off"></i>' : '<i class="ti ti-eye"></i>';
-      };
-      ctrl.appendChild(toggle);
-    }
-
-    const badge = document.createElement('span');
-    badge.className = 'cfg-badge ' + (info.is_set ? 'set' : 'unset');
-    badge.textContent = info.is_set ? 'set' : 'unset';
-    ctrl.appendChild(badge);
-
-    row.appendChild(label);
-    row.appendChild(input);
-    row.appendChild(ctrl);
-    container.appendChild(row);
-  });
-}
-
-// ══════════════════════════════════════════
-// Save section
-// ══════════════════════════════════════════
-async function saveSection(section) {
-  setPill('saving...', 'warn');
-
-  const inputs = document.querySelectorAll(`#cfg-${section}-fields .cfg-input`);
-  const tasks  = [];
-
-  inputs.forEach(input => {
-    const key = input.dataset.key;
-    const val = input.value.trim();
-    if (val) tasks.push({ key, value: val });
-  });
-
-  if (tasks.length === 0) {
-    toast('Nothing to save — no fields were changed.', 'warn');
-    setPill('no changes', '');
-    return;
-  }
-
-  let saved = 0;
-  for (const { key, value } of tasks) {
     try {
-      const res = await api('/config', {
+      const res  = await fetch(`${BASE}/login`, {
         method: 'POST',
-        body: JSON.stringify({ key, value })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ login, password })
       });
-      if (res.ok) saved++;
-      else {
-        const err = await res.json();
-        toast(`Error saving ${key}: ${err.error}`, 'err');
+      const data = await res.json();
+      if (res.ok && data.token) {
+        SA_TOKEN = data.token;
+        document.getElementById('navUser').textContent = login;
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('shell').classList.add('visible');
+        initPanel();
+      } else {
+        errEl.textContent = data.error || 'Authentication failed.';
+      }
+    } catch {
+      errEl.textContent = 'Cannot reach the server. Is Flask running?';
+    }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-box-arrow-in-right"></i> Sign in';
+  }
+
+  function doLogout() {
+    SA_TOKEN = '';
+    document.getElementById('shell').classList.remove('visible');
+    document.getElementById('loginScreen').style.display = 'flex';
+    document.getElementById('saPassword').value = '';
+    document.getElementById('loginError').textContent = '';
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && document.getElementById('loginScreen').style.display !== 'none') doLogin();
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // API helper
+  // ═══════════════════════════════════════════════════════════════
+  async function api(path, opts = {}) {
+    const res = await fetch(`${BASE}${path}`, {
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SA_TOKEN}` },
+      ...opts
+    });
+    if (res.status === 401) { doLogout(); throw new Error('Session expired'); }
+    return res;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // Init
+  // ═══════════════════════════════════════════════════════════════
+  function initPanel() {
+    loadConfig('database');
+    loadConfig('vk');
+    loadConfig('auth');
+    loadBackups();
+    loadStatus();
+    loadUsers();
+    loadTpl('predv_zakaznaryad', document.querySelector('.tpl-tab-btn'));
+    loadPrivacy();
+    checkAllEndpoints();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // Navigation
+  // ═══════════════════════════════════════════════════════════════
+  function switchTab(el) {
+    document.querySelectorAll('.sb-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.tab-sa').forEach(t => t.style.display = 'none');
+    el.classList.add('active');
+    const id = el.dataset.tab;
+    document.getElementById('tab-' + id).style.display = 'block';
+    document.getElementById('pageTitle').innerHTML = TAB_TITLES[id] || id;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // Config fields
+  // ═══════════════════════════════════════════════════════════════
+  async function loadConfig(section) {
+    try {
+      const res  = await api(`/config/${section}`);
+      const data = await res.json();
+      renderConfigFields(section, data);
+    } catch (e) { console.error('loadConfig', section, e); }
+  }
+
+  function renderConfigFields(section, data) {
+    const container = document.getElementById(`cfg-${section}-fields`);
+    if (!container) return;
+    container.innerHTML = '';
+    Object.entries(data).forEach(([key, info]) => {
+      const row = document.createElement('div');
+      row.className = 'cfg-row';
+      const label = document.createElement('div');
+      label.className = 'cfg-key'; label.textContent = key;
+      const input = document.createElement('input');
+      input.className = 'form-control form-control-sm cfg-input';
+      input.type = info.is_secret ? 'password' : 'text';
+      input.placeholder = info.is_set ? '(currently set — type to change)' : '(not set)';
+      input.dataset.key = key;
+      input.value = info.value || '';
+      const ctrl = document.createElement('div');
+      ctrl.className = 'd-flex align-items-center gap-2';
+      if (info.is_secret) {
+        const toggle = document.createElement('button');
+        toggle.className = 'btn btn-sm btn-outline-secondary';
+        toggle.style.padding = '2px 7px'; toggle.title = 'Toggle visibility';
+        toggle.innerHTML = '<i class="bi bi-eye"></i>';
+        toggle.onclick = () => {
+          const show = input.type === 'password';
+          input.type = show ? 'text' : 'password';
+          toggle.innerHTML = show ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+        };
+        ctrl.appendChild(toggle);
+      }
+      const badge = document.createElement('span');
+      badge.className = 'badge ' + (info.is_set ? 'bg-success' : 'bg-danger');
+      badge.style.fontSize = '10px'; badge.textContent = info.is_set ? 'set' : 'unset';
+      ctrl.appendChild(badge);
+      row.appendChild(label); row.appendChild(input); row.appendChild(ctrl);
+      container.appendChild(row);
+    });
+  }
+
+  async function saveSection(section) {
+    const inputs = document.querySelectorAll(`#cfg-${section}-fields .cfg-input`);
+    const tasks  = [];
+    inputs.forEach(input => {
+      if (input.value.trim()) tasks.push({ key: input.dataset.key, value: input.value.trim() });
+    });
+    if (!tasks.length) { showToast('Nothing changed — no fields were filled in.', 'secondary'); return; }
+    let saved = 0;
+    for (const { key, value } of tasks) {
+      try {
+        const res = await api('/config', { method: 'POST', body: JSON.stringify({ key, value }) });
+        if (res.ok) saved++;
+        else { const err = await res.json(); showToast(`Error saving ${key}: ${err.error}`, 'danger'); }
+      } catch (e) { showToast('Network error: ' + e.message, 'danger'); }
+    }
+    if (saved > 0) { showToast(`Saved ${saved} key(s). Restart Flask to apply.`, 'success'); loadConfig(section); }
+  }
+
+  async function testDb() {
+    const log = document.getElementById('db-log');
+    log.style.display = 'block';
+    log.innerHTML = '<span class="log-dim">Connecting to database...</span>';
+    try {
+      const res  = await api('/status');
+      const data = await res.json();
+      log.innerHTML = data.database?.ok
+        ? '<span class="log-ok">✓ Connection OK — PostgreSQL is responding</span>'
+        : '<span class="log-err">✗ Connection failed — check DATABASE_URL in .env</span>';
+    } catch (e) { log.innerHTML = `<span class="log-err">✗ Error: ${e.message}</span>`; }
+  }
+
+  async function testVk() {
+    const log = document.getElementById('vk-log');
+    log.style.display = 'block';
+    log.innerHTML = '<span class="log-dim">Checking VK API credentials...</span>';
+    try {
+      const res  = await api('/status');
+      const data = await res.json();
+      log.innerHTML = data.vk?.ok
+        ? '<span class="log-ok">✓ VK credentials are configured</span>'
+        : '<span class="log-err">✗ VK not configured — set VK_GROUP_ID and VK_ACCESS_TOKEN</span>';
+    } catch (e) { log.innerHTML = `<span class="log-err">✗ Error: ${e.message}</span>`; }
+  }
+
+  function rotateKey(key) {
+    if (!confirm(`Rotate ${key}?\n\nThis will invalidate all active user sessions after you save and restart Flask.`)) return;
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let val = '';
+    for (let i = 0; i < 48; i++) val += chars[Math.floor(Math.random() * chars.length)];
+    const input = document.querySelector(`[data-key="${key}"]`);
+    if (input) { input.value = val; input.type = 'text'; }
+    showToast(`New ${key} generated — click "Save & apply" to write to .env`, 'warning');
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // API ENDPOINT MONITOR
+  // ═══════════════════════════════════════════════════════════════
+
+  // Описание эндпоинтов: id → { method, path, authRequired, okStatuses, checkBody }
+  const ENDPOINTS = {
+    'auth-login':    { method: 'POST', path: '/api/auth/login',  auth: false, okOn: [401, 200], body: JSON.stringify({login:'_test_',password:'_test_'}) },
+    'clients-list':  { method: 'GET',  path: '/api/clients',     auth: true,  okOn: [200] },
+    'cars-list':     { method: 'GET',  path: '/api/cars',        auth: true,  okOn: [200] },
+    'orders-list':   { method: 'GET',  path: '/api/orders',      auth: true,  okOn: [200] },
+    'orders-archive':{ method: 'GET',  path: '/api/orders/archive', auth: true, okOn: [200] },
+    'mechanics-list':{ method: 'GET',  path: '/api/mechanics',   auth: true,  okOn: [200] },
+    'vk-webhook':    { method: 'GET',  path: '/vk/callback',     auth: false, okOn: [405, 200, 400, 404] },
+  };
+
+  const epState = {}; // id → { status, ms, lastCheck }
+
+  async function pingEndpoint(id) {
+    const ep    = ENDPOINTS[id];
+    if (!ep) return;
+    setDot(id, 'checking', '...');
+    const start = Date.now();
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (ep.auth) headers['Authorization'] = `Bearer ${SA_TOKEN}`;
+      const opts = { method: ep.method, headers };
+      if (ep.body) opts.body = ep.body;
+      const res  = await fetch(ep.path, opts);
+      const ms   = Date.now() - start;
+      const ok   = ep.okOn.includes(res.status);
+
+      let bodyText = '';
+      try {
+        const clone = res.clone();
+        const json  = await clone.json();
+        bodyText = JSON.stringify(json, null, 2);
+      } catch {
+        bodyText = await res.text();
+      }
+
+      setDot(id, ok ? 'ok' : 'err', `${res.status} · ${ms}ms`);
+      setResp(id, ok, res.status, ms, bodyText);
+      epState[id] = { ok, ms, status: res.status };
+    } catch (e) {
+      const ms = Date.now() - start;
+      setDot(id, 'err', 'error');
+      setResp(id, false, 0, ms, `Network error: ${e.message}`);
+      epState[id] = { ok: false, ms, status: 0 };
+    }
+    updateSummary();
+  }
+
+  async function checkAllEndpoints() {
+    document.getElementById('apiLastCheck').textContent = 'Checking...';
+    // Run in parallel
+    await Promise.all(Object.keys(ENDPOINTS).map(id => pingEndpoint(id)));
+    const now = new Date().toLocaleTimeString('ru');
+    document.getElementById('apiLastCheck').textContent = `Last check: ${now}`;
+    updateSummary();
+  }
+
+  function updateSummary() {
+    const states = Object.values(epState);
+    const ok   = states.filter(s => s.ok).length;
+    const err  = states.filter(s => !s.ok && s.status !== undefined).length;
+    const pend = Object.keys(ENDPOINTS).length - states.length;
+    document.getElementById('apiSummaryOk').textContent   = `${ok} OK`;
+    document.getElementById('apiSummaryErr').textContent  = `${err} Error`;
+    document.getElementById('apiSummaryPend').textContent = `${pend} Pending`;
+    // Sidebar badge
+    const errBadge = document.getElementById('apiErrBadge');
+    errBadge.style.display = err > 0 ? 'inline' : 'none';
+    if (err > 0) errBadge.textContent = err;
+  }
+
+  function setDot(id, cls, text) {
+    const dot = document.getElementById('dot-' + id);
+    const txt = document.getElementById('txt-' + id);
+    if (dot) { dot.className = 'api-status-dot ' + cls; }
+    if (txt) { txt.textContent = text; txt.style.color = cls === 'ok' ? '#198754' : cls === 'err' ? '#dc3545' : '#6c757d'; }
+  }
+
+  function setResp(id, ok, status, ms, body) {
+    const box = document.getElementById('resp-' + id);
+    if (!box) return;
+    const colorCls = ok ? 'log-ok' : 'log-err';
+    const icon     = ok ? '✓' : '✗';
+    const preview  = body.length > 800 ? body.slice(0, 800) + '\n... (truncated)' : body;
+    box.innerHTML  = `<span class="${colorCls}">${icon} HTTP ${status} · ${ms}ms</span>\n<span style="color:#6c757d">─────────────────</span>\n${escHtml(preview)}`;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function toggleDetail(id) {
+    const detail = document.getElementById('detail-' + id);
+    const chev   = document.getElementById('chev-' + id);
+    if (!detail) return;
+    const open = detail.classList.toggle('open');
+    if (chev) chev.style.transform = open ? 'rotate(180deg)' : '';
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // STATUS
+  // ═══════════════════════════════════════════════════════════════
+  async function loadStatus() {
+    const list = document.getElementById('status-list');
+    try {
+      const res  = await api('/status');
+      const data = await res.json();
+      list.innerHTML = '';
+      const items = [
+        { label: 'Flask API',    ok: true,              note: 'process running' },
+        { label: 'PostgreSQL',   ok: data.database?.ok, note: data.database?.ok ? 'connected' : 'connection failed — check DATABASE_URL' },
+        { label: 'VK Bot',       ok: data.vk?.ok,       note: data.vk?.ok ? 'configured' : 'not configured — go to VK tab' },
+        { label: 'Backup files', ok: data.backup_count > 0, note: `${data.backup_count} file(s) in /backups` }
+      ];
+      document.getElementById('vkAlert').style.display = data.vk?.ok ? 'none' : 'inline';
+      const allOk = items.every(i => i.ok);
+      const pill  = document.getElementById('navPill');
+      pill.textContent    = allOk ? '● all systems ok' : '● issues detected';
+      pill.style.color       = allOk ? 'rgba(255,255,255,.9)' : '#ffc107';
+      pill.style.borderColor = allOk ? 'rgba(255,255,255,.3)' : '#ffc107';
+      items.forEach(item => {
+        const row = document.createElement('div');
+        row.className = 'status-row';
+        row.innerHTML = `
+          <span class="badge ${item.ok ? 'bg-success' : 'bg-danger'}" style="width:42px">${item.ok ? 'OK' : 'ERR'}</span>
+          <span class="status-key">${item.label}</span>
+          <span class="status-note">${item.note}</span>`;
+        list.appendChild(row);
+      });
+    } catch (e) {
+      list.innerHTML = `<p class="text-danger small mb-0">Status check failed: ${e.message}</p>`;
+    }
+    await loadLogs();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // TEMPLATE EDITOR
+  // ═══════════════════════════════════════════════════════════════
+  let currentTplName   = 'predv_zakaznaryad';
+  let originalTplContent = '';
+  let tplPreviewMode   = false;
+
+  async function loadLogs() {
+      const logContainer = document.getElementById('app-log');
+      if (!logContainer) return;
+      
+      try {
+          const res = await api('/logs');
+          const data = await res.json();
+          
+          if (res.ok && data.lines && data.lines.length) {
+              // Формируем вывод с подсветкой уровней (INFO, ERROR, WARNING)
+              let html = '';
+              for (const line of data.lines) {
+                  let text = line.text;
+                  // Простая раскраска
+                  if (text.includes('ERROR')) {
+                      text = `<span class="log-err">${escapeHtml(text)}</span>`;
+                  } else if (text.includes('WARNING')) {
+                      text = `<span class="log-warn">${escapeHtml(text)}</span>`;
+                  } else {
+                      text = `<span>${escapeHtml(text)}</span>`;
+                  }
+                  html += `<div style="font-family: monospace; font-size: 11px; white-space: pre-wrap; border-bottom: 1px solid #eee; padding: 2px 0;">${text}</div>`;
+              }
+              logContainer.innerHTML = html;
+          } else {
+              logContainer.innerHTML = '<span class="log-dim">Нет записей в логе или лог-файл не найден.</span>';
+          }
+      } catch (e) {
+          logContainer.innerHTML = `<span class="log-err">Ошибка загрузки логов: ${e.message}</span>`;
+      }
+  }
+
+  // Вспомогательная функция для экранирования HTML
+  function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/[&<>]/g, function(m) {
+          if (m === '&') return '&amp;';
+          if (m === '<') return '&lt;';
+          if (m === '>') return '&gt;';
+          return m;
+      });
+  }
+
+  async function loadTpl(name, btnEl) {
+    // Switch active tab button
+    document.querySelectorAll('.tpl-tab-btn').forEach(b => b.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+
+    currentTplName = name;
+    document.getElementById('tplFilename').textContent = name + '.html';
+    document.getElementById('tplSaveStatus').textContent = 'Loading...';
+
+    try {
+      // Пробуем суперадмин-маршрут
+      const res = await api(`/templates/${name}`);
+      if (res.ok) {
+        const data = await res.json();
+        originalTplContent = data.content;
+        document.getElementById('tplEditor').value = data.content;
+        document.getElementById('tplSaveStatus').textContent = 'Загружено с сервера';
+      } else if (res.status === 404) {
+        document.getElementById('tplEditor').value = `<!-- Шаблон ${name}.html не найден -->`;
+        document.getElementById('tplSaveStatus').textContent = 'Шаблон не найден';
+        document.getElementById('tplSaveStatus').style.color = '#dc3545';
+      } else {
+        document.getElementById('tplEditor').value = `<!-- Ошибка загрузки: HTTP ${res.status} -->`;
+        document.getElementById('tplSaveStatus').textContent = `Ошибка ${res.status}`;
       }
     } catch (e) {
-      toast(`Network error saving ${key}`, 'err');
+      document.getElementById('tplEditor').value = `<!-- Ошибка сети: ${e.message} -->`;
+      document.getElementById('tplSaveStatus').textContent = 'Ошибка сети';
+    }
+
+    // If in preview mode — refresh preview
+    if (tplPreviewMode) renderTplPreview();
+  }
+
+  async function saveTpl() {
+    const content = document.getElementById('tplEditor').value;
+    document.getElementById('tplSaveStatus').textContent = 'Saving...';
+    try {
+      const res = await api(`/templates/${currentTplName}`, {
+        method: 'POST',
+        body: JSON.stringify({ content })
+      });
+      if (res.ok) {
+        originalTplContent = content;
+        document.getElementById('tplSaveStatus').textContent = `Saved at ${new Date().toLocaleTimeString('ru')}`;
+        showToast('Template saved successfully', 'success');
+      } else {
+        const err = await res.json();
+        document.getElementById('tplSaveStatus').textContent = 'Save failed';
+        showToast('Save error: ' + (err.error || 'unknown'), 'danger');
+      }
+    } catch (e) {
+      document.getElementById('tplSaveStatus').textContent = 'Network error';
+      showToast('Network error: ' + e.message, 'danger');
     }
   }
 
-  if (saved > 0) {
-    toast(`Saved ${saved} key(s). Restart Flask to apply.`, 'ok');
-    setPill('saved', 'ok');
-    // Reload config to update badges
-    loadConfig(section);
-  } else {
-    setPill('error', 'err');
+  function resetTpl() {
+    if (!confirm('Reset all unsaved changes?')) return;
+    document.getElementById('tplEditor').value = originalTplContent;
+    document.getElementById('tplSaveStatus').textContent = 'Changes reset';
   }
-}
 
-// ══════════════════════════════════════════
-// Test DB
-// ══════════════════════════════════════════
-async function testDb() {
-  const log = document.getElementById('db-log');
-  log.style.display = 'block';
-  log.innerHTML = '<span class="log-dim">Connecting...</span>';
-
-  try {
-    const res  = await api('/status');
-    const data = await res.json();
-    if (data.database?.ok) {
-      log.innerHTML = '<span class="log-ok">✓ Connection OK — PostgreSQL responding</span>';
+  function tplToggleView() {
+    tplPreviewMode = !tplPreviewMode;
+    const editorWrap  = document.getElementById('tplEditorWrap');
+    const previewWrap = document.getElementById('tplPreviewWrap');
+    const btn         = document.getElementById('tplViewBtn');
+    if (tplPreviewMode) {
+      editorWrap.style.display  = 'none';
+      previewWrap.style.display = 'block';
+      btn.innerHTML = '<i class="bi bi-pencil me-1"></i>Edit';
+      renderTplPreview();
     } else {
-      log.innerHTML = '<span class="log-err">✗ Connection failed — check DATABASE_URL</span>';
+      editorWrap.style.display  = 'block';
+      previewWrap.style.display = 'none';
+      btn.innerHTML = '<i class="bi bi-eye me-1"></i>Preview';
     }
-  } catch (e) {
-    log.innerHTML = `<span class="log-err">✗ Error: ${e.message}</span>`;
   }
-}
 
-// ══════════════════════════════════════════
-// Test VK
-// ══════════════════════════════════════════
-async function testVk() {
-  const log = document.getElementById('vk-log');
-  log.style.display = 'block';
-  log.innerHTML = '<span class="log-dim">Checking VK API...</span>';
+  function renderTplPreview() {
+    const content = document.getElementById('tplEditor').value;
+    const frame   = document.getElementById('tplPreview');
+    const doc     = frame.contentDocument || frame.contentWindow.document;
+    doc.open(); doc.write(content); doc.close();
+  }
 
-  try {
-    const res  = await api('/status');
-    const data = await res.json();
-    if (data.vk?.ok) {
-      log.innerHTML = '<span class="log-ok">✓ VK credentials are set</span>';
-    } else {
-      log.innerHTML = '<span class="log-err">✗ VK not configured — check VK_GROUP_ID and VK_ACCESS_TOKEN</span>';
+  // Auto-mark unsaved
+  document.addEventListener('DOMContentLoaded', () => {
+    const editor = document.getElementById('tplEditor');
+    if (editor) {
+      editor.addEventListener('input', () => {
+        if (editor.value !== originalTplContent) {
+          document.getElementById('tplSaveStatus').textContent = '● Unsaved changes';
+          document.getElementById('tplSaveStatus').style.color = '#dc3545';
+        } else {
+          document.getElementById('tplSaveStatus').textContent = 'No changes';
+          document.getElementById('tplSaveStatus').style.color = '';
+        }
+      });
     }
-  } catch (e) {
-    log.innerHTML = `<span class="log-err">✗ Error: ${e.message}</span>`;
-  }
-}
+  });
 
-// ══════════════════════════════════════════
-// Rotate key
-// ══════════════════════════════════════════
-function rotateKey(key) {
-  if (!confirm(`Rotate ${key}?\n\nThis will invalidate all active user sessions.`)) return;
-
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let newKey = '';
-  for (let i = 0; i < 48; i++) newKey += chars[Math.floor(Math.random() * chars.length)];
-
-  // Fill the corresponding input
-  const input = document.querySelector(`[data-key="${key}"]`);
-  if (input) { input.value = newKey; input.type = 'text'; input.classList.remove('masked'); }
-
-  toast(`New ${key} generated — click "Save & apply" to write to .env`, 'ok');
-}
-
-// ══════════════════════════════════════════
-// Backups
-// ══════════════════════════════════════════
-async function loadBackups() {
-  const wrap = document.getElementById('backup-list');
-  try {
-    const res  = await api('/backups');
-    const data = await res.json();
-
-    if (!data.backups || data.backups.length === 0) {
-      wrap.innerHTML = '<span style="color:var(--text3);font-size:11px">No backup files found in /backend/backups/</span>';
-      return;
-    }
-
-    wrap.innerHTML = '';
-    data.backups.forEach(b => {
-      const row = document.createElement('div');
-      row.className = 'backup-row';
-
-      const info = document.createElement('div');
-      const d = new Date(b.modified * 1000);
-      info.innerHTML = `<div class="backup-name">${b.filename}</div>
-        <div class="backup-meta">${d.toLocaleString()} · ${b.size}</div>`;
-
-      const acts = document.createElement('div');
-      acts.className = 'backup-actions';
-
-      const dlBtn = document.createElement('button');
-      dlBtn.className = 'btn-icon';
-      dlBtn.title = 'Download';
-      dlBtn.innerHTML = '<i class="ti ti-download"></i>';
-      dlBtn.onclick = () => downloadBackup(b.filename);
-
-      const delBtn = document.createElement('button');
-      delBtn.className = 'btn-icon danger';
-      delBtn.title = 'Delete';
-      delBtn.innerHTML = '<i class="ti ti-trash"></i>';
-      delBtn.onclick = () => deleteBackup(b.filename, row);
-
-      acts.appendChild(dlBtn);
-      acts.appendChild(delBtn);
-      row.appendChild(info);
-      row.appendChild(acts);
-      wrap.appendChild(row);
-    });
-  } catch (e) {
-    wrap.innerHTML = `<span style="color:var(--red);font-size:11px">Error loading backups: ${e.message}</span>`;
-  }
-}
-
-async function runBackup(type) {
-  const prog  = document.getElementById('backup-progress');
-  const fill  = document.getElementById('backup-fill');
-  const label = document.getElementById('backup-progress-label');
-
-  prog.style.display = 'block';
-  fill.style.width = '0%';
-  label.textContent = `Running ${type === 'full' ? 'full dump' : 'quick backup'}...`;
-
-  // Fake progress bar while waiting for API
-  let pct = 0;
-  const iv = setInterval(() => {
-    pct = Math.min(pct + Math.random() * 12, 90);
-    fill.style.width = pct.toFixed(0) + '%';
-  }, 250);
-
-  try {
-    const res = await api('/backups/run', {
-      method: 'POST',
-      body: JSON.stringify({ type })
-    });
-    clearInterval(iv);
-    fill.style.width = '100%';
-
-    if (res.ok) {
+  // ═══════════════════════════════════════════════════════════════
+  // BACKUPS — через /superadmin/api/backups (проксируется на /api/backup/*)
+  // Маршруты нужно добавить в superadmin.py — см. superadmin_patch.py
+  // ═══════════════════════════════════════════════════════════════
+  async function loadBackups() {
+    const wrap = document.getElementById('backup-list');
+    try {
+      const res  = await api('/backups');
+      if (!res.ok) {
+        const txt = await res.text();
+        wrap.innerHTML = `<p class="text-danger small mb-0">Ошибка ${res.status} — добавьте маршруты из <code>superadmin_patch.py</code> в superadmin.py</p>`;
+        return;
+      }
       const data = await res.json();
-      label.textContent = `✓ Done — ${data.filename || 'backup created'}`;
-      toast('Backup created successfully', 'ok');
-      setTimeout(() => { prog.style.display = 'none'; loadBackups(); }, 2000);
-    } else {
-      const err = await res.json();
-      label.textContent = `✗ Error: ${err.error || 'unknown'}`;
-      fill.style.width = '0%';
-    }
-  } catch (e) {
-    clearInterval(iv);
-    label.textContent = `✗ Network error: ${e.message}`;
-    fill.style.width = '0%';
+      if (!data.backups?.length) { wrap.innerHTML = '<p class="text-muted small mb-0">Файлы бэкапов не найдены в /backend/backups/</p>'; return; }
+      wrap.innerHTML = '';
+      data.backups.forEach(b => {
+        const d   = new Date(b.created);
+        const row = document.createElement('div');
+        row.className = 'backup-item';
+        row.innerHTML = `
+          <div>
+            <div class="backup-filename"><i class="bi bi-file-earmark-zip me-1 text-muted"></i>${b.filename}</div>
+            <div class="backup-meta">${isNaN(d) ? b.created : d.toLocaleString('ru')} &nbsp;·&nbsp; ${b.size}</div>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-success" onclick="downloadBackup('${b.filename}')" title="Скачать"><i class="bi bi-download"></i></button>
+            <button class="btn btn-sm btn-outline-danger"  onclick="deleteBackup('${b.filename}', this)" title="Удалить"><i class="bi bi-trash"></i></button>
+          </div>`;
+        wrap.appendChild(row);
+      });
+    } catch (e) { wrap.innerHTML = `<p class="text-danger small mb-0">Ошибка: ${e.message}</p>`; }
   }
-}
 
-function downloadBackup(filename) {
-  // Создаём временную ссылку с токеном в заголовке через fetch + blob
-  api(`/backups/download/${encodeURIComponent(filename)}`)
-    .then(r => { if (!r.ok) throw new Error('Download failed'); return r.blob(); })
-    .then(blob => {
-      const url = URL.createObjectURL(blob);
-      const a   = document.createElement('a');
-      a.href = url; a.download = filename;
-      document.body.appendChild(a); a.click();
-      URL.revokeObjectURL(url); document.body.removeChild(a);
-    })
-    .catch(e => toast('Download error: ' + e.message, 'err'));
-}
-
-async function deleteBackup(filename, rowEl) {
-  if (!confirm(`Delete ${filename}?`)) return;
-  try {
-    const res = await api(`/backups/${encodeURIComponent(filename)}`, { method: 'DELETE' });
-    if (res.ok) { rowEl.remove(); toast(`Deleted ${filename}`, 'ok'); }
-    else { const err = await res.json(); toast(err.error, 'err'); }
-  } catch (e) { toast('Error: ' + e.message, 'err'); }
-}
-
-// ══════════════════════════════════════════
-// Status
-// ══════════════════════════════════════════
-async function loadStatus() {
-  const list = document.getElementById('status-list');
-  try {
-    const res  = await api('/status');
-    const data = await res.json();
-    list.innerHTML = '';
-
-    const items = [
-      { label: 'Flask API',      ok: true,           note: 'process running' },
-      { label: 'PostgreSQL',     ok: data.database?.ok,  note: data.database?.ok ? 'connected' : 'connection failed' },
-      { label: 'VK Bot webhook', ok: data.vk?.ok,    note: data.vk?.ok ? 'configured' : 'not configured — check VK tab' },
-      { label: 'Backup files',   ok: data.backup_count > 0, note: `${data.backup_count} file(s) in /backups` }
-    ];
-
-    // Update VK badge
-    document.getElementById('vkBadge').classList.toggle('visible', !data.vk?.ok);
-
-    // Update top pill
-    const allOk = items.every(i => i.ok);
-    setPill(allOk ? '● all systems ok' : '● issues detected', allOk ? 'ok' : 'warn');
-
-    items.forEach(item => {
-      const row = document.createElement('div');
-      row.className = 'status-row';
-      const cls = item.ok ? 'ok' : 'err';
-      row.innerHTML = `
-        <span class="status-dot ${cls}"></span>
-        <span class="status-key">${item.label}</span>
-        <span class="status-val" style="color:var(--${item.ok ? 'green' : 'red'})">${item.ok ? 'ok' : 'error'}</span>
-        <span class="status-note">${item.note}</span>
-      `;
-      list.appendChild(row);
-    });
-  } catch (e) {
-    list.innerHTML = `<span style="color:var(--red);font-size:11px">Status check failed: ${e.message}</span>`;
+  async function runBackup(type) {
+    const prog  = document.getElementById('backup-progress');
+    const fill  = document.getElementById('backup-fill');
+    const label = document.getElementById('backup-progress-label');
+    const pct   = document.getElementById('backup-pct');
+    prog.style.display = 'block'; fill.style.width = '0%'; pct.textContent = '0%';
+    label.textContent = `Запуск ${type === 'full' ? 'полного дампа' : 'быстрого бэкапа'}...`;
+    let p = 0;
+    const iv = setInterval(() => {
+      p = Math.min(p + Math.random() * 12, 90);
+      fill.style.width = p.toFixed(0) + '%'; pct.textContent = p.toFixed(0) + '%';
+    }, 250);
+    try {
+      const res = await api('/backups/run', { method: 'POST', body: JSON.stringify({ type, timestamp: new Date().toISOString() }) });
+      clearInterval(iv); fill.style.width = '100%'; pct.textContent = '100%';
+      let data = {};
+      try { data = await res.json(); } catch {}
+      if (res.ok) {
+        label.textContent = `✓ Готово — ${data.filename || 'бэкап создан'} (${data.size || ''})`;
+        showToast('Резервная копия успешно создана', 'success');
+        setTimeout(() => { prog.style.display = 'none'; loadBackups(); }, 2500);
+      } else {
+        label.textContent = `✗ Ошибка: ${data.error || `HTTP ${res.status}`}`;
+        showToast('Ошибка бэкапа: ' + (data.error || res.status), 'danger');
+      }
+    } catch (e) { clearInterval(iv); label.textContent = `✗ Ошибка сети: ${e.message}`; showToast('Ошибка сети: ' + e.message, 'danger'); }
   }
-}
 
-// ══════════════════════════════════════════
-// Users
-// ══════════════════════════════════════════
-async function loadUsers() {
-  const wrap = document.getElementById('users-table-wrap');
-  try {
-    const res  = await fetch('/api/users', {
-      headers: { 'Authorization': `Bearer ${SA_TOKEN}` }
-    });
-    if (!res.ok) throw new Error('Cannot load users from /api/users');
-    const users = await res.json();
+  function downloadBackup(filename) {
+    api(`/backups/download/${encodeURIComponent(filename)}`)
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); })
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); URL.revokeObjectURL(url); document.body.removeChild(a);
+        showToast(`Скачивание ${filename}...`, 'success');
+      })
+      .catch(e => showToast('Ошибка скачивания: ' + e.message, 'danger'));
+  }
 
+  async function deleteBackup(filename, btn) {
+    if (!confirm(`Удалить ${filename}?`)) return;
+    try {
+      const res = await api(`/backups/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+      if (res.ok) { btn.closest('.backup-item').remove(); showToast(`Удалён ${filename}`, 'success'); }
+      else { let err = {}; try { err = await res.json(); } catch {} showToast(err.error || 'Ошибка удаления', 'danger'); }
+    } catch (e) { showToast('Ошибка: ' + e.message, 'danger'); }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // USERS
+  // ═══════════════════════════════════════════════════════════════
+  let _usersData = [];
+
+  async function loadUsers() {
+    const wrap = document.getElementById('users-table-wrap');
+    try {
+      const res   = await fetch('/superadmin/api/users', { headers: { 'Authorization': `Bearer ${SA_TOKEN}` } });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      _usersData = await res.json();
+      renderUsersTable(_usersData);
+    } catch (e) { wrap.innerHTML = `<p class="text-muted small mb-0">Не удалось загрузить пользователей: ${e.message}</p>`; }
+  }
+
+  function renderUsersTable(users) {
+    const wrap = document.getElementById('users-table-wrap');
     const table = document.createElement('table');
-    table.className = 'users-table';
-    table.innerHTML = `<thead><tr>
-      <th>Login</th><th>Full name</th><th>Role</th>
+    table.className = 'table table-sm table-hover mb-0';
+    table.innerHTML = `<thead class="table-light"><tr>
+      <th style="font-weight:500;font-size:12px;color:#6c757d;text-transform:uppercase;letter-spacing:.06em">Логин</th>
+      <th style="font-weight:500;font-size:12px;color:#6c757d;text-transform:uppercase;letter-spacing:.06em">Полное имя</th>
+      <th style="font-weight:500;font-size:12px;color:#6c757d;text-transform:uppercase;letter-spacing:.06em">Роль</th>
+      <th style="font-weight:500;font-size:12px;color:#6c757d;text-transform:uppercase;letter-spacing:.06em">Действия</th>
     </tr></thead>`;
     const tbody = document.createElement('tbody');
 
-    // Superadmin row (virtual)
+    // Superadmin row (read-only)
     const suRow = tbody.insertRow();
     suRow.innerHTML = `
-      <td>superadmin</td>
-      <td style="color:var(--text3)">System superuser</td>
-      <td><span class="role-tag su">superuser</span></td>
-    `;
+      <td><code>superadmin</code></td>
+      <td class="text-muted">Системный суперпользователь</td>
+      <td><span class="badge bg-warning text-dark">superuser</span></td>
+      <td><span class="text-muted small">изменяется через .env</span></td>`;
 
     users.forEach(u => {
       const row = tbody.insertRow();
+      row.id = `user-row-${u.user_id || u.id}`;
+      const roleBadge = u.role === 'manager' || u.role_name === 'manager'
+        ? 'bg-primary' : u.role === 'mechanic' || u.role_name === 'mechanic'
+        ? 'bg-success' : 'bg-secondary';
+      const roleLabel = u.role || u.role_name || '—';
       row.innerHTML = `
-        <td>${u.login}</td>
-        <td style="color:var(--text2)">${u.full_name || '—'}</td>
-        <td><span class="role-tag">${u.role || '—'}</span></td>
-      `;
+        <td><code>${u.login}</code></td>
+        <td class="text-muted">${u.full_name || '—'}</td>
+        <td><span class="badge ${roleBadge}">${roleLabel}</span></td>
+        <td>
+          <div class="d-flex gap-1">
+            <button class="btn btn-sm btn-outline-secondary" style="padding:2px 8px;font-size:11px"
+              onclick="openUserEdit(${JSON.stringify(u).replace(/"/g,'&quot;')})">
+              <i class="bi bi-pencil me-1"></i>Изменить
+            </button>
+          </div>
+        </td>`;
     });
-
     table.appendChild(tbody);
     wrap.innerHTML = '';
     wrap.appendChild(table);
-  } catch (e) {
-    wrap.innerHTML = `<span style="color:var(--text3);font-size:11px">${e.message}</span>`;
   }
-}
 
-// ══════════════════════════════════════════
-// UI helpers
-// ══════════════════════════════════════════
-function setPill(text, cls = '') {
-  const pill = document.getElementById('topPill');
-  pill.textContent = text;
-  pill.className = 'status-pill ' + cls;
-}
+  function toggleViewPass() {
+    const el   = document.getElementById('viewUserPass');
+    const icon = document.getElementById('viewPassIcon');
+    const hidden = el.style.filter !== '';
+    el.style.filter = hidden ? '' : 'blur(4px)';
+    icon.className  = hidden ? 'bi bi-eye-slash' : 'bi bi-eye';
+  }
 
-let toastTimer;
-function toast(msg, type = '') {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = 'toast show ' + type;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.className = 'toast'; }, 3500);
-}
-</script>
-</body>
-</html>
+  function openUserEdit(u) {
+    // Текущие данные (только просмотр)
+    document.getElementById('viewUserLogin').textContent = u.login || '—';
+    const passEl = document.getElementById('viewUserPass');
+    passEl.textContent = u.password_plain || u.password || '(не раскрывается — хранится хэш)';
+    passEl.style.filter = 'blur(4px)';
+    document.getElementById('viewPassIcon').className = 'bi bi-eye';
+
+    // Поля редактирования
+    document.getElementById('editUserId').value    = u.user_id || u.id || '';
+    document.getElementById('editUserLogin').value  = u.login || '';
+    document.getElementById('editUserName').value   = u.full_name || '';
+    document.getElementById('editUserRole').value   = u.role || u.role_name || '';
+    document.getElementById('editUserPhone').value  = u.phone || '';
+    document.getElementById('editUserPass').value   = '';
+    document.getElementById('editUserPass2').value  = '';
+    document.getElementById('editUserErr').textContent = '';
+    document.getElementById('editUserModalLabel').textContent = `Пользователь: ${u.login}`;
+    new bootstrap.Modal(document.getElementById('editUserModal')).show();
+  }
+
+  async function saveUserEdit() {
+    const id    = document.getElementById('editUserId').value;
+    const login = document.getElementById('editUserLogin').value.trim();
+    const name  = document.getElementById('editUserName').value.trim();
+    const role  = document.getElementById('editUserRole').value;
+    const phone = document.getElementById('editUserPhone').value.trim();
+    const pass  = document.getElementById('editUserPass').value;
+    const pass2 = document.getElementById('editUserPass2').value;
+    const errEl = document.getElementById('editUserErr');
+    errEl.textContent = '';
+
+    if (!login) { errEl.textContent = 'Логин не может быть пустым.'; return; }
+    if (pass && pass !== pass2) { errEl.textContent = 'Пароли не совпадают.'; return; }
+    if (pass && pass.length < 4) { errEl.textContent = 'Пароль должен быть не менее 4 символов.'; return; }
+
+    const body = { login, full_name: name, role_name: role, phone };
+    if (pass) body.password = pass;
+
+    try {
+      const res = await fetch(`/superadmin/api/users/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SA_TOKEN}` },
+        body: JSON.stringify(body)
+      });
+      let data = {};
+      try { data = await res.json(); } catch {}
+      if (res.ok) {
+        bootstrap.Modal.getInstance(document.getElementById('editUserModal')).hide();
+        showToast(`Пользователь ${login} обновлён`, 'success');
+        loadUsers();
+      } else {
+        errEl.textContent = data.error || `Ошибка HTTP ${res.status}`;
+      }
+    } catch (e) { errEl.textContent = 'Ошибка сети: ' + e.message; }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // TOAST
+  // ═══════════════════════════════════════════════════════════════
+  let toastTimer;
+
+  // ═══════════════════════════════════════════════════════════════
+  // PRIVACY POLICY EDITOR
+  // ═══════════════════════════════════════════════════════════════
+  let originalPrivacyContent = '';
+  let privacyPreviewMode = false;
+
+  async function loadPrivacy() {
+    const editor = document.getElementById('privacyEditor');
+    const statusSpan = document.getElementById('privacySaveStatus');
+    if (!editor) return;
+    statusSpan.textContent = 'Loading...';
+    try {
+      const res = await api('/privacy');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      originalPrivacyContent = data.content;
+      editor.value = data.content;
+      statusSpan.textContent = 'Loaded from server';
+      if (privacyPreviewMode) renderPrivacyPreview();
+    } catch (e) {
+      console.error(e);
+      editor.value = `<!-- Error loading privacy.html: ${e.message} -->`;
+      statusSpan.textContent = 'Load failed';
+    }
+  }
+
+  async function savePrivacy() {
+    const content = document.getElementById('privacyEditor').value;
+    const statusSpan = document.getElementById('privacySaveStatus');
+    statusSpan.textContent = 'Saving...';
+    try {
+      const res = await api('/privacy', {
+        method: 'POST',
+        body: JSON.stringify({ content })
+      });
+      if (res.ok) {
+        originalPrivacyContent = content;
+        statusSpan.textContent = `Saved at ${new Date().toLocaleTimeString('ru')}`;
+        showToast('Privacy policy saved successfully', 'success');
+      } else {
+        const err = await res.json();
+        statusSpan.textContent = 'Save failed';
+        showToast('Save error: ' + (err.error || 'unknown'), 'danger');
+      }
+    } catch (e) {
+      statusSpan.textContent = 'Network error';
+      showToast('Network error: ' + e.message, 'danger');
+    }
+  }
+
+  function resetPrivacy() {
+    if (!confirm('Reset all unsaved changes for privacy.html?')) return;
+    document.getElementById('privacyEditor').value = originalPrivacyContent;
+    document.getElementById('privacySaveStatus').textContent = 'Changes reset';
+    if (privacyPreviewMode) renderPrivacyPreview();
+  }
+
+  function privacyToggleView() {
+    privacyPreviewMode = !privacyPreviewMode;
+    const editorWrap  = document.getElementById('privacyEditorWrap');
+    const previewWrap = document.getElementById('privacyPreviewWrap');
+    const btn         = document.getElementById('privacyViewBtn');
+    if (privacyPreviewMode) {
+      editorWrap.style.display  = 'none';
+      previewWrap.style.display = 'block';
+      btn.innerHTML = '<i class="bi bi-pencil me-1"></i>Edit';
+      renderPrivacyPreview();
+    } else {
+      editorWrap.style.display  = 'block';
+      previewWrap.style.display = 'none';
+      btn.innerHTML = '<i class="bi bi-eye me-1"></i>Preview';
+    }
+  }
+
+  function renderPrivacyPreview() {
+    const content = document.getElementById('privacyEditor').value;
+    const frame   = document.getElementById('privacyPreview');
+    const doc     = frame.contentDocument || frame.contentWindow.document;
+    doc.open(); doc.write(content); doc.close();
+  }
+
+  // Auto‑mark unsaved changes
+  document.addEventListener('DOMContentLoaded', () => {
+    const editor = document.getElementById('privacyEditor');
+    if (editor) {
+      editor.addEventListener('input', () => {
+        const statusSpan = document.getElementById('privacySaveStatus');
+        if (editor.value !== originalPrivacyContent) {
+          statusSpan.textContent = '● Unsaved changes';
+          statusSpan.style.color = '#dc3545';
+        } else {
+          statusSpan.textContent = 'No changes';
+          statusSpan.style.color = '';
+        }
+      });
+    }
+  });
+
+  function showToast(msg, type = 'secondary') {
+    const wrap = document.getElementById('saToast');
+    const el   = document.getElementById('toastEl');
+    document.getElementById('toastBody').textContent = msg;
+    el.className = `toast show align-items-center text-white border-0 bg-${type}`;
+    wrap.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(hideToast, 4000);
+  }
+  function hideToast() { document.getElementById('saToast').style.display = 'none'; }
+  </script>
+  </body>
+  </html>

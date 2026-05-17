@@ -10,9 +10,6 @@ clients_bp = Blueprint('clients', __name__, url_prefix='/api/clients')
 def check_auth_and_role(required_role=None):
     """Проверяет авторизацию и роль пользователя"""
     auth_header = request.headers.get('Authorization')
-    print(f"=== DEBUG AUTH CHECK ===")
-    print(f"Authorization header: {auth_header}")
-    print(f"Required role: {required_role}")
     
     if not auth_header:
         print("No authorization header")
