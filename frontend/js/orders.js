@@ -176,12 +176,14 @@ async function createOrder() {
     // Проверка: если статус не "Забронирован", у механика не должно быть других активных заказов
     const selectedStatus = document.getElementById('orderStatus').value;
     if (selectedStatus !== 'Забронирован') {
-        // Используем уже загруженные заказы (ordersData) для быстрой проверки
+        // «Готов к выдаче» не блокирует: механик уже закончил работу,
+        // машина ждёт хозяина — механик свободен для следующего заказа.
         const mechanicActiveOrders = ordersData.filter(order =>
             order.mechanic_id == mechanicId &&
             order.status !== 'Выполнен' &&
             order.status !== 'Отменен' &&
-            order.status !== 'Забронирован'
+            order.status !== 'Забронирован' &&
+            order.status !== 'Готов к выдаче'
         );
         if (mechanicActiveOrders.length > 0) {
             showError('У этого механика уже есть активный заказ. Вы можете создать только бронь (статус «Забронирован»).');

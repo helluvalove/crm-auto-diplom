@@ -10,21 +10,206 @@
     <!-- Наш CSS -->
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        body { background: #f8f9fa; }
+        .tab-pane { padding: 1rem 0; }
+        #statusDot { font-size: 1.2em; }
+        
+        .backup-btn {
+            background-color: transparent !important;
+            border: 1px solid #f8f9fa !important;
+            color: #f8f9fa !important;
+            border-radius: 6px !important;
+            padding: 6px 12px !important;
+            font-weight: 500 !important;
+            font-size: 0.875rem !important;
+            transition: all 0.2s ease !important;
+            margin-left: 10px !important;
+        }
+        .backup-btn:hover {
+            background-color: rgba(255, 255, 255, 0.1) !important;
+            border-color: #ffffff !important;
+            color: #ffffff !important;
+            transform: translateY(-1px);
+        }
+        .backup-btn:active {
+            transform: translateY(0);
+        }
+        .backup-btn i {
+            margin-right: 4px !important;
+        }
+        .backup-modal .modal-header {
+            background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%) !important;
+            color: white !important;
+            border-bottom: none !important;
+            padding: 1.2rem 1.5rem !important;
+            border-radius: 0.3rem 0.3rem 0 0 !important;
+        }
+        .backup-modal .modal-title {
+            color: #ffffff !important;
+            font-weight: 600 !important;
+            font-size: 1.25rem !important;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15) !important;
+            letter-spacing: 0.3px !important;
+        }
+        .backup-modal .backup-option {
+            border: 1px solid #dee2e6 !important;
+            border-radius: 8px !important;
+            padding: 15px !important;
+            margin-bottom: 10px !important;
+            cursor: pointer !important;
+            transition: all 0.2s ease !important;
+        }
+        .backup-modal .backup-option:hover {
+            border-color: #0d6efd !important;
+            background-color: #f8f9fa !important;
+        }
+        .backup-modal .backup-option.active {
+            border-color: #0d6efd !important;
+            background-color: #e7f1ff !important;
+        }
+        .backup-status {
+            display: none;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+        .is-valid { border-color: #198754 !important; }
+        .is-invalid { border-color: #dc3545 !important; }
+        .invalid-feedback { display: block; color: #dc3545; font-size: 0.875em; margin-top: 0.25rem; }
+
+/* ---- Компактный график занятости (без правого индикатора) ---- */
+        .timeline-header-row,
+        .mechanic-row {
+            display: flex;
+            align-items: center;
+            padding: 4px 0;
+        }
+        .mechanic-row {
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .mechanic-row:last-child {
+            border-bottom: none;
+        }
+
+        .mechanic-name,
+        .mechanic-name-placeholder {
+            width: 220px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+        .mechanic-name-placeholder {
+            visibility: hidden;
+        }
+
+        .timeline-marks {
+            flex: 1;
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            color: #6c757d;
+            padding: 0 2px;
+            min-width: 150px;
+        }
+
+        .timeline {
+            flex: 1;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+            cursor: default;
+            min-width: 150px;
+        }
+
+        .timeline-busy {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            background: #ffc107;
+            border-radius: 10px;
+            opacity: 0.85;
+            transition: opacity 0.2s;
+            font-size: 0.65rem;
+            color: #212529;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+            padding: 0 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        .timeline-busy:hover {
+            opacity: 1;
+            z-index: 2;
+            box-shadow: 0 0 0 2px rgba(0,0,0,0.1);
+        }
+
+        .timeline-free {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            background: #28a745;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 0.65rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            opacity: 0.9;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            padding: 0 4px;
+        }
+
+        @media (max-width: 576px) {
+            .mechanic-name,
+            .mechanic-name-placeholder {
+                width: 140px;
+                font-size: 0.8rem;
+            }
+            .timeline-marks {
+                font-size: 0.65rem;
+            }
+        }
+
+        /* Дополнительные стили для мобильной навигации */
+        @media (max-width: 768px) {
+            #tabContent {
+                padding-bottom: 70px;
+            }
+            .btn {
+                padding: 0.6rem 0.8rem;
+                font-size: 1rem;
+            }
+            input, select, textarea {
+                font-size: 16px;
+            }
+        }
+    </style>
 </head>
 <body>
     <!-- Навигация -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
         <div class="container">
             <a class="navbar-brand" href="#">
-                CRM Автомастерская 43 | г. Киров
+                <i class="bi bi-tools"></i> CRM Автомастерская 43 | г. Киров
             </a>
-            <div class="user-status-pill" id="userInfo">
-                <span class="user-status-dot" id="statusDot"></span>
-                <span class="user-status-text" id="userStatusText">Не авторизован</span>
-                <button id="logoutBtn" class="user-logout-btn" style="display: none;" onclick="logout()">
-                    <i class="bi bi-box-arrow-right"></i>
+            <div class="navbar-text text-light" id="userInfo">
+                <span id="statusDot" class="text-warning">●</span> Не авторизован
+                <button id="logoutBtn" class="btn btn-sm btn-outline-light ms-2" style="display: none;" onclick="logout()">
+                    <i class="bi bi-box-arrow-right"></i> Выйти
                 </button>
             </div>
         </div>
@@ -55,44 +240,26 @@
             </div>
             
             <div class="col-md-6">
-                <div class="card auth-info-card">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0"><i class="bi bi-shield-check"></i> CRM Автомастерская</h5>
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="bi bi-info-circle"></i> Статус системы</h5>
                     </div>
                     <div class="card-body">
-                        <div class="auth-welcome">
-                            <div class="auth-welcome-icon">
-                                <i class="bi bi-tools"></i>
-                            </div>
-                            <div class="auth-welcome-text">
-                                <h6 class="mb-1">Добро пожаловать!</h6>
-                                <p class="text-muted mb-0 small">Система управления заказами, клиентами и механиками автосервиса</p>
+                        <div id="systemStatus">
+                            <div class="d-flex align-items-center mb-2">
+                                <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                                <span>Проверка подключения...</span>
                             </div>
                         </div>
-                        <hr class="my-3">
-                        <div class="auth-features">
-                            <div class="auth-feature-item">
-                                <i class="bi bi-people-fill text-primary"></i>
-                                <span>Управление клиентами и автомобилями</span>
-                            </div>
-                            <div class="auth-feature-item">
-                                <i class="bi bi-clipboard-check-fill text-success"></i>
-                                <span>Заказ-наряды и статусы работ</span>
-                            </div>
-                            <div class="auth-feature-item">
-                                <i class="bi bi-graph-up-arrow text-warning"></i>
-                                <span>Статистика сервиса</span>
-                            </div>
-                            <div class="auth-feature-item">
-                                <i class="bi bi-wrench-adjustable-circle-fill text-info"></i>
-                                <span>Учёт механиков и распределение задач</span>
-                            </div>
-                        </div>
-                        <hr class="my-3">
-                        <div class="d-flex align-items-center gap-2 text-muted small">
-                            <i class="bi bi-telephone-fill text-primary"></i>
-                            <span>Тех. поддержка: <strong class="text-dark">+7 (999) 888-77-66</strong></span>
-                        </div>
+                        <hr>
+                        <h6>Доступные API эндпоинты:</h6>
+                        <ul class="small mb-0">
+                            <li><code>/api/auth/login</code> — аутентификация</li>
+                            <li><code>/api/clients</code> — клиенты</li>
+                            <li><code>/api/orders</code> — заказ-наряды</li>
+                            <li><code>/api/cars</code> — автомобили</li>
+                            <li><code>/api/orders/archive</code> — архив заказов</li>
+                        </ul>
                     </div>
                 </div>
             </div>
@@ -279,13 +446,14 @@
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <h5 class="mb-0"><i class="bi bi-clipboard-check"></i> Заказ-наряды</h5>
                             <div>
-                                <div class="btn-group orders-filter-group" role="group" id="ordersFilterGroup">
-                                    <button class="btn btn-sm orders-filter-btn active" onclick="ordersFilterClick(this, 'active')">Активные</button>
-                                    <button class="btn btn-sm orders-filter-btn" onclick="ordersFilterClick(this, 'Забронирован')">Забронированы</button>
-                                    <button class="btn btn-sm orders-filter-btn" onclick="ordersFilterClick(this, 'Создан')">Созданы</button>
-                                    <button class="btn btn-sm orders-filter-btn" onclick="ordersFilterClick(this, 'На диагностике')">На диагностике</button>
-                                    <button class="btn btn-sm orders-filter-btn" onclick="ordersFilterClick(this, 'В работе')">В работе</button>
-                                    <button class="btn btn-sm orders-filter-btn" onclick="ordersFilterClick(this, 'Готов к выдаче')">Готовы</button>
+                                <span class="me-2 small text-muted">Фильтры:</span>
+                                <div class="btn-group" role="group">
+                                    <button class="btn btn-sm btn-outline-primary active" onclick="filterOrders('active')">Активные</button>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="filterOrders('Забронирован')">Забронированы</button>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="filterOrders('Создан')">Созданы</button>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="filterOrders('На диагностике')">На диагностике</button>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="filterOrders('В работе')">В работе</button>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="filterOrders('Готов к выдаче')">Готовы</button>
                                 </div>
                             </div>
                         </div>
@@ -766,25 +934,6 @@
         </div>
     </div>
 
-    <!-- Футер -->
-    <footer class="crm-footer">
-        <div class="container">
-            <div class="crm-footer-inner">
-                <div class="crm-footer-left">
-                    <i class="bi bi-tools"></i>
-                    <span><strong>CRM Автомастерская 43</strong> &nbsp;·&nbsp; г. Киров</span>
-                </div>
-                <div class="crm-footer-center">
-                    <i class="bi bi-c-circle"></i> 2026 &nbsp;·&nbsp; Все права защищены &nbsp;·&nbsp;
-                </div>
-                <div class="crm-footer-right">
-                    <i class="bi bi-headset text-primary"></i>
-                    <span>Тех. поддержка: <strong>+7 (999) 888-77-66</strong></span>
-                </div>
-            </div>
-        </div>
-    </footer>
-
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <!-- Наши скрипты -->
@@ -803,25 +952,5 @@
     <script src="js/mechanic_my_works.js"></script>
     <script src="js/mechanic_profile.js"></script>
     <script src="app.js"></script>
-    <script>
-
-    function ordersFilterClick(btn, filter) {
-        // Передаём фиктивный event, чтобы filterOrders мог определить цель
-        if (typeof filterOrders === 'function') {
-            filterOrders(filter, { target: btn });
-        }
-    }
-
-    // Обновление отображения статуса пользователя в navbar
-    function updateUserStatusUI(name, role) {
-        const text = document.getElementById('userStatusText');
-        if (text) text.textContent = name || 'Не авторизован';
-        const dot = document.getElementById('statusDot');
-        if (dot) {
-            dot.classList.remove('status-online', 'status-offline');
-            dot.classList.add(name ? 'status-online' : 'status-offline');
-        }
-    }
-    </script>
 </body>
 </html>

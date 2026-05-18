@@ -100,10 +100,23 @@ function showTab(tabName, event = null, options = {}) {
 }
 
 function filterOrders(status, event = null) {
-    document.querySelectorAll('#ordersTab .btn-group button').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    if (event?.target) event.target.classList.add('active');
+    // Находим все кнопки фильтра по правильному селектору
+    const buttons = document.querySelectorAll('.orders-filter-group .orders-filter-btn');
+    buttons.forEach(btn => btn.classList.remove('active'));
+    
+    if (event?.target) {
+        // Если передан event, добавляем активный класс на кликнутую кнопку
+        event.target.classList.add('active');
+    } else {
+        // Иначе пытаемся найти кнопку по статусу (например, при загрузке страницы)
+        const targetBtn = Array.from(buttons).find(btn => {
+            const onclickAttr = btn.getAttribute('onclick');
+            return onclickAttr && onclickAttr.includes(`'${status}'`);
+        });
+        if (targetBtn) targetBtn.classList.add('active');
+    }
+    
+    // Загружаем заказы с нужным фильтром
     loadOrders(status === 'all' ? 'all' : status);
 }
 

@@ -280,10 +280,10 @@ def create_order():
 
         # --- Запрет нескольких активных заказов (кроме брони) ---
         if status != 'Забронирован':
-            active_statuses = ['Создан', 'На диагностике', 'В работе', 'Готов к выдаче']
+            truly_active_statuses = ['Создан', 'На диагностике', 'В работе']  # 'Готов к выдаче' НЕ блокирует
             existing_active = WorkOrder.query.filter(
                 WorkOrder.mechanic_id == mechanic_id,
-                WorkOrder.status.in_(active_statuses)
+                WorkOrder.status.in_(truly_active_statuses)
             ).first()
             if existing_active:
                 return jsonify({
@@ -455,10 +455,10 @@ def update_order(order_id):
 
             # --- Запрет нескольких активных заказов (кроме брони) ---
             if order.status != 'Забронирован':
-                active_statuses = ['Создан', 'На диагностике', 'В работе', 'Готов к выдаче']
+                truly_active_statuses = ['Создан', 'На диагностике', 'В работе']  # 'Готов к выдаче' НЕ блокирует
                 other_active = WorkOrder.query.filter(
                     WorkOrder.mechanic_id == order.mechanic_id,
-                    WorkOrder.status.in_(active_statuses),
+                    WorkOrder.status.in_(truly_active_statuses),
                     WorkOrder.order_id != order_id
                 ).first()
                 if other_active:

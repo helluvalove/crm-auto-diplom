@@ -31,11 +31,13 @@ async function login() {
 
             // Обновляем информацию о пользователе
             document.getElementById('userInfo').innerHTML = `
-                <span id="statusDot" class="text-success">●</span> 
-                <i class="bi bi-person-circle"></i> 
-                ${currentUser.full_name} (${currentUser.role})
-                <button class="btn btn-sm btn-outline-light ms-2" onclick="logout()">
-                    <i class="bi bi-box-arrow-right"></i> Выйти
+                <span id="statusDot" class="user-status-dot status-online"></span>
+                <span class="user-status-text">
+                    <i class="bi bi-person-circle"></i>
+                    ${currentUser.full_name} (${currentUser.role})
+                </span>
+                <button id="logoutBtn" class="user-logout-btn" onclick="logout()">
+                    <i class="bi bi-box-arrow-right"></i>
                 </button>
             `;
 
@@ -56,13 +58,32 @@ async function login() {
 function logout() {
     setAuthData(null, null);
 
-    document.getElementById('authPanel').style.display = 'block';
+    const authPanel = document.getElementById('authPanel');
+    // Сбрасываем все inline-стили и возвращаем исходные классы
+    authPanel.style.cssText = '';
+    authPanel.className = 'row mb-4';
+    
+    // Восстанавливаем классы у колонок
+    const leftCol = authPanel.querySelector('.col-md-6:first-child');
+    const rightCol = authPanel.querySelector('.col-md-6:last-child');
+    if (leftCol) leftCol.className = 'col-md-6';
+    if (rightCol) rightCol.className = 'col-md-6';
+    
+    // Скрываем основной интерфейс и показываем панель входа
     document.getElementById('mainInterface').style.display = 'none';
-
+    authPanel.style.display = '';  // сброс инлайн-стиля, Bootstrap .row восстановит display:flex
+    
+    // Обновляем информацию о пользователе в navbar
     document.getElementById('userInfo').innerHTML = `
-        <span id="statusDot" class="text-warning">●</span> Не авторизован
+        <span id="statusDot" class="user-status-dot status-offline"></span>
+        <span class="user-status-text">Не авторизован</span>
     `;
-
+    
+    // Удаляем возможные остатки модальных окон (backdrop)
+    const backdrops = document.querySelectorAll('.modal-backdrop');
+    backdrops.forEach(backdrop => backdrop.remove());
+    document.body.classList.remove('modal-open');
+    
     showSuccess('Вы успешно вышли из системы');
 }
 

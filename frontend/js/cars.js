@@ -290,9 +290,9 @@ async function loadClientCars(clientId) {
 
         let html = `
             <div class="mb-3">
-                <div class="alert alert-primary">
-                    <i class="bi bi-person"></i> Клиент: <strong>${client.name}</strong> (тел: ${formatPhone(client.phone)})
-                    <button class="btn btn-sm btn-outline-primary float-end" onclick="loadAllCarsInService()">
+                <div class="alert alert-primary d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-person"></i> Клиент: <strong>${client.name}</strong> (тел: ${formatPhone(client.phone)})</span>
+                    <button class="btn btn-sm btn-outline-primary flex-shrink-0 ms-2" onclick="loadAllCarsInService()">
                         <i class="bi bi-arrow-left"></i> Все авто в сервисе
                     </button>
                 </div>

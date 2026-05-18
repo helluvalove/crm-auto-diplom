@@ -91,3 +91,6 @@ backend\__pycache__
 
 app.log
 logs
+
+frontend\style_old.css
+frontend\index_old.html
