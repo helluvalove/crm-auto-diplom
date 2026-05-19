@@ -9,6 +9,9 @@ let ordersData = [];
 function setAuthData(newToken, user) {
     token = newToken;
     currentUser = user;
+    // Обновляем window-переменные, чтобы все скрипты видели актуальные данные
+    window.token = newToken;
+    window.currentUser = user;
 }
 
 window.API_URL = API_URL;

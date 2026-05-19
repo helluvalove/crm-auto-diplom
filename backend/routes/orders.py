@@ -1,7 +1,9 @@
 from flask import Blueprint, request, jsonify, render_template, make_response, send_file, current_app
 from datetime import datetime, timedelta
-from models import db, WorkOrder, Client, Car, User, Role
+from models import db, WorkOrder, Client, Car, User, Role, OrderPhoto
 import pdfkit, os, sys, platform
+import storage                                   # backend/storage.py
+from routes.vk import vk_notify                  # backend/routes/vk/vk_notify.py
 
 NON_BUSY_STATUSES = {'Выполнен', 'Отменен', 'Готов к выдаче'}
 
@@ -381,12 +383,19 @@ def update_order(order_id):
 
         # --- Статус ---
         if 'status' in data:
-            order.status = data['status']
-            if data['status'] == 'Выполнен' and not order.completed_date:
+            new_status = data['status']
+            status_changed = new_status != order.status
+            order.status = new_status
+            if new_status == 'Выполнен' and not order.completed_date:
                 order.completed_date = datetime.now()
                 pdf_path = save_order_pdf(order_id, 'itogoviy_zakaznaryad.html', 'final')
                 if pdf_path:
                     order.pdf_url = f'/api/orders/{order_id}/pdf/final'
+            # --- VK уведомление клиенту при смене статуса ---
+            if status_changed and order.client and order.client.vk_user_id:
+                vk_notify.notify_status_change(
+                    order.client.vk_user_id, order_id, new_status
+                )
 
         # --- Описание ---
         if 'problem_description' in data:
@@ -743,3 +752,63 @@ def check_mechanic_availability(mechanic_id, appointment_dt, estimated_hours, ex
             return False, f"Механик занят (пересечение с заказом #{order_id})"
 
     return True, None
+
+# ---------------------------------------------------------------------------
+# Загрузка фото механиком
+# ---------------------------------------------------------------------------
+
+@orders_bp.route('/<int:order_id>/photos', methods=['POST'])
+def upload_photo(order_id):
+    """
+    Принимает фото от механика, сохраняет в Yandex Object Storage,
+    записывает в order_photos и отправляет клиенту в VK.
+
+    multipart/form-data:
+        photo        — файл изображения  (обязательно)
+        mechanic_id  — ID механика       (обязательно)
+        comment      — комментарий       (необязательно)
+    """
+    if 'photo' not in request.files:
+        return jsonify({'error': 'Файл photo обязателен'}), 400
+
+    file        = request.files['photo']
+    comment     = request.form.get('comment', '').strip()
+    mechanic_id = request.form.get('mechanic_id')
+
+    if not mechanic_id:
+        return jsonify({'error': 'mechanic_id обязателен'}), 400
+    try:
+        mechanic_id = int(mechanic_id)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'Некорректный mechanic_id'}), 400
+
+    order = WorkOrder.query.get(order_id)
+    if not order:
+        return jsonify({'error': f'Заказ #{order_id} не найден'}), 404
+
+    try:
+        # 1. Yandex Object Storage
+        presigned_url = storage.upload_photo(file, order_id, file.filename)
+
+        # 2. Запись в БД
+        photo = OrderPhoto(
+            order_id=order_id,
+            mechanic_id=mechanic_id,
+            file_url=presigned_url,
+            comment=comment or None,
+        )
+        db.session.add(photo)
+        db.session.commit()
+
+        # 3. Отправка клиенту в VK (ошибка VK не роняет ответ)
+        if order.client and order.client.vk_user_id:
+            vk_notify.send_photo_to_client(
+                order.client.vk_user_id, order_id, presigned_url, comment
+            )
+
+        return jsonify(photo.to_dict()), 201
+
+    except Exception as e:
+        db.session.rollback()
+        print(f"❌ Ошибка в upload_photo: {e}")
+        return jsonify({'error': str(e)}), 500

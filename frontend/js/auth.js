@@ -25,25 +25,21 @@ async function login() {
         if (response.ok && data.token) {
             setAuthData(data.token, data.user);
 
-            // Скрываем панель входа, показываем основной интерфейс
             document.getElementById('authPanel').style.display = 'none';
-            document.getElementById('mainInterface').style.display = 'block';
 
-            // Обновляем информацию о пользователе
             document.getElementById('userInfo').innerHTML = `
                 <span id="statusDot" class="user-status-dot status-online"></span>
                 <span class="user-status-text">
                     <i class="bi bi-person-circle"></i>
-                    ${currentUser.full_name} (${currentUser.role})
+                    ${data.user.full_name} (${data.user.role})
                 </span>
                 <button id="logoutBtn" class="user-logout-btn" onclick="logout()">
                     <i class="bi bi-box-arrow-right"></i>
                 </button>
             `;
 
-            // Настраиваем интерфейс и загружаем стартовые данные в зависимости от роли
-            applyRoleUI(currentUser);
-
+            applyRoleUI(data.user);
+            document.getElementById('mainInterface').style.display = 'block';
             showSuccess('Успешный вход в систему!');
         } else {
             showError(data.error || 'Ошибка аутентификации');
@@ -59,87 +55,118 @@ function logout() {
     setAuthData(null, null);
 
     const authPanel = document.getElementById('authPanel');
-    // Сбрасываем все inline-стили и возвращаем исходные классы
     authPanel.style.cssText = '';
     authPanel.className = 'row mb-4';
     
-    // Восстанавливаем классы у колонок
     const leftCol = authPanel.querySelector('.col-md-6:first-child');
     const rightCol = authPanel.querySelector('.col-md-6:last-child');
     if (leftCol) leftCol.className = 'col-md-6';
     if (rightCol) rightCol.className = 'col-md-6';
     
-    // Скрываем основной интерфейс и показываем панель входа
     document.getElementById('mainInterface').style.display = 'none';
-    authPanel.style.display = '';  // сброс инлайн-стиля, Bootstrap .row восстановит display:flex
+    authPanel.style.display = '';
     
-    // Обновляем информацию о пользователе в navbar
     document.getElementById('userInfo').innerHTML = `
         <span id="statusDot" class="user-status-dot status-offline"></span>
         <span class="user-status-text">Не авторизован</span>
     `;
     
-    // Удаляем возможные остатки модальных окон (backdrop)
     const backdrops = document.querySelectorAll('.modal-backdrop');
     backdrops.forEach(backdrop => backdrop.remove());
     document.body.classList.remove('modal-open');
+    
+    // Показать футер (был скрыт для механика)
+    const footer = document.querySelector('.crm-footer');
+    if (footer) footer.style.display = '';
     
     showSuccess('Вы успешно вышли из системы');
 }
 
 // ==================== ПРИМЕНЕНИЕ ИНТЕРФЕЙСА ПО РОЛИ ====================
 function applyRoleUI(user) {
-    const desktopTabs = document.getElementById('mainTabs');
-    const mobileNav = document.getElementById('mobileNav');
+    console.log('[applyRoleUI] вызов с user:', user);
 
-    // Явно перечисляем все вкладки, чтобы гарантированно скрыть
+    if (!user) {
+        console.error('[applyRoleUI] ОШИБКА: user is null/undefined!');
+        return;
+    }
+
+    const desktopTabs = document.getElementById('mainTabs');
+    const mobileNav   = document.getElementById('mobileNav');
+    const footer      = document.querySelector('.crm-footer');
+
+    // Скрываем все tab-pane
     const allTabIds = [
         'clientsTab', 'ordersTab', 'newOrderTab', 'requestsTab',
         'carsTab', 'archiveTab', 'mechanicsTab', 'statisticsTab',
         'availableOrdersTab', 'myWorksTab', 'mechanicProfileTab'
     ];
-
-    // Скрываем все вкладки
     allTabIds.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
     });
 
-    // Снимаем активность со всех кнопок
+    // Снимаем активность со всех кнопок навигации
     document.querySelectorAll('#mainTabs .nav-link, #mobileNav .nav-link')
         .forEach(btn => btn.classList.remove('active'));
 
-    if (user.role === 'mechanic') {
-        // Скрываем десктопную панель через классы Bootstrap
+    const isMechanic = user.role === 'mechanic' || 
+                       user.role === 'механик' || 
+                       user.role?.toLowerCase() === 'mechanic';
+
+    if (isMechanic) {
+        console.log('[applyRoleUI] → роль: механик');
+
+        // Жёстко скрываем десктопную панель
         if (desktopTabs) {
             desktopTabs.classList.add('d-none');
             desktopTabs.classList.remove('d-flex');
+            desktopTabs.setAttribute('style', 'display: none !important');
         }
-        // Показываем мобильную панель (инлайн‑стиль работает)
-        if (mobileNav) mobileNav.style.display = 'flex';
+
+        // Показываем мобильную панель, не трогая остальные inline-стили (justify-content, padding)
+        if (mobileNav) {
+            mobileNav.style.display = 'flex';
+            // НЕ используем setAttribute, чтобы не стереть выравнивание
+        }
+
+        // Скрываем футер для механика
+        if (footer) footer.style.display = 'none';
 
         // Показываем первую вкладку механика
-        document.getElementById('availableOrdersTab').style.display = 'block';
-        // Активируем кнопку "Заказы"
+        const availTab = document.getElementById('availableOrdersTab');
+        if (availTab) availTab.style.display = 'block';
+
         const firstBtn = mobileNav?.querySelector('.nav-link');
         if (firstBtn) firstBtn.classList.add('active');
-        // Загружаем доступные заказы
+
         if (typeof loadAvailableOrders === 'function') loadAvailableOrders();
+
     } else {
-        // Менеджер: показываем десктопную панель
+        console.log('[applyRoleUI] → роль: менеджер');
+
+        // Показываем десктопную панель
         if (desktopTabs) {
             desktopTabs.classList.remove('d-none');
             desktopTabs.classList.add('d-flex');
+            desktopTabs.style.display = '';
+            desktopTabs.removeAttribute('style');
         }
-        // Скрываем мобильную панель
-        if (mobileNav) mobileNav.style.display = 'none';
 
-        // Показываем первую вкладку "Клиенты"
-        document.getElementById('clientsTab').style.display = 'block';
+        // Скрываем мобильную панель
+        if (mobileNav) {
+            mobileNav.style.display = 'none';
+        }
+
+        // Показываем футер для менеджера
+        if (footer) footer.style.display = '';
+
+        const clientsTab = document.getElementById('clientsTab');
+        if (clientsTab) clientsTab.style.display = 'block';
+
         const clientsBtn = desktopTabs?.querySelector('.nav-link');
         if (clientsBtn) clientsBtn.classList.add('active');
 
-        // Загружаем данные менеджера
         loadClients();
         loadOrders('active');
         loadRequests();

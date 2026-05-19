@@ -102,7 +102,7 @@
         <div id="mainInterface" style="display: none;">
             
             <!-- ДЕСКТОПНАЯ ПАНЕЛЬ НАВИГАЦИИ -->
-            <ul class="nav nav-tabs mb-4 d-flex" id="mainTabs">
+            <ul class="nav nav-tabs mb-4 d-none" id="mainTabs">
                 <li class="nav-item">
                     <button class="nav-link active" onclick="showTab('clients', event)">
                         <i class="bi bi-people"></i> Клиенты
@@ -168,7 +168,7 @@
             <!-- КОНТЕНТ ВСЕХ ВКЛАДОК -->
             <div id="tabContent">
                 <!-- Вкладка Клиенты (список – 7, форма – 5) -->
-                <div id="clientsTab" class="tab-pane">
+                <div id="clientsTab" class="tab-pane" style="display: none;">
                     <div class="row">
                         <div class="col-md-7">
                             <div class="card">
