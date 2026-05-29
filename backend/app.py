@@ -4,7 +4,7 @@ from models import db, User
 from config import Config
 import os
 import logging
-from logging.handlers import RotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler
 
 # Не используем basicConfig, чтобы не было конфликта с RotatingFileHandler
 # logging.basicConfig(filename='app.log', level=logging.DEBUG)
@@ -40,7 +40,12 @@ def create_app():
     # Создаём папку logs в той же директории, где находится app.py (папка backend)
     if not os.path.exists('logs'):
         os.mkdir('logs')
-    file_handler = RotatingFileHandler('logs/app.log', maxBytes=10240, backupCount=10)
+    # TimedRotatingFileHandler вместо RotatingFileHandler — не блокирует файл на Windows.
+    # RotatingFileHandler делает os.rename() пока файл открыт другим потоком → PermissionError
+    # → каждый logger.info() из фонового потока зависает на обработке ошибки (~несколько сек).
+    file_handler = TimedRotatingFileHandler(
+        'logs/app.log', when='midnight', backupCount=10, encoding='utf-8', delay=True
+    )
     file_handler.setFormatter(logging.Formatter(
         '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
     ))
@@ -48,6 +53,17 @@ def create_app():
     app.logger.addHandler(file_handler)
     app.logger.setLevel(logging.INFO)
     app.logger.info('Сервер запущен')
+
+    # Подключаем root logger к тому же хендлеру — теперь все модули
+    # (vk_photo_sender, vk_notify и др.) пишут INFO в консоль и файл.
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(logging.Formatter('%(levelname)s [%(name)s] %(message)s'))
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
     # =================================================
 
     @app.route('/privacy')

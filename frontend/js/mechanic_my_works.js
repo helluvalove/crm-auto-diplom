@@ -122,20 +122,36 @@ function renderMyWorkCard(order) {
                 <div>
                     <h6 class="mb-3">
                         <i class="bi bi-camera text-primary me-2"></i>
-                        Добавить фото
+                        Отправить фото клиенту
                     </h6>
 
                     <div class="mb-2">
-                        <label class="form-label small text-muted">Фото (замена запчастей, результат работы)</label>
+                        <label class="form-label small text-muted">Фото до 10 штук</label>
                         <input type="file"
                                class="form-control"
                                id="photoFileInput"
                                accept="image/*"
-                               capture="environment">
+                               multiple
+                               onchange="previewPhotos(this)">
+                    </div>
+
+                    <!-- Превью -->
+                    <div id="photoPreviews" class="d-flex flex-wrap gap-2 mb-2"></div>
+
+                    <!-- Прогресс сжатия/загрузки -->
+                    <div id="photoProgress" class="mb-2" style="display:none">
+                        <div class="d-flex justify-content-between small text-muted mb-1">
+                            <span id="photoProgressLabel">Подготовка...</span>
+                            <span id="photoProgressPct">0%</span>
+                        </div>
+                        <div class="progress" style="height:6px">
+                            <div id="photoProgressBar" class="progress-bar progress-bar-striped progress-bar-animated"
+                                 style="width:0%"></div>
+                        </div>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label small text-muted">Комментарий к фото</label>
+                        <label class="form-label small text-muted">Комментарий (необязательно)</label>
                         <input type="text"
                                class="form-control"
                                id="photoComment"
@@ -144,7 +160,7 @@ function renderMyWorkCard(order) {
 
                     <button class="btn btn-primary w-100"
                             id="uploadPhotoBtn"
-                            onclick="uploadOrderPhoto(${order.order_id})">
+                            onclick="uploadOrderPhotos(${order.order_id})">
                         <i class="bi bi-cloud-upload me-2"></i>Отправить фото клиенту
                     </button>
 
@@ -174,53 +190,146 @@ async function updateMyOrderStatus(orderId, newStatus) {
     }
 }
 
-async function uploadOrderPhoto(orderId) {
-    const fileInput   = document.getElementById('photoFileInput');
+// ── Превью выбранных фото ────────────────────────────────────────────────
+function previewPhotos(input) {
+    const container = document.getElementById('photoPreviews');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!input.files.length) return;
+
+    Array.from(input.files).slice(0, 10).forEach((file, i) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            const wrapper = document.createElement('div');
+            wrapper.style.cssText = 'position:relative;width:64px;height:64px;flex-shrink:0';
+            wrapper.innerHTML = `
+                <img src="${e.target.result}"
+                     style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:2px solid #dee2e6">
+                <span class="badge bg-primary"
+                      style="position:absolute;bottom:2px;right:2px;font-size:9px">${i + 1}</span>`;
+            container.appendChild(wrapper);
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+// ── Сжатие одного файла через Canvas (браузер, без сервера) ─────────────
+function compressImage(file, maxWidth, quality) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                let w = img.width, h = img.height;
+                if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+
+                canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', quality);
+            };
+            img.onerror = () => resolve(file);
+            img.src = e.target.result;
+        };
+        reader.onerror = () => resolve(file);
+        reader.readAsDataURL(file);
+    });
+}
+
+// ── Обновление прогресс-бара ─────────────────────────────────────────────
+function setProgress(label, pct) {
+    const bar   = document.getElementById('photoProgressBar');
+    const lbl   = document.getElementById('photoProgressLabel');
+    const pctEl = document.getElementById('photoProgressPct');
+    const wrap  = document.getElementById('photoProgress');
+    if (!bar) return;
+    wrap.style.display = 'block';
+    bar.style.width    = pct + '%';
+    if (lbl)   lbl.textContent  = label;
+    if (pctEl) pctEl.textContent = pct + '%';
+}
+
+// ── Основная функция отправки ─────────────────────────────────────────────
+async function uploadOrderPhotos(orderId) {
+    const fileInput    = document.getElementById('photoFileInput');
     const commentInput = document.getElementById('photoComment');
-    const btn         = document.getElementById('uploadPhotoBtn');
-    const resultDiv   = document.getElementById('photoUploadResult');
+    const btn          = document.getElementById('uploadPhotoBtn');
+    const resultDiv    = document.getElementById('photoUploadResult');
+    const progressWrap = document.getElementById('photoProgress');
 
     if (!fileInput.files.length) {
         resultDiv.innerHTML = `<div class="alert alert-warning py-2 small">
-            <i class="bi bi-exclamation-triangle me-1"></i>Выберите фото
-        </div>`;
+            <i class="bi bi-exclamation-triangle me-1"></i>Выберите хотя бы одно фото</div>`;
         return;
     }
 
+    const files = Array.from(fileInput.files).slice(0, 10);
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Загрузка...';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Подготовка...';
     resultDiv.innerHTML = '';
+    progressWrap.style.display = 'block';
 
+    // ── 1. Сжатие на фронте (Canvas) ─────────────────────────────────────
+    // Сжимаем до 1280px / quality 0.75 — уменьшает типичный файл с 4-6 МБ до ~300-500 кб
+    // Это экономит 30-50 секунд на передаче с телефона на сервер
+    const compressed = [];
+    for (let i = 0; i < files.length; i++) {
+        setProgress(`Сжатие ${i + 1} из ${files.length}...`, Math.round((i / files.length) * 40));
+        const blob = await compressImage(files[i], 1280, 0.75);
+        compressed.push(blob);
+    }
+    setProgress('Загрузка на сервер...', 40);
+
+    // ── 2. Отправка на сервер ─────────────────────────────────────────────
     const formData = new FormData();
-    formData.append('photo', fileInput.files[0]);
+    compressed.forEach((blob, i) => formData.append('photos', blob, `photo_${i + 1}.jpg`));
     formData.append('mechanic_id', currentUser.user_id);
     formData.append('comment', commentInput.value.trim());
 
     try {
-        const response = await fetch(`${API_URL}/orders/${orderId}/photos`, {
-            method: 'POST',
-            body: formData   // Content-Type НЕ ставим — браузер сам добавит boundary
+        // XHR вместо fetch — даёт реальный progress upload
+        const result = await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.onprogress = e => {
+                if (e.lengthComputable) {
+                    const pct = 40 + Math.round((e.loaded / e.total) * 55);
+                    setProgress(`Загрузка... ${Math.round(e.loaded / 1024)}кб / ${Math.round(e.total / 1024)}кб`, pct);
+                }
+            };
+
+            xhr.onload = () => {
+                try { resolve({ ok: xhr.status === 201, data: JSON.parse(xhr.responseText) }); }
+                catch { reject(new Error('Ошибка ответа сервера')); }
+            };
+            xhr.onerror = () => reject(new Error('Ошибка соединения'));
+
+            xhr.open('POST', `${API_URL}/orders/${orderId}/photos`);
+            xhr.send(formData);
         });
 
-        const data = await response.json();
+        setProgress('Готово', 100);
 
-        if (response.ok) {
+        if (result.ok) {
             resultDiv.innerHTML = `<div class="alert alert-success py-2 small">
-                <i class="bi bi-check-circle me-1"></i>Фото отправлено клиенту в VK
+                <i class="bi bi-check-circle me-1"></i>
+                ${files.length > 1 ? files.length + ' фото отправляются клиенту в VK' : 'Фото отправляется клиенту в VK'}
+                <br><small class="text-muted">Доставка занимает до 1 минуты</small>
             </div>`;
             fileInput.value = '';
             commentInput.value = '';
+            document.getElementById('photoPreviews').innerHTML = '';
         } else {
             resultDiv.innerHTML = `<div class="alert alert-danger py-2 small">
-                <i class="bi bi-x-circle me-1"></i>${data.error || 'Ошибка загрузки'}
-            </div>`;
+                <i class="bi bi-x-circle me-1"></i>${result.data.error || 'Ошибка загрузки'}</div>`;
         }
     } catch (e) {
         resultDiv.innerHTML = `<div class="alert alert-danger py-2 small">
-            <i class="bi bi-x-circle me-1"></i>Ошибка соединения
-        </div>`;
+            <i class="bi bi-x-circle me-1"></i>Ошибка соединения</div>`;
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-cloud-upload me-2"></i>Отправить фото клиенту';
+        setTimeout(() => { if (progressWrap) progressWrap.style.display = 'none'; }, 3000);
     }
 }

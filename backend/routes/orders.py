@@ -1,9 +1,11 @@
 from flask import Blueprint, request, jsonify, render_template, make_response, send_file, current_app
 from datetime import datetime, timedelta
 from models import db, WorkOrder, Client, Car, User, Role, OrderPhoto
-import pdfkit, os, sys, platform
-import storage                                   # backend/storage.py
-from routes.vk import vk_notify                  # backend/routes/vk/vk_notify.py
+import pdfkit, os, sys, platform, threading
+import storage    
+import io                           
+from routes.vk.vk_notify import notify_status_change
+from routes.vk.vk_photo_sender import send_photos_to_client
 
 NON_BUSY_STATUSES = {'Выполнен', 'Отменен', 'Готов к выдаче'}
 
@@ -393,7 +395,7 @@ def update_order(order_id):
                     order.pdf_url = f'/api/orders/{order_id}/pdf/final'
             # --- VK уведомление клиенту при смене статуса ---
             if status_changed and order.client and order.client.vk_user_id:
-                vk_notify.notify_status_change(
+                notify_status_change(
                     order.client.vk_user_id, order_id, new_status
                 )
 
@@ -754,25 +756,23 @@ def check_mechanic_availability(mechanic_id, appointment_dt, estimated_hours, ex
     return True, None
 
 # ---------------------------------------------------------------------------
-# Загрузка фото механиком
+# Загрузка фото механиком (оптимизированная, параллельная)
 # ---------------------------------------------------------------------------
 
 @orders_bp.route('/<int:order_id>/photos', methods=['POST'])
 def upload_photo(order_id):
     """
-    Принимает фото от механика, сохраняет в Yandex Object Storage,
-    записывает в order_photos и отправляет клиенту в VK.
-
-    multipart/form-data:
-        photo        — файл изображения  (обязательно)
-        mechanic_id  — ID механика       (обязательно)
-        comment      — комментарий       (необязательно)
+    Принимает несколько фото от механика (до 10), сохраняет в Yandex Object Storage,
+    записывает в order_photos и отправляет клиенту в VK одним сообщением-сеткой.
+    Загрузка в S3 выполняется параллельно (до 5 файлов одновременно).
     """
-    if 'photo' not in request.files:
-        return jsonify({'error': 'Файл photo обязателен'}), 400
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    file        = request.files['photo']
-    comment     = request.form.get('comment', '').strip()
+    files = request.files.getlist('photos')
+    if not files or all(f.filename == '' for f in files):
+        return jsonify({'error': 'Не переданы файлы photos'}), 400
+
+    comment = request.form.get('comment', '').strip()
     mechanic_id = request.form.get('mechanic_id')
 
     if not mechanic_id:
@@ -786,29 +786,100 @@ def upload_photo(order_id):
     if not order:
         return jsonify({'error': f'Заказ #{order_id} не найден'}), 404
 
-    try:
-        # 1. Yandex Object Storage
-        presigned_url = storage.upload_photo(file, order_id, file.filename)
+    files = files[:10]
+    total_files = len(files)
 
-        # 2. Запись в БД
-        photo = OrderPhoto(
-            order_id=order_id,
-            mechanic_id=mechanic_id,
-            file_url=presigned_url,
-            comment=comment or None,
-        )
-        db.session.add(photo)
-        db.session.commit()
+    # ---------- Читаем все файлы в память ДО параллельной загрузки ----------
+    # FileStorage объекты нельзя читать из нескольких потоков одновременно —
+    # они все читают из одного HTTP-сокета. Сначала читаем в bytes, потом параллельно в S3.
+    file_data = []  # list of (filename, bytes)
+    for f in files:
+        try:
+            file_data.append((f.filename, f.read()))
+        except Exception as e:
+            file_data.append((f.filename, None))
 
-        # 3. Отправка клиенту в VK (ошибка VK не роняет ответ)
-        if order.client and order.client.vk_user_id:
-            vk_notify.send_photo_to_client(
-                order.client.vk_user_id, order_id, presigned_url, comment
+    # ---------- Параллельная загрузка в S3 ----------
+    def upload_one(filename, raw_bytes):
+        if raw_bytes is None:
+            return None, 'Не удалось прочитать файл'
+        try:
+            url = storage.upload_photo(io.BytesIO(raw_bytes), order_id, filename)
+            return url, None
+        except Exception as e:
+            return None, str(e)
+
+    # Массив для результатов (сохраняем порядок)
+    results = [None] * total_files
+    errors = []
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_index = {executor.submit(upload_one, fname, raw): idx
+                           for idx, (fname, raw) in enumerate(file_data)}
+        for future in as_completed(future_to_index):
+            idx = future_to_index[future]
+            url, err = future.result()
+            if err:
+                errors.append(f"Фото {idx+1}: {err}")
+            else:
+                results[idx] = url
+
+    # Сохраняем только успешно загруженные
+    saved_photos = []
+    presigned_urls = []
+    for idx, url in enumerate(results):
+        if url is not None:
+            presigned_urls.append(url)
+            photo = OrderPhoto(
+                order_id=order_id,
+                mechanic_id=mechanic_id,
+                file_url=url,
+                comment=comment or None,
             )
+            db.session.add(photo)
+            saved_photos.append(photo)
 
-        return jsonify(photo.to_dict()), 201
-
-    except Exception as e:
+    if not saved_photos:
         db.session.rollback()
-        print(f"❌ Ошибка в upload_photo: {e}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'Не удалось загрузить ни одного фото', 'details': errors}), 500
+
+    db.session.commit()
+
+    # ---------- Отправка в VK (фон) ----------
+    if order.client and order.client.vk_user_id:
+        order_info = {}
+        if order.car:
+            order_info['car_model'] = order.car.model or ''
+            order_info['car_gos_number'] = order.car.gos_number or ''
+        mechanic = User.query.get(mechanic_id)
+        if mechanic:
+            order_info['mechanic_name'] = mechanic.full_name
+
+        app = current_app._get_current_object()
+        vk_kwargs = dict(
+            vk_user_id=order.client.vk_user_id,
+            order_id=order_id,
+            photo_urls=presigned_urls,
+            comment=comment,
+            order_info=order_info,
+        )
+        def _send_vk_photos(app, kwargs):
+            with app.app_context():
+                send_photos_to_client(**kwargs)
+
+        threading.Thread(target=_send_vk_photos, args=(app, vk_kwargs), daemon=True).start()
+
+    response_data = {
+        'message': f'Загружено {len(saved_photos)} фото',
+        'photos': [p.to_dict() for p in saved_photos],
+    }
+    if errors:
+        response_data['warnings'] = errors
+    return jsonify(response_data), 201
+
+def notify_client_status_change(order: WorkOrder, new_status: str) -> None:
+    """Вызывается после изменения статуса заказа — отправляет уведомление клиенту в VK."""
+    if order.client and order.client.vk_user_id:
+        notify_status_change(
+            order.client.vk_user_id, order.order_id, new_status
+        )
