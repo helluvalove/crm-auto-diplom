@@ -96,6 +96,9 @@ function showTab(tabName, event = null, options = {}) {
         case 'mechanicProfile':
             loadMechanicProfile();
             break;
+        case 'mechanicHistory':
+            loadMechanicHistory();
+            break;
     }
 }
 

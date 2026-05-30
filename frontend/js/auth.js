@@ -99,7 +99,8 @@ function applyRoleUI(user) {
     const allTabIds = [
         'clientsTab', 'ordersTab', 'newOrderTab', 'requestsTab',
         'carsTab', 'archiveTab', 'mechanicsTab', 'statisticsTab',
-        'availableOrdersTab', 'myWorksTab', 'mechanicProfileTab'
+        'availableOrdersTab', 'myWorksTab', 'mechanicProfileTab',
+        'mechanicHistoryTab'
     ];
     allTabIds.forEach(id => {
         const el = document.getElementById(id);
@@ -117,30 +118,40 @@ function applyRoleUI(user) {
     if (isMechanic) {
         console.log('[applyRoleUI] → роль: механик');
 
-        // Жёстко скрываем десктопную панель
+        // Скрыть десктопную панель, показать мобильную
         if (desktopTabs) {
             desktopTabs.classList.add('d-none');
             desktopTabs.classList.remove('d-flex');
             desktopTabs.setAttribute('style', 'display: none !important');
         }
-
-        // Показываем мобильную панель, не трогая остальные inline-стили (justify-content, padding)
         if (mobileNav) {
             mobileNav.style.display = 'flex';
-            // НЕ используем setAttribute, чтобы не стереть выравнивание
         }
-
-        // Скрываем футер для механика
         if (footer) footer.style.display = 'none';
 
-        // Показываем первую вкладку механика
+        // 1. Показать все нужные вкладки
         const availTab = document.getElementById('availableOrdersTab');
         if (availTab) availTab.style.display = 'block';
+        const myWorksTab = document.getElementById('myWorksTab');
+        if (myWorksTab) myWorksTab.style.display = 'block';
+        const historyTab = document.getElementById('mechanicHistoryTab');
+        if (historyTab) historyTab.style.display = 'block';
+        const profileTab = document.getElementById('mechanicProfileTab');
+        if (profileTab) profileTab.style.display = 'block';
 
-        const firstBtn = mobileNav?.querySelector('.nav-link');
-        if (firstBtn) firstBtn.classList.add('active');
+        // 2. Сделать активной вкладку "Мои работы" (myWorksTab)
+        // Сначала снять активность со всех кнопок навигации
+        document.querySelectorAll('#mainTabs .nav-link, #mobileNav .nav-link')
+            .forEach(btn => btn.classList.remove('active'));
+        // Найти кнопку, которая ведёт на myWorksTab, и сделать её активной
+        const myWorksBtn = mobileNav?.querySelector('.nav-link[onclick*="myWorks"]');
+        if (myWorksBtn) myWorksBtn.classList.add('active');
 
+        // 3. Загрузить данные для всех вкладок
         if (typeof loadAvailableOrders === 'function') loadAvailableOrders();
+        if (typeof loadMyWork === 'function') loadMyWork();
+        if (typeof loadMechanicHistory === 'function') loadMechanicHistory();
+        if (typeof loadMechanicProfile === 'function') loadMechanicProfile();
 
     } else {
         console.log('[applyRoleUI] → роль: менеджер');

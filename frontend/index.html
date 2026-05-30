@@ -16,8 +16,8 @@
 <body>
     <!-- Навигация -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
-        <div class="container">
-            <a class="navbar-brand" href="#">
+        <div class="container" id="navbarContainer">
+            <a class="navbar-brand" href="#" style="font-size:clamp(0.8rem,2.5vw,1rem);">
                 CRM Автомастерская 43 | г. Киров
             </a>
             <div class="user-status-pill" id="userInfo">
@@ -29,6 +29,35 @@
             </div>
         </div>
     </nav>
+    <style>
+    /* Только мобиль: бренд и pill на разных строках */
+    @media (max-width: 575px) {
+        #navbarContainer {
+            flex-wrap: wrap !important;
+            gap: 4px;
+        }
+        #navbarContainer .navbar-brand {
+            flex: 0 0 100%;
+            font-size: 0.82rem !important;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #navbarContainer #userInfo {
+            flex: 0 0 100%;
+            max-width: 100%;
+            justify-content: flex-start;
+        }
+        #navbarContainer #userInfo .user-status-text {
+            max-width: calc(100vw - 100px);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        /* Компенсируем двойную строку navbar */
+        .navbar { padding-bottom: 6px; }
+    }
+    </style>
 
     <div class="container">
         <!-- Панель аутентификации -->
@@ -147,20 +176,20 @@
 
             <!-- МОБИЛЬНАЯ ПАНЕЛЬ НАВИГАЦИИ (механик) -->
             <ul class="nav nav-pills fixed-bottom bg-white border-top shadow" 
-                id="mobileNav" style="display: none; justify-content: space-around; padding: 8px 0;">
+                id="mobileNav" style="display: none; justify-content: space-around; padding: 6px 0 calc(6px + env(safe-area-inset-bottom));">
                 <li class="nav-item text-center">
-                    <button class="nav-link active" onclick="showTab('availableOrders', event)">
-                        <i class="bi bi-clipboard fs-5"></i><br><small>Заказы</small>
+                    <button class="nav-link active" onclick="showTab('myWorks', event)" style="padding:4px 8px;">
+                        <i class="bi bi-tools fs-5 d-block"></i><small style="font-size:10px;">Работа</small>
                     </button>
                 </li>
                 <li class="nav-item text-center">
-                    <button class="nav-link" onclick="showTab('myWorks', event)">
-                        <i class="bi bi-tools fs-5"></i><br><small>Мои работы</small>
+                    <button class="nav-link" onclick="showTab('mechanicHistory', event)" style="padding:4px 8px;">
+                        <i class="bi bi-clock-history fs-5 d-block"></i><small style="font-size:10px;">История</small>
                     </button>
                 </li>
                 <li class="nav-item text-center">
-                    <button class="nav-link" onclick="showTab('mechanicProfile', event)">
-                        <i class="bi bi-person fs-5"></i><br><small>Профиль</small>
+                    <button class="nav-link" onclick="showTab('mechanicProfile', event)" style="padding:4px 8px;">
+                        <i class="bi bi-person fs-5 d-block"></i><small style="font-size:10px;">Профиль</small>
                     </button>
                 </li>
             </ul>
@@ -659,37 +688,49 @@
                 </div>
 
                 <!-- ТРИ НОВЫЕ ВКЛАДКИ ДЛЯ АВТОМЕХАНИКА -->
-                <!-- Вкладка Доступные заказы -->
-                <div id="availableOrdersTab" class="tab-pane" style="display: none;">
-                    <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center bg-primary text-white">
-                            <h5 class="mb-0"><i class="bi bi-clipboard"></i> Доступные заказ-наряды</h5>
-                            <button class="btn btn-sm btn-light" onclick="loadAvailableOrders()">
-                                <i class="bi bi-arrow-clockwise"></i> Обновить
+
+                <!-- Вкладка Мои работы -->
+                <div id="myWorksTab" class="tab-pane" style="display: none; padding-bottom: 80px;">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="bi bi-tools"></i> Моя текущая работа</h5>
+                            <button class="btn btn-sm btn-light" onclick="refreshMyWork()" title="Обновить">
+                                <i class="bi bi-arrow-clockwise"></i>
                             </button>
                         </div>
                         <div class="card-body">
-                            <div id="availableOrdersList">
+                            <div id="myWorkContent">
                                 <div class="text-center text-muted py-4">
-                                    <i class="bi bi-clipboard display-6"></i><br>
-                                    Загрузка доступных заказов...
+                                    <i class="bi bi-tools display-6"></i><br>
+                                    Загрузка...
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Вкладка Мои работы -->
-                <div id="myWorksTab" class="tab-pane" style="display: none;">
-                    <div class="card">
-                        <div class="card-header bg-primary text-white">
-                            <h5 class="mb-0"><i class="bi bi-tools"></i> Моя текущая работа</h5>
+                <!-- Вкладка История заказов механика -->
+                <div id="mechanicHistoryTab" class="tab-pane" style="display: none;">
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>История заказов</h5>
+                            <button class="btn btn-sm btn-light" onclick="loadMechanicHistory()">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
                         </div>
-                        <div class="card-body">
-                            <div id="myWorkContent">
-                                <div class="text-center text-muted py-4">
-                                    <i class="bi bi-tools display-6"></i><br>
-                                    У вас пока нет активного заказа
+                        <div class="card-body px-2">
+                            <!-- Фильтр по дате завершения -->
+                            <div class="d-flex gap-2 mb-3 align-items-center">
+                                <label class="form-label mb-0 text-muted small flex-shrink-0">Дата:</label>
+                                <input type="date" class="form-control form-control-sm" id="historyDateFilter" onchange="loadMechanicHistory()">
+                                <button class="btn btn-sm btn-outline-secondary flex-shrink-0" onclick="document.getElementById('historyDateFilter').value='';loadMechanicHistory();" title="Сбросить">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                            <div id="mechanicHistoryContent">
+                                <div class="text-center text-muted py-5">
+                                    <i class="bi bi-clock-history display-6"></i>
+                                    <p class="mt-2 mb-0">История загружается...</p>
                                 </div>
                             </div>
                         </div>
@@ -697,8 +738,8 @@
                 </div>
 
                 <!-- Вкладка Профиль -->
-                <div id="mechanicProfileTab" class="tab-pane" style="display: none;">
-                    <div class="card">
+                <div id="mechanicProfileTab" class="tab-pane" style="display: none; padding-bottom: 80px;">
+                    <div class="card border-0 shadow-sm">
                         <div class="card-header bg-primary text-white">
                             <h5 class="mb-0"><i class="bi bi-person"></i> Профиль автомеханика</h5>
                         </div>
@@ -799,14 +840,17 @@
     <script src="js/orders.js"></script>
     <script src="js/mechanics.js"></script>
     <script src="js/vk.js"></script>
-    <script src="js/mechanic_all_orders.js"></script>
     <script src="js/mechanic_my_works.js"></script>
     <script src="js/mechanic_profile.js"></script>
+    <script src="js/mechanic_history.js"></script>
     <script src="app.js"></script>
     <script>
 
     function ordersFilterClick(btn, filter) {
         // Передаём фиктивный event, чтобы filterOrders мог определить цель
+        if (tabName === 'mechanicHistory' && typeof loadMechanicHistory === 'function') {
+            loadMechanicHistory();
+        }
         if (typeof filterOrders === 'function') {
             filterOrders(filter, { target: btn });
         }
@@ -820,6 +864,14 @@
         if (dot) {
             dot.classList.remove('status-online', 'status-offline');
             dot.classList.add(name ? 'status-online' : 'status-offline');
+        }
+        // Автозагрузка данных механика при входе
+        if (name && role === 'mechanic') {
+            setTimeout(() => {
+                if (typeof loadMyWork === 'function') loadMyWork();
+                if (typeof loadMechanicHistory === 'function') loadMechanicHistory();
+                if (typeof loadMechanicProfile === 'function') loadMechanicProfile();
+            }, 100);
         }
     }
     </script>
