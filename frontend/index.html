@@ -865,14 +865,6 @@
             dot.classList.remove('status-online', 'status-offline');
             dot.classList.add(name ? 'status-online' : 'status-offline');
         }
-        // Автозагрузка данных механика при входе
-        if (name && role === 'mechanic') {
-            setTimeout(() => {
-                if (typeof loadMyWork === 'function') loadMyWork();
-                if (typeof loadMechanicHistory === 'function') loadMechanicHistory();
-                if (typeof loadMechanicProfile === 'function') loadMechanicProfile();
-            }, 100);
-        }
     }
     </script>
 </body>

@@ -75,7 +75,6 @@ function logout() {
     backdrops.forEach(backdrop => backdrop.remove());
     document.body.classList.remove('modal-open');
     
-    // Показать футер (был скрыт для механика)
     const footer = document.querySelector('.crm-footer');
     if (footer) footer.style.display = '';
     
@@ -99,8 +98,7 @@ function applyRoleUI(user) {
     const allTabIds = [
         'clientsTab', 'ordersTab', 'newOrderTab', 'requestsTab',
         'carsTab', 'archiveTab', 'mechanicsTab', 'statisticsTab',
-        'availableOrdersTab', 'myWorksTab', 'mechanicProfileTab',
-        'mechanicHistoryTab'
+        'myWorksTab', 'mechanicHistoryTab', 'mechanicProfileTab'
     ];
     allTabIds.forEach(id => {
         const el = document.getElementById(id);
@@ -129,52 +127,30 @@ function applyRoleUI(user) {
         }
         if (footer) footer.style.display = 'none';
 
-        // 1. Показать все нужные вкладки
-        const availTab = document.getElementById('availableOrdersTab');
-        if (availTab) availTab.style.display = 'block';
-        const myWorksTab = document.getElementById('myWorksTab');
-        if (myWorksTab) myWorksTab.style.display = 'block';
-        const historyTab = document.getElementById('mechanicHistoryTab');
-        if (historyTab) historyTab.style.display = 'block';
-        const profileTab = document.getElementById('mechanicProfileTab');
-        if (profileTab) profileTab.style.display = 'block';
-
-        // 2. Сделать активной вкладку "Мои работы" (myWorksTab)
-        // Сначала снять активность со всех кнопок навигации
-        document.querySelectorAll('#mainTabs .nav-link, #mobileNav .nav-link')
-            .forEach(btn => btn.classList.remove('active'));
-        // Найти кнопку, которая ведёт на myWorksTab, и сделать её активной
-        const myWorksBtn = mobileNav?.querySelector('.nav-link[onclick*="myWorks"]');
-        if (myWorksBtn) myWorksBtn.classList.add('active');
-
-        // 3. Загрузить данные для всех вкладок
-        if (typeof loadAvailableOrders === 'function') loadAvailableOrders();
+        // Загрузить данные для всех вкладок (чтобы они были готовы при переключении)
         if (typeof loadMyWork === 'function') loadMyWork();
         if (typeof loadMechanicHistory === 'function') loadMechanicHistory();
         if (typeof loadMechanicProfile === 'function') loadMechanicProfile();
 
+        // Переключиться на вкладку "Работа" (она скроет остальные и покажет только одну)
+        showTab('myWorks');
+
     } else {
         console.log('[applyRoleUI] → роль: менеджер');
 
-        // Показываем десктопную панель
         if (desktopTabs) {
             desktopTabs.classList.remove('d-none');
             desktopTabs.classList.add('d-flex');
             desktopTabs.style.display = '';
             desktopTabs.removeAttribute('style');
         }
-
-        // Скрываем мобильную панель
         if (mobileNav) {
             mobileNav.style.display = 'none';
         }
-
-        // Показываем футер для менеджера
         if (footer) footer.style.display = '';
 
         const clientsTab = document.getElementById('clientsTab');
         if (clientsTab) clientsTab.style.display = 'block';
-
         const clientsBtn = desktopTabs?.querySelector('.nav-link');
         if (clientsBtn) clientsBtn.classList.add('active');
 

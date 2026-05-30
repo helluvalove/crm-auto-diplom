@@ -62,6 +62,36 @@ async function refreshMyWork() {
     await loadMyWork();
 }
 
+// Функция парсинга problem_description для раздельного отображения
+function formatProblemDescription(rawText) {
+    if (!rawText) return '<div class="text-muted">—</div>';
+    
+    // Регулярные выражения для поиска
+    const clientMatch = rawText.match(/Клиент:\s*([^,]+)/);
+    const phoneMatch = rawText.match(/тел\.:\s*([+\d\s\(\)-]+)/);
+    const vkMatch = rawText.match(/VK ID\s*(\d+)/);
+    const dateMatch = rawText.match(/Желаемая дата и время:\s*([\d.:\s]+)/);
+    
+    // Проблема — всё, что после последнего двоеточия или оставшаяся часть
+    let problem = rawText;
+    if (clientMatch) problem = problem.replace(clientMatch[0], '');
+    if (phoneMatch) problem = problem.replace(phoneMatch[0], '');
+    if (vkMatch) problem = problem.replace(vkMatch[0], '');
+    if (dateMatch) problem = problem.replace(dateMatch[0], '');
+    problem = problem.replace(/^[:\s,]+/, '').trim();
+    if (!problem) problem = '—';
+    
+    let html = '<div class="problem-details">';
+    if (clientMatch) html += `<div><i class="bi bi-person me-1"></i>${clientMatch[1].trim()}</div>`;
+    if (phoneMatch) html += `<div><i class="bi bi-telephone me-1"></i>${phoneMatch[1].trim()}</div>`;
+    if (vkMatch) html += `<div><i class="bi bi-vk me-1"></i>VK ID: ${vkMatch[1]}</div>`;
+    if (dateMatch) html += `<div><i class="bi bi-calendar-check me-1"></i>${dateMatch[1].trim()}</div>`;
+    html += `<div class="mt-1"><i class="bi bi-wrench me-1"></i><strong>Проблема:</strong> ${problem}</div>`;
+    html += '</div>';
+    
+    return html;
+}
+
 function renderMyWorkCard(order) {
     const statusColors = {
         'Создан': 'secondary',
@@ -116,11 +146,12 @@ function renderMyWorkCard(order) {
                     <span class="small">Запись: <strong>${appointment}</strong></span>
                 </div>` : ''}
 
-                ${order.problem_description ? `
+                <!-- Отображение деталей заявки (клиент, телефон, VK, дата, проблема) -->
                 <div class="mb-3">
-                    <div class="text-muted small mb-1"><i class="bi bi-chat-left-text me-1"></i>Проблема</div>
-                    <div class="bg-light rounded p-2 small">${order.problem_description}</div>
-                </div>` : ''}
+                    <div class="bg-light rounded p-2 small">
+                        ${formatProblemDescription(order.problem_description)}
+                    </div>
+                </div>
 
                 <!-- Смена статуса -->
                 <div class="mb-3">
@@ -210,7 +241,7 @@ function renderMyWorkCard(order) {
         </div>`;
 }
 
-// ── Вспомогательные функции для фото (без изменений) ────────────────────────
+// ── Вспомогательные функции для фото ────────────────────────────────────────
 
 function onPhotoSelected(input) {
     const warning   = document.getElementById('photoWarning');
