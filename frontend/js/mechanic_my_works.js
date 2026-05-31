@@ -62,34 +62,26 @@ async function refreshMyWork() {
     await loadMyWork();
 }
 
-// Функция парсинга problem_description для раздельного отображения
+// Функция парсинга problem_description — показывает только суть проблемы.
+// Клиент и телефон уже отображены в карточке выше; дата записи — в зелёном блоке.
 function formatProblemDescription(rawText) {
     if (!rawText) return '<div class="text-muted">—</div>';
-    
-    // Регулярные выражения для поиска
-    const clientMatch = rawText.match(/Клиент:\s*([^,]+)/);
-    const phoneMatch = rawText.match(/тел\.:\s*([+\d\s\(\)-]+)/);
-    const vkMatch = rawText.match(/VK ID\s*(\d+)/);
-    const dateMatch = rawText.match(/Желаемая дата и время:\s*([\d.:\s]+)/);
-    
-    // Проблема — всё, что после последнего двоеточия или оставшаяся часть
-    let problem = rawText;
-    if (clientMatch) problem = problem.replace(clientMatch[0], '');
-    if (phoneMatch) problem = problem.replace(phoneMatch[0], '');
-    if (vkMatch) problem = problem.replace(vkMatch[0], '');
-    if (dateMatch) problem = problem.replace(dateMatch[0], '');
-    problem = problem.replace(/^[:\s,]+/, '').trim();
+
+    // Вырезаем служебные строки
+    let problem = rawText
+        .replace(/Клиент:[^\n]+/g, '')
+        .replace(/VK ID\s*\d+:\s*/g, '')
+        .replace(/Желаемая дата и время:[^\n]+/g, '')
+        .replace(/Время:\s*не указано/g, '')
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => l.length > 0)
+        .join(' ')
+        .trim();
+
     if (!problem) problem = '—';
-    
-    let html = '<div class="problem-details">';
-    if (clientMatch) html += `<div><i class="bi bi-person me-1"></i>${clientMatch[1].trim()}</div>`;
-    if (phoneMatch) html += `<div><i class="bi bi-telephone me-1"></i>${phoneMatch[1].trim()}</div>`;
-    if (vkMatch) html += `<div><i class="bi bi-vk me-1"></i>VK ID: ${vkMatch[1]}</div>`;
-    if (dateMatch) html += `<div><i class="bi bi-calendar-check me-1"></i>${dateMatch[1].trim()}</div>`;
-    html += `<div class="mt-1"><i class="bi bi-wrench me-1"></i><strong>Проблема:</strong> ${problem}</div>`;
-    html += '</div>';
-    
-    return html;
+
+    return `<div><i class="bi bi-wrench me-1"></i><strong>Проблема:</strong> ${problem}</div>`;
 }
 
 function renderMyWorkCard(order) {

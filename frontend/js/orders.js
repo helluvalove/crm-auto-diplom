@@ -132,69 +132,25 @@ async function completeOrder(orderId) {
     }
 }
 
+// ID заявки из ВК которую сейчас принимают (если установлен — форма работает в режиме принятия)
+window._acceptingVkOrderId = null;
+
 async function createOrder() {
     const priceVal = parseFloat(document.getElementById('orderPrice').value);
     if (priceVal > 99999999.99) {
         showError('Сумма превышает максимально допустимую (99 999 999,99 ₽)');
         return;
     }
-    const clientId = document.getElementById('orderClientSelect').value;
-    const carId = document.getElementById('orderCarSelect').value;
-    const problem = document.getElementById('orderProblem').value.trim();
+
     const mechanicId = document.getElementById('orderMechanicSelect').value;
-
-    if (!clientId || !carId || !problem) {
-        showError('Заполните все обязательные поля');
-        return;
-    }
-
     if (!mechanicId) {
         showError('Выберите механика');
         return;
     }
 
-    // Проверка, что у автомобиля нет другого активного заказа
-    try {
-        const ordersResponse = await fetch(`${API_URL}/orders`);
-        if (ordersResponse.ok) {
-            const allOrders = await ordersResponse.json();
-            const carActiveOrders = allOrders.filter(order =>
-                order.car_id == carId &&
-                order.status !== 'Выполнен' &&
-                order.status !== 'Отменен'
-            );
-
-            if (carActiveOrders.length > 0) {
-                showError('Нельзя создать заказ: у этого автомобиля уже есть активный заказ.');
-                return;
-            }
-        }
-    } catch (error) {
-        console.error('Ошибка проверки заказов:', error);
-    }
-
-    // Проверка: если статус не "Забронирован", у механика не должно быть других активных заказов
     const selectedStatus = document.getElementById('orderStatus').value;
-    if (selectedStatus !== 'Забронирован') {
-        // «Готов к выдаче» не блокирует: механик уже закончил работу,
-        // машина ждёт хозяина — механик свободен для следующего заказа.
-        const mechanicActiveOrders = ordersData.filter(order =>
-            order.mechanic_id == mechanicId &&
-            order.status !== 'Выполнен' &&
-            order.status !== 'Отменен' &&
-            order.status !== 'Забронирован' &&
-            order.status !== 'Готов к выдаче'
-        );
-        if (mechanicActiveOrders.length > 0) {
-            showError('У этого механика уже есть активный заказ. Вы можете создать только бронь (статус «Забронирован»).');
-            return;
-        }
-    }
-
-    // Считываем выбранное время из скрытого поля (заполняется сеткой слотов)
     const appointmentDatetime = document.getElementById('orderAppointmentTime').value || null;
 
-    // --- Обработка примерного времени (часов) ---
     const estimatedHoursInput = document.getElementById('orderEstimatedHours');
     let estimatedHours = null;
     if (estimatedHoursInput) {
@@ -210,15 +166,115 @@ async function createOrder() {
         }
     }
 
+    // ── РЕЖИМ ПРИНЯТИЯ ВК-ЗАЯВКИ: PUT /orders/{id} ────────────────────────────
+    const vkOrderId = window._acceptingVkOrderId;
+    if (vkOrderId) {
+        const body = {
+            mechanic_id:          parseInt(mechanicId),
+            status:               selectedStatus,
+            appointment_datetime: appointmentDatetime,
+            estimated_hours:      estimatedHours,
+            total_price:          document.getElementById('orderPrice').value || null
+        };
+
+        // Проверка: если статус не «Забронирован» — у механика не должно быть других активных заказов
+        if (selectedStatus !== 'Забронирован') {
+            const activeCheck = ordersData.filter(o =>
+                o.mechanic_id == mechanicId &&
+                !['Выполнен','Отменен','Отменена','Забронирован','Готов к выдаче','Заявка'].includes(o.status)
+            );
+            if (activeCheck.length > 0) {
+                showError('У этого механика уже есть активный заказ. Выберите статус «Забронирован».');
+                return;
+            }
+        }
+
+        try {
+            const token = localStorage.getItem('access_token');
+            const res = await fetch(`${API_URL}/orders/${vkOrderId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify(body)
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                if (data.busy_mechanic) document.getElementById('orderMechanicSelect')?.classList.add('is-invalid');
+                showError(data.error || `Ошибка ${res.status}`);
+                return;
+            }
+
+            showSuccess(`Заявка №${vkOrderId} принята → ${selectedStatus}. Клиент уведомлён в ВК.`);
+            if (data.warning) setTimeout(() => showInfo(data.warning), 300);
+
+            // Сброс режима принятия
+            window._acceptingVkOrderId = null;
+            document.getElementById('vkAcceptBanner')?.remove();
+
+            // Очистка формы
+            _clearNewOrderForm(estimatedHoursInput);
+            loadOrders('active');
+            loadAllCarsInService();
+            showTab('orders');
+
+        } catch (e) {
+            showError('Ошибка подключения к серверу: ' + e.message);
+        }
+        return;
+    }
+
+    // ── ОБЫЧНЫЙ РЕЖИМ: POST /orders ────────────────────────────────────────────
+    const clientId = document.getElementById('orderClientSelect').value;
+    const carId = document.getElementById('orderCarSelect').value;
+    const problem = document.getElementById('orderProblem').value.trim();
+
+    if (!clientId || !carId || !problem) {
+        showError('Заполните все обязательные поля');
+        return;
+    }
+
+    // Проверка активного заказа у авто (только в обычном режиме)
+    try {
+        const ordersResponse = await fetch(`${API_URL}/orders`);
+        if (ordersResponse.ok) {
+            const allOrders = await ordersResponse.json();
+            const carActiveOrders = allOrders.filter(o =>
+                o.car_id == carId &&
+                !['Выполнен','Отменен','Отменена','Заявка'].includes(o.status)
+            );
+            if (carActiveOrders.length > 0) {
+                showError('Нельзя создать заказ: у этого автомобиля уже есть активный заказ.');
+                return;
+            }
+        }
+    } catch (error) {
+        console.error('Ошибка проверки заказов:', error);
+    }
+
+    // Проверка занятости механика (только если статус не «Забронирован»)
+    if (selectedStatus !== 'Забронирован') {
+        const mechanicActiveOrders = ordersData.filter(o =>
+            o.mechanic_id == mechanicId &&
+            !['Выполнен','Отменен','Отменена','Забронирован','Готов к выдаче'].includes(o.status)
+        );
+        if (mechanicActiveOrders.length > 0) {
+            showError('У этого механика уже есть активный заказ. Вы можете создать только бронь (статус «Забронирован»).');
+            return;
+        }
+    }
+
     const orderData = {
-        client_id: parseInt(clientId),
-        car_id: parseInt(carId),
-        problem_description: problem,
-        mechanic_id: parseInt(mechanicId),
-        total_price: document.getElementById('orderPrice').value || null,
-        status: selectedStatus,
+        client_id:            parseInt(clientId),
+        car_id:               parseInt(carId),
+        problem_description:  problem,
+        mechanic_id:          parseInt(mechanicId),
+        total_price:          document.getElementById('orderPrice').value || null,
+        status:               selectedStatus,
         appointment_datetime: appointmentDatetime,
-        estimated_hours: estimatedHours
+        estimated_hours:      estimatedHours
     };
 
     try {
@@ -231,36 +287,32 @@ async function createOrder() {
         if (response.ok) {
             const data = await response.json();
             showSuccess(`Заказ-наряд #${data.order.order_id} создан!`);
+            if (data.warning) setTimeout(() => showInfo(data.warning), 300);
 
-            if (data.warning) {
-                setTimeout(() => showInfo(data.warning), 300);
-            }
-
-            // Очистка формы
-            document.getElementById('orderProblem').value = '';
-            document.getElementById('orderPrice').value = '';
-            const dateF = document.getElementById('orderAppointmentDate');
-            if (dateF) dateF.value = '';
-            document.getElementById('timeSlotsContainer').innerHTML =
-                '<div class="text-muted small text-center py-3">Выберите дату</div>';
-            document.getElementById('orderAppointmentTime').value = '';
-            if (estimatedHoursInput) estimatedHoursInput.value = '';
-
+            _clearNewOrderForm(estimatedHoursInput);
             loadOrders('active');
             loadAllCarsInService();
             showTab('orders');
 
         } else {
             const errorData = await response.json();
-            if (errorData.busy_mechanic) {
-                const mechSelect = document.getElementById('orderMechanicSelect');
-                if (mechSelect) mechSelect.classList.add('is-invalid');
-            }
+            if (errorData.busy_mechanic) document.getElementById('orderMechanicSelect')?.classList.add('is-invalid');
             showError(errorData.error || 'Ошибка создания заказа');
         }
     } catch (error) {
         showError('Ошибка подключения к серверу: ' + error.message);
     }
+}
+
+function _clearNewOrderForm(estimatedHoursInput) {
+    document.getElementById('orderProblem').value = '';
+    document.getElementById('orderPrice').value = '';
+    const dateF = document.getElementById('orderAppointmentDate');
+    if (dateF) dateF.value = '';
+    const slotsContainer = document.getElementById('timeSlotsContainer');
+    if (slotsContainer) slotsContainer.innerHTML = '<div class="text-muted small text-center py-3">Выберите дату</div>';
+    document.getElementById('orderAppointmentTime').value = '';
+    if (estimatedHoursInput) estimatedHoursInput.value = '';
 }
 
 function createOrderForClient(clientId, clientName) {
@@ -296,22 +348,25 @@ async function createOrderForCar(carId, clientId) {
         if (bsModal) bsModal.hide();
     });
 
-    try {
-        const res = await fetch(`${API_URL}/orders`);
-        if (res.ok) {
-            const orders = await res.json();
-            const active = orders.filter(o => 
-                o.car_id == carId && 
-                o.status !== 'Выполнен' && 
-                o.status !== 'Отменен'
-            );
-            if (active.length > 0) {
-                showError('Нельзя создать заказ: у этого автомобиля уже есть активный заказ.');
-                return;
+    // Пропускаем проверку активных заказов если это принятие ВК-заявки
+    // (заявка и есть тот самый "активный" заказ, мы просто меняем её статус)
+    if (!window._acceptingVkOrderId) {
+        try {
+            const res = await fetch(`${API_URL}/orders`);
+            if (res.ok) {
+                const orders = await res.json();
+                const active = orders.filter(o =>
+                    o.car_id == carId &&
+                    !['Выполнен','Отменен','Отменена','Заявка'].includes(o.status)
+                );
+                if (active.length > 0) {
+                    showError('Нельзя создать заказ: у этого автомобиля уже есть активный заказ.');
+                    return;
+                }
             }
+        } catch (e) {
+            console.error('Ошибка проверки заказов:', e);
         }
-    } catch (e) {
-        console.error('Ошибка проверки заказов:', e);
     }
 
     try {

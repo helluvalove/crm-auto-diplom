@@ -31,7 +31,8 @@
 
     <table class="work-table">
         <tr><td colspan="2"><strong>Выполненные работы и установленные запчасти</strong></td></tr>
-        <tr><td>Описание работ</td><td>{{ order.work_description or 'См. приложение' }}</td></tr>
+        <tr><td>Описание проблемы (со слов клиента)</td><td>{{ problem_text or '—' }}</td></tr>
+        <tr><td>Выполненные работы</td><td>{{ order.work_description or '—' }}</td></tr>
         <tr><td><strong>Итоговая стоимость</strong></td><td>{{ "%.2f"|format(order.total_price) if order.total_price else '0.00' }} руб.</td></tr>
         <tr><td>Гарантийный срок</td><td>30 дней с момента подписания</td></tr>
     </table>

@@ -29,12 +29,24 @@ def save_order_pdf(order_id, template_name, suffix):
     client = Client.query.get(order.client_id)
     car = Car.query.get(order.car_id)
     manager = User.query.get(order.manager_id) if order.manager_id else User.query.first()
-    ### ДОБАВЛЕНО: получаем механика
     mechanic = User.query.get(order.mechanic_id) if order.mechanic_id else None
+
+    # Вытаскиваем только текст проблемы из problem_description
+    # Формат строки: "Клиент: ...\nVK ID 123456: текст проблемы\nВремя: ..."
+    problem_text = ''
+    if order.problem_description:
+        for line in order.problem_description.splitlines():
+            line = line.strip()
+            if line.startswith('VK ID'):
+                parts = line.split(':', 1)
+                if len(parts) == 2:
+                    problem_text = parts[1].strip()
+                break
 
     html = render_template(template_name,
                            order=order, client=client, car=car,
-                           manager=manager, mechanic=mechanic)    # mechanic передан
+                           manager=manager, mechanic=mechanic,
+                           problem_text=problem_text)
     pdf_dir = os.path.join(current_app.root_path, 'static', 'pdf')
     os.makedirs(pdf_dir, exist_ok=True)
     pdf_path = os.path.join(pdf_dir, f'order_{order_id}_{suffix}.pdf')
@@ -62,6 +74,185 @@ def handle_order(order_id):
         return update_order(order_id)
     elif request.method == 'DELETE':
         return delete_order(order_id)
+
+@orders_bp.route('/<int:order_id>/moderate', methods=['POST'])
+def moderate_order(order_id):
+    """
+    Модерация заявки из ВК: принять (→ Забронирован/Создан) или отклонить (→ Отменена).
+
+    Тело запроса:
+        action      : "accept" | "reject"   (обязательно)
+        reject_reason: str                  (обязательно при action=reject)
+        # При принятии — те же поля, что у create_order:
+        mechanic_id, appointment_datetime, estimated_hours, work_description
+    """
+    try:
+        order = WorkOrder.query.get_or_404(order_id)
+
+        if order.status != 'Заявка':
+            return jsonify({'error': 'Можно модерировать только заявки со статусом «Заявка»'}), 400
+
+        data = request.get_json() or {}
+        action = data.get('action')
+
+        if action not in ('accept', 'reject'):
+            return jsonify({'error': 'Поле action должно быть "accept" или "reject"'}), 400
+
+        # ── ОТКЛОНЕНИЕ ──────────────────────────────────────────────────────
+        if action == 'reject':
+            reason = (data.get('reject_reason') or '').strip()
+            if not reason:
+                return jsonify({'error': 'Укажите причину отклонения'}), 400
+
+            order.status = 'Отменена'
+            db.session.commit()
+
+            if order.client and order.client.vk_user_id:
+                try:
+                    from routes.vk.vk_notify import _send_plain_message
+                    msg = (
+                        f"❌ Ваша заявка №{order_id} отклонена.\n\n"
+                        f"Причина: {reason}\n\n"
+                        f"Если у вас остались вопросы, свяжитесь с нами напрямую."
+                    )
+                    _send_plain_message(order.client.vk_user_id, msg)
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).error(f"[moderate] VK reject notify error: {e}")
+
+            return jsonify({'message': f'Заявка №{order_id} отклонена', 'status': 'Отменена'}), 200
+
+        # ── ПРИНЯТИЕ ────────────────────────────────────────────────────────
+        mechanic_id = data.get('mechanic_id')
+        if not mechanic_id:
+            return jsonify({'error': 'Для принятия заявки укажите механика'}), 400
+        try:
+            mechanic_id = int(mechanic_id)
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Некорректный ID механика'}), 400
+
+        mechanic = User.query.join(Role).filter(
+            User.user_id == mechanic_id, Role.role_name == 'mechanic'
+        ).first()
+        if not mechanic:
+            return jsonify({'error': 'Механик не найден'}), 404
+
+        appointment_dt = None
+        appointment_str = data.get('appointment_datetime')
+        if appointment_str:
+            try:
+                appointment_dt = datetime.fromisoformat(appointment_str)
+            except Exception:
+                return jsonify({'error': 'Неверный формат даты записи'}), 400
+            if appointment_dt < datetime.now():
+                return jsonify({'error': 'Дата записи не может быть в прошлом'}), 400
+            if appointment_dt.weekday() == 6:
+                return jsonify({'error': 'Запись невозможна: воскресенье выходной'}), 400
+            if appointment_dt.hour < 10 or appointment_dt.hour >= 20:
+                return jsonify({'error': 'Время записи должно быть с 10:00 до 20:00'}), 400
+
+        est_hours = None
+        if data.get('estimated_hours') not in (None, ''):
+            try:
+                est_hours = float(data['estimated_hours'])
+                if est_hours < 0:
+                    return jsonify({'error': 'Оценка времени не может быть отрицательной'}), 400
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Некорректное значение estimated_hours'}), 400
+
+        new_status = 'Забронирован' if appointment_dt else 'Создан'
+
+        is_available, err_msg = check_mechanic_availability(
+            mechanic_id, appointment_dt, est_hours
+        )
+        if not is_available:
+            return jsonify({'error': err_msg, 'busy_mechanic': True}), 409
+
+        order.mechanic_id = mechanic_id
+        order.appointment_datetime = appointment_dt
+        order.estimated_hours = est_hours
+        order.status = new_status
+        if data.get('work_description'):
+            order.work_description = data['work_description']
+
+        db.session.commit()
+
+        # Генерируем предварительный PDF
+        try:
+            prelim_path = save_order_pdf(order_id, 'predv_zakaznaryad.html', 'prelim')
+            if prelim_path:
+                order.pdf_prelim_url = f'/api/orders/{order_id}/pdf/prelim'
+                db.session.commit()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"[moderate] PDF prelim error: {e}")
+
+        # Уведомляем клиента в ВК
+        if order.client and order.client.vk_user_id:
+            try:
+                notify_status_change(order.client.vk_user_id, order_id, new_status)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"[moderate] VK accept notify error: {e}")
+
+        warning_msg = get_indefinite_warning(mechanic_id, appointment_dt, est_hours,
+                                             exclude_order_id=order_id)
+
+        return jsonify({
+            'message': f'Заявка №{order_id} принята → {new_status}',
+            'status': new_status,
+            'order_id': order_id,
+            'warning': warning_msg
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        import logging
+        logging.getLogger(__name__).error(f"[moderate_order] {e}")
+        return jsonify({'error': str(e)}), 500
+
+@orders_bp.route('/<int:order_id>/reject', methods=['POST'])
+def reject_vk_order(order_id):
+    """
+    Отклонение заявки из ВК — меняет статус на 'Отменена' и отправляет клиенту причину в ВК.
+    Тело: { "reject_reason": "текст причины" }
+    """
+    try:
+        order = WorkOrder.query.get_or_404(order_id)
+
+        if order.status != 'Заявка':
+            return jsonify({'error': 'Можно отклонить только заявку со статусом «Заявка»'}), 400
+
+        data = request.get_json() or {}
+        reason = (data.get('reject_reason') or '').strip()
+        if not reason:
+            return jsonify({'error': 'Укажите причину отклонения'}), 400
+
+        order.status = 'Отменена'
+        db.session.commit()
+
+        # Уведомляем клиента в ВК
+        if order.client and order.client.vk_user_id:
+            try:
+                from routes.vk.vk_notify import _send_plain_message
+                msg = (
+                    f"❌ Ваша заявка №{order_id} отклонена.\n\n"
+                    f"Причина: {reason}\n\n"
+                    f"Если у вас остались вопросы — свяжитесь с нами напрямую."
+                )
+                _send_plain_message(order.client.vk_user_id, msg)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"[reject_vk_order] VK notify error: {e}")
+
+        return jsonify({'message': f'Заявка №{order_id} отклонена', 'status': 'Отменена'}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        import logging
+        logging.getLogger(__name__).error(f"[reject_vk_order] {e}")
+        return jsonify({'error': str(e)}), 500
+
 
 @orders_bp.route('/archive', methods=['GET'])
 def get_archive():
@@ -388,16 +579,30 @@ def update_order(order_id):
             new_status = data['status']
             status_changed = new_status != order.status
             order.status = new_status
+
             if new_status == 'Выполнен' and not order.completed_date:
                 order.completed_date = datetime.now()
                 pdf_path = save_order_pdf(order_id, 'itogoviy_zakaznaryad.html', 'final')
                 if pdf_path:
                     order.pdf_url = f'/api/orders/{order_id}/pdf/final'
-            # --- VK уведомление клиенту при смене статуса ---
+
+                if order.client and order.client.vk_user_id:
+                    _vk_user_id = order.client.vk_user_id
+                    _order_id = order_id
+                    _pdf_final = pdf_path
+                    app = current_app._get_current_object()
+                    def _send_pdf(app, vk_user_id, order_id, pdf_final):
+                        with app.app_context():
+                            from routes.vk.vk_notify import send_pdfs_to_client
+                            send_pdfs_to_client(vk_user_id, order_id, pdf_final)
+                    threading.Thread(
+                        target=_send_pdf,
+                        args=(app, _vk_user_id, _order_id, _pdf_final),
+                        daemon=True
+                    ).start()
+
             if status_changed and order.client and order.client.vk_user_id:
-                notify_status_change(
-                    order.client.vk_user_id, order_id, new_status
-                )
+                notify_status_change(order.client.vk_user_id, order_id, new_status)
 
         # --- Описание ---
         if 'problem_description' in data:
@@ -514,9 +719,10 @@ def update_order(order_id):
         return jsonify({'error': str(e)}), 500
     
 def delete_order(order_id):
-    """Удалить заказ"""
     try:
         order = WorkOrder.query.get_or_404(order_id)
+        # Удаляем все фото, связанные с этим заказом
+        OrderPhoto.query.filter_by(order_id=order_id).delete()
         db.session.delete(order)
         db.session.commit()
         return jsonify({'message': 'Заказ удален'})
@@ -531,11 +737,33 @@ def complete_order(order_id):
         order = WorkOrder.query.get_or_404(order_id)
         order.status = 'Выполнен'
         order.completed_date = datetime.now()
-        # Генерируем PDF
+
         pdf_path = save_order_pdf(order_id, 'itogoviy_zakaznaryad.html', 'final')
         if pdf_path:
             order.pdf_url = f'/api/orders/{order_id}/pdf/final'
+
         db.session.commit()
+
+        # Отправка PDF и уведомления в ВК
+        if order.client and order.client.vk_user_id:
+            _vk_user_id = order.client.vk_user_id
+            _order_id = order_id
+            _pdf_final = pdf_path
+            app = current_app._get_current_object()
+
+            def _send_pdf(app, vk_user_id, order_id, pdf_final):
+                with app.app_context():
+                    from routes.vk.vk_notify import send_pdfs_to_client, notify_status_change
+                    notify_status_change(vk_user_id, order_id, 'Выполнен')
+                    if pdf_final:
+                        send_pdfs_to_client(vk_user_id, order_id, pdf_final)
+
+            threading.Thread(
+                target=_send_pdf,
+                args=(app, _vk_user_id, _order_id, _pdf_final),
+                daemon=True
+            ).start()
+
         return jsonify({
             'message': 'Заказ завершен и перемещен в архив',
             'order': {

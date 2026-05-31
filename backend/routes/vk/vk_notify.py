@@ -10,6 +10,7 @@ import logging
 import time
 import requests
 import vk_api.utils
+import os
 
 from .utils import get_vk_api
 
@@ -166,3 +167,66 @@ def send_photos_to_client(
 
     except Exception as e:
         logger.error(f"[VK] Ошибка отправки фото: {e}")
+
+def _send_plain_message(vk_user_id: int, text: str) -> None:
+    """
+    Отправляет произвольное текстовое сообщение клиенту.
+    Не бросает исключения — все ошибки только логируются.
+    """
+    if not vk_user_id or not text:
+        return
+    try:
+        vk = get_vk_api()
+        vk.messages.send(
+            user_id=vk_user_id,
+            message=text,
+            random_id=vk_api.utils.get_random_id(),
+        )
+        logger.info(f"[VK] Сообщение отправлено: user={vk_user_id}")
+    except Exception as e:
+        logger.error(f"[VK] Ошибка отправки сообщения: {e}")
+
+def send_pdfs_to_client(vk_user_id: int, order_id: int, pdf_final_path: str) -> None:
+    """Отправляет итоговый заказ-наряд клиенту в ВК как документ."""
+    if not vk_user_id or not pdf_final_path:
+        return
+
+    try:
+        vk = get_vk_api()
+        title = f'Итоговый_заказ-наряд_{order_id}.pdf'
+
+        if not os.path.exists(pdf_final_path):
+            logger.warning(f"[VK] PDF не найден: {pdf_final_path}")
+            return
+
+        upload_server = vk.docs.getMessagesUploadServer(peer_id=vk_user_id, type='doc')
+        with open(pdf_final_path, 'rb') as f:
+            upload_resp = requests.post(
+                upload_server['upload_url'],
+                files={'file': (title, f, 'application/pdf')},
+                timeout=60
+            )
+        upload_resp.raise_for_status()
+        upload_data = upload_resp.json()
+
+        if not upload_data.get('file'):
+            raise ValueError(f"VK не вернул file: {upload_data}")
+
+        saved = vk.docs.save(file=upload_data['file'], title=title)
+
+        if not saved or not saved.get('doc'):
+            raise ValueError(f"VK docs.save вернул: {saved}")
+
+        doc = saved['doc']
+        attachment = f"doc{doc['owner_id']}_{doc['id']}"
+
+        vk.messages.send(
+            user_id=vk_user_id,
+            message=f"📄 Итоговый заказ-наряд №{order_id}",
+            attachment=attachment,
+            random_id=vk_api.utils.get_random_id(),
+        )
+        logger.info(f"[VK] Итоговый PDF отправлен: user={vk_user_id}, order={order_id}")
+
+    except Exception as e:
+        logger.error(f"[VK] Ошибка отправки PDF: {e}")

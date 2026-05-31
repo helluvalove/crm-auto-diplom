@@ -190,6 +190,9 @@ class WorkOrder(db.Model):
     # Отношения к пользователям (менеджер и механик)
     manager = db.relationship('User', foreign_keys=[manager_id], backref='managed_orders')
     mechanic = db.relationship('User', foreign_keys=[mechanic_id], backref='assigned_orders')
+    
+    # Каскадное удаление фотографий при удалении заказа
+    photos = db.relationship('OrderPhoto', backref='order', cascade='all, delete-orphan')
 
     def to_dict(self):
         return {
@@ -220,9 +223,9 @@ class OrderPhoto(db.Model):
     comment = db.Column(db.Text)
     uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
-    # Отношения
-    order = db.relationship('WorkOrder', backref='photos')
+    # Отношения (связь с WorkOrder уже определена через WorkOrder.photos, поэтому здесь не дублируем)
     mechanic = db.relationship('User', foreign_keys=[mechanic_id], backref='uploaded_photos')
+    # Строка order = db.relationship(...) удалена, так как она перенесена в WorkOrder
 
     def to_dict(self):
         return {

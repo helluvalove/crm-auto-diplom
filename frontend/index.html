@@ -430,6 +430,85 @@
                     </div>
                 </div>
 
+                <!-- МОДАЛКА ПРИНЯТИЯ ЗАЯВКИ ВК -->
+                <div class="modal fade" id="acceptModal" tabindex="-1" aria-labelledby="acceptModalTitle" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header bg-success text-white">
+                                <h5 class="modal-title" id="acceptModalTitle">
+                                    <i class="bi bi-check-circle me-2"></i>Принять заявку
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p class="text-muted small mb-3">
+                                    Заявка получит статус <strong>«Забронирован»</strong> (если выбрана дата)
+                                    или <strong>«Создан»</strong>. Клиент получит уведомление в ВКонтакте.
+                                </p>
+                
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Механик <span class="text-danger">*</span></label>
+                                    <select class="form-select" id="acceptMechanicSelect">
+                                        <option value="">— выберите механика —</option>
+                                    </select>
+                                    <div class="invalid-feedback">Выберите механика</div>
+                                </div>
+                
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Дата и время записи</label>
+                                    <input type="datetime-local" class="form-control" id="acceptDatetime"
+                                        min="${new Date().toISOString().slice(0,16)}">
+                                    <div class="form-text">Оставьте пустым — статус будет «Создан» без брони</div>
+                                </div>
+                
+                                <div class="mb-1">
+                                    <label class="form-label fw-semibold">Примерное время выполнения (ч)</label>
+                                    <input type="number" class="form-control" id="acceptEstimatedHours"
+                                        placeholder="например 2 или 1.5" step="0.5" min="0" max="24">
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                <button type="button" class="btn btn-success" onclick="confirmAccept()">
+                                    <i class="bi bi-check-lg me-1"></i>Принять заявку
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- МОДАЛКА ОТКЛОНЕНИЯ ЗАЯВКИ ВК -->
+                <div class="modal fade" id="rejectModal" tabindex="-1" aria-labelledby="rejectModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header bg-danger text-white">
+                                <h5 class="modal-title text-white" id="rejectModalLabel">
+                                    <i class="bi bi-x-circle me-2"></i>Отклонить заявку
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p class="text-muted small mb-3">
+                                    <i class="fab fa-vk me-1"></i>
+                                    Клиент получит сообщение во ВКонтакте с указанной причиной.
+                                </p>
+                                <label class="form-label fw-semibold">Причина отклонения <span class="text-danger">*</span></label>
+                                <textarea id="rejectReasonInput" class="form-control" rows="3"
+                                    placeholder="Например: на выбранную дату нет свободных мест. Позвоните нам для подбора другого времени."
+                                    maxlength="500"></textarea>
+                                <div class="invalid-feedback">Укажите причину отклонения</div>
+                                <div class="form-text">Максимум 500 символов</div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                                <button type="button" class="btn btn-danger" onclick="confirmReject()">
+                                    <i class="bi bi-x-lg me-1"></i>Отклонить и уведомить клиента
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Вкладка Автомобили (оригинал) -->
                 <div id="carsTab" class="tab-pane" style="display: none;">
                     <div class="row">
