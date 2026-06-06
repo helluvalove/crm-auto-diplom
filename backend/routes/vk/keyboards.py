@@ -282,3 +282,60 @@ def kb_inline_profile_actions():
             ]
         ]
     })
+
+def kb_inline_skip_problem():
+    """Кнопки: Пропустить описание проблемы и Назад в меню."""
+    return json.dumps({
+        "inline": True,
+        "buttons": [
+            [
+                {
+                    "action": {
+                        "type": "callback",
+                        "label": "Пропустить",
+                        "payload": "{\"command\":\"skip_problem\"}"
+                    },
+                    "color": "secondary"
+                }
+            ],
+            [
+                {
+                    "action": {
+                        "type": "callback",
+                        "label": "Назад в меню",
+                        "payload": "{\"command\":\"cancel_process\"}"
+                    },
+                    "color": "negative"
+                }
+            ]
+        ]
+    })
+
+
+def kb_inline_skip_vin():
+    """Кнопки: Пропустить VIN и Назад в меню."""
+    return json.dumps({
+        "inline": True,
+        "buttons": [
+            [
+                {
+                    "action": {
+                        "type": "callback",
+                        "label": "Пропустить",
+                        "payload": "{\"command\":\"skip_vin\"}"
+                    },
+                    "color": "secondary"
+                }
+            ],
+            [
+                {
+                    "action": {
+                        "type": "callback",
+                        "label": "Назад в меню",
+                        "payload": "{\"command\":\"cancel_process\"}"
+                    },
+                    "color": "negative"
+                }
+            ]
+        ]
+    })

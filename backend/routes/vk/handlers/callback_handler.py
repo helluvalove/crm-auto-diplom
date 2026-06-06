@@ -5,7 +5,7 @@ import logging
 from ..vk_api_client import get_vk
 from ..helpers import clear_inline_buttons
 from ..utils import send_message
-from ..keyboards import kb_main_menu, kb_empty, kb_inline_cancel_process, kb_inline_my_cars, kb_inline_add_car
+from ..keyboards import kb_main_menu, kb_empty, kb_inline_cancel_process, kb_inline_my_cars, kb_inline_add_car, kb_inline_skip_problem, kb_inline_skip_vin, kb_inline_skip_or_cancel
 from ..state import ( 
     _AWAITING_PROBLEM_DESC, _CAR_DATA, _AWAITING_CAR_STEP,
     _AWAITING_NAME, _AWAITING_PHONE, _AWAITING_CAR_SELECTION,
@@ -101,9 +101,8 @@ def process_event(event):
             cancel_order(order_id, user_id)
             _AWAITING_PROBLEM_DESC[user_id] = car_id
             send_message(user_id,
-                         "📝 Кратко опишите проблему (например, «не заводится», «стук в подвеске»)\n"
-                         "Или напишите «Пропустить», чтобы оставить без описания.",
-                         keyboard=kb_inline_cancel_process())
+                        "📝 Кратко опишите проблему (например, «не заводится», «стук в подвеске»).",
+                        keyboard=kb_inline_skip_problem())
         except Exception as e:
             logger.error(f"Cancel order error: {e}")
             send_message(user_id, "⚠ Не удалось отменить заявку. Возможно, она уже обработана.", keyboard=kb_main_menu())
@@ -119,6 +118,53 @@ def process_event(event):
             # Сбрасываем состояние В ЛЮБОМ случае — и при успехе, и при ошибке
             _AWAITING_PREFERRED_TIME.pop(user_id, None)
             _create_order(user_id, client, data['car_id'], data['desc'], preferred_dt=preferred_dt)
+
+    elif command == 'skip_problem':
+        car_id = _AWAITING_PROBLEM_DESC.pop(user_id, None)
+        if car_id:
+            _AWAITING_PREFERRED_TIME[user_id] = {'car_id': car_id, 'desc': 'Без описания', 'step': 'date'}
+            send_message(
+                user_id,
+                "📅 Укажите удобную дату записи в формате ДД.ММ.ГГГГ\n"
+                "Например: 20.06.2025\n"
+                "❕ Воскресенье — выходной день автосервиса.\n\n"
+                "Или нажмите «Пропустить» — менеджер согласует время с вами.",
+                keyboard=kb_inline_skip_or_cancel()
+            )
+
+    elif command == 'skip_vin':
+        data = _CAR_DATA.get(user_id, {})
+        if _AWAITING_CAR_STEP.get(user_id) == 'vin':
+            try:
+                car = Car(
+                    client_id=client.client_id,
+                    model=data.get('model', 'Не указана'),
+                    gos_number=data.get('gos_number'),
+                    year=data.get('year'),
+                    mileage=data.get('mileage', 0),
+                    vin=None
+                )
+                db.session.add(car)
+                db.session.commit()
+                db.session.refresh(client)
+
+                context = data.get('context', 'add')
+                _AWAITING_CAR_STEP.pop(user_id, None)
+                _CAR_DATA.pop(user_id, None)
+
+                if context == 'order':
+                    _AWAITING_PROBLEM_DESC[user_id] = car.car_id
+                    send_message(
+                        user_id,
+                        "📝 Кратко опишите проблему (например, «не заводится», «стук в подвеске»).",
+                        keyboard=kb_inline_skip_problem()
+                    )
+                else:
+                    send_message(user_id, "✅ Автомобиль успешно добавлен!", keyboard=kb_main_menu())
+            except Exception as e:
+                logger.error(f"skip_vin car error: {e}")
+                db.session.rollback()
+                send_message(user_id, "⚠ Ошибка при добавлении автомобиля.", keyboard=kb_main_menu())
 
     elif command == 'revoke_consent':
         if not client.phone:

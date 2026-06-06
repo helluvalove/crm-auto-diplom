@@ -9,7 +9,8 @@ from ..keyboards import (
     kb_main_menu, kb_inline_add_car,
     kb_inline_cancel_and_new, kb_inline_cancel_process,
     kb_inline_my_cars, kb_inline_skip_or_cancel,
-    kb_inline_profile_actions, kb_empty
+    kb_inline_profile_actions, kb_empty,
+    kb_inline_skip_problem, kb_inline_skip_vin
 )
 from ..state import (
     _AWAITING_NAME, _AWAITING_PHONE, _AWAITING_CAR_SELECTION,
@@ -151,9 +152,8 @@ def process_message(user_id, text, client):
                 _AWAITING_PROBLEM_DESC[user_id] = car_id
                 send_message(
                     user_id,
-                    "📝 Кратко опишите проблему (например, «не заводится», «стук в подвеске»)\n"
-                    "Или напишите «Пропустить», чтобы оставить без описания.",
-                    keyboard=kb_inline_cancel_process()
+                    "📝 Кратко опишите проблему (например, «не заводится», «стук в подвеске»).",
+                    keyboard=kb_inline_skip_problem()
                 )
                 return
             else:
@@ -225,15 +225,13 @@ def process_message(user_id, text, client):
                 return
             data['mileage'] = mileage_val
             _AWAITING_CAR_STEP[user_id] = 'vin'
-            send_message(user_id, "🔢 Введите VIN (17 символов) или напишите «Пропустить»:", keyboard=kb_inline_cancel_process())
+            send_message(user_id, "🔢 Введите VIN-номер автомобиля (17 символов):", keyboard=kb_inline_skip_vin())
             return
 
         elif step == 'vin':
             vin = text.strip()
-            if vin.lower() in ['пропустить', 'нет', '-']:
-                vin = None
             if vin and len(vin) != 17:
-                send_message(user_id, "❌ VIN должен содержать ровно 17 символов. Попробуйте ещё раз или напишите «Пропустить».", keyboard=kb_inline_cancel_process())
+                send_message(user_id, "❌ VIN должен содержать ровно 17 символов. Попробуйте ещё раз или нажмите «Пропустить».", keyboard=kb_inline_skip_vin())
                 return
 
             try:
@@ -266,9 +264,8 @@ def process_message(user_id, text, client):
                     _AWAITING_PROBLEM_DESC[user_id] = car.car_id
                     send_message(
                         user_id,
-                        "📝 Кратко опишите проблему (например, «не заводится», «стук в подвеске»)\n"
-                        "Или напишите «Пропустить», чтобы оставить без описания.",
-                        keyboard=kb_inline_cancel_process()
+                        "📝 Кратко опишите проблему (например, «не заводится», «стук в подвеске»).",
+                        keyboard=kb_inline_skip_problem()
                     )
                 else:
                     send_message(user_id, "✅ Автомобиль успешно добавлен!", keyboard=kb_main_menu())
@@ -281,8 +278,6 @@ def process_message(user_id, text, client):
     if user_id in _AWAITING_PROBLEM_DESC:
         car_id = _AWAITING_PROBLEM_DESC.pop(user_id)
         desc = text.strip()
-        if desc.lower() in ['пропустить', 'нет', '-']:
-            desc = "Без описания"
 
         # Переходим к шагу выбора даты
         _AWAITING_PREFERRED_TIME[user_id] = {'car_id': car_id, 'desc': desc, 'step': 'date'}

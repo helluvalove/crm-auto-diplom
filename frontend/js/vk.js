@@ -53,6 +53,13 @@ async function loadRequests() {
                         <span class="me-3"><i class="fas fa-phone me-1"></i>${escapeHtml(phone)}</span>
                         <span><i class="fab fa-vk me-1"></i>VK ID: ${escapeHtml(vkId)}</span>
                     </div>
+                    <div class="mb-2 text-body-secondary small">
+                        <i class="bi bi-car-front me-1"></i>
+                        ${order.car_model ? escapeHtml(order.car_model) : '—'}
+                        ${order.car_year ? `(${order.car_year} г.)` : ''}
+                        ${order.car_gos_number ? `· Госномер: ${escapeHtml(order.car_gos_number)}` : ''}
+                        ${order.car_vin ? `· VIN: ${escapeHtml(order.car_vin)}` : ''}
+                    </div>
                     <p class="mb-2"><i class="fas fa-file-alt me-1 text-muted"></i>${escapeHtml(problem)}</p>
                     ${preferredDt
                         ? `<div class="mb-2">
