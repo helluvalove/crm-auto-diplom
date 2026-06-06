@@ -22,7 +22,7 @@ class Role(db.Model):
 class User(db.Model):
     __tablename__ = 'users'
 
-    user_id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     _full_name = db.Column('full_name', db.String(255), nullable=False)  # шифрованное
     login = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
