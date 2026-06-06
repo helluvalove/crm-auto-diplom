@@ -1,9 +1,9 @@
-  <!DOCTYPE html>
-  <html lang="en">
+<!DOCTYPE html>
+  <html lang="ru">
   <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AutoCRM · System Administration</title>
+  <title>AutoCRM · Системное администрирование</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.css">
   <style>
@@ -183,20 +183,20 @@
   <div id="loginScreen">
     <div class="card shadow">
       <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><i class="bi bi-shield-lock"></i> System Administration</h5>
+        <h5 class="mb-0"><i class="bi bi-shield-lock"></i> Системное администрирование</h5>
       </div>
       <div class="card-body p-4">
-        <p class="text-muted small mb-4">AutoCRM · Superuser access only</p>
+        <p class="text-muted small mb-4">AutoCRM · Только для суперпользователя</p>
         <div class="mb-3">
-          <label class="form-label">Login</label>
+          <label class="form-label">Логин</label>
           <input type="text" class="form-control" id="saLogin" placeholder="" autocomplete="username">
         </div>
         <div class="mb-3">
-          <label class="form-label">Password</label>
+          <label class="form-label">Пароль</label>
           <input type="password" class="form-control" id="saPassword" placeholder="" autocomplete="current-password">
         </div>
         <button class="btn btn-primary w-100" id="loginBtn" onclick="doLogin()">
-          <i class="bi bi-box-arrow-in-right"></i> Sign in
+          <i class="bi bi-box-arrow-in-right"></i> Войти
         </button>
         <div class="text-danger small mt-2" id="loginError" style="min-height:20px"></div>
       </div>
@@ -213,10 +213,10 @@
           <span class="badge bg-warning text-dark ms-2" style="font-size:10px">SYSADMIN</span>
         </span>
         <div class="ms-auto d-flex align-items-center gap-3">
-          <span class="nav-pill-badge" id="navPill">● checking...</span>
+          <span class="nav-pill-badge" id="navPill">● проверка...</span>
           <span class="text-white-50 small" id="navUser">superadmin</span>
           <button class="btn btn-sm btn-outline-light" onclick="doLogout()">
-            <i class="bi bi-box-arrow-right"></i> Logout
+            <i class="bi bi-box-arrow-right"></i> Выйти
           </button>
         </div>
       </div>
@@ -226,44 +226,44 @@
 
       <!-- ── Sidebar ── -->
       <div class="sa-sidebar">
-        <div class="sb-section">Configuration</div>
+        <div class="sb-section">Конфигурация</div>
         <div class="sb-item active" data-tab="database" onclick="switchTab(this)">
-          <i class="bi bi-database"></i> Database
+          <i class="bi bi-database"></i> База данных
         </div>
         <div class="sb-item" data-tab="vk" onclick="switchTab(this)">
-          <i class="bi bi-chat-dots"></i> VK Bot
+          <i class="bi bi-chat-dots"></i> VK Бот
           <i class="bi bi-exclamation-circle text-danger ms-auto" id="vkAlert" style="display:none;font-size:13px"></i>
         </div>
         <div class="sb-item" data-tab="auth" onclick="switchTab(this)">
           <i class="bi bi-key"></i> Auth / JWT
         </div>
         <div class="sb-divider"></div>
-        <div class="sb-section">Monitoring</div>
+        <div class="sb-section">Мониторинг</div>
         <div class="sb-item" data-tab="api" onclick="switchTab(this)">
-          <i class="bi bi-hdd-network"></i> API endpoints
+          <i class="bi bi-hdd-network"></i> API эндпоинты
           <span class="badge bg-danger ms-auto" id="apiErrBadge" style="display:none;font-size:9px">!</span>
         </div>
         <div class="sb-item" data-tab="status" onclick="switchTab(this)">
-          <i class="bi bi-activity"></i> System status
+          <i class="bi bi-activity"></i> Статус системы
         </div>
         <div class="sb-divider"></div>
-        <div class="sb-section">Operations</div>
+        <div class="sb-section">Операции</div>
         <div class="sb-item" data-tab="templates" onclick="switchTab(this)">
-          <i class="bi bi-file-earmark-text"></i> Templates
+          <i class="bi bi-file-earmark-text"></i> Шаблоны
         </div>
         <div class="sb-item" data-tab="privacy" onclick="switchTab(this)">
-          <i class="bi bi-shield-lock"></i> Privacy policy
+          <i class="bi bi-shield-lock"></i> Политика конфиденциальности
         </div>
         <div class="sb-item" data-tab="backup" onclick="switchTab(this)">
-          <i class="bi bi-device-hdd"></i> Backup
+          <i class="bi bi-device-hdd"></i> Резервные копии
         </div>
         <div class="sb-item" data-tab="users" onclick="switchTab(this)">
-          <i class="bi bi-people"></i> Users
+          <i class="bi bi-people"></i> Пользователи
         </div>
         <div class="sb-divider"></div>
         <div class="px-3 pb-3">
           <p class="text-muted mb-0" style="font-size:11px;line-height:1.6">
-            Changes to <code>.env</code> require Flask restart to take effect.
+            Изменения в <code>.env</code> требуют перезапуска Flask.
           </p>
         </div>
       </div>
@@ -272,7 +272,7 @@
       <div class="sa-main">
         <div class="mb-4">
           <h5 class="fw-semibold mb-0" id="pageTitle">
-            <i class="bi bi-database me-2"></i>Database connection
+            <i class="bi bi-database me-2"></i>Подключение к базе данных
           </h5>
         </div>
 
@@ -283,16 +283,16 @@
               <h6 class="mb-0"><i class="bi bi-database-fill me-2"></i>PostgreSQL / SQLAlchemy</h6>
             </div>
             <div class="card-body">
-              <div id="cfg-database-fields"><p class="text-muted small mb-0">Loading...</p></div>
+              <div id="cfg-database-fields"><p class="text-muted small mb-0">Загрузка...</p></div>
             </div>
           </div>
           <div class="card mb-3">
             <div class="card-body d-flex gap-2 flex-wrap py-2">
               <button class="btn btn-sm btn-outline-secondary" onclick="testDb()">
-                <i class="bi bi-plug me-1"></i>Test connection
+                <i class="bi bi-plug me-1"></i>Проверить соединение
               </button>
               <button class="btn btn-sm btn-primary" onclick="saveSection('database')">
-                <i class="bi bi-check-lg me-1"></i>Save &amp; apply
+                <i class="bi bi-check-lg me-1"></i>Сохранить и применить
               </button>
             </div>
           </div>
@@ -303,19 +303,19 @@
         <div class="tab-sa" id="tab-vk" style="display:none">
           <div class="card mb-3">
             <div class="card-header bg-primary text-white">
-              <h6 class="mb-0"><i class="bi bi-chat-dots-fill me-2"></i>VK API credentials</h6>
+              <h6 class="mb-0"><i class="bi bi-chat-dots-fill me-2"></i>Данные VK API</h6>
             </div>
             <div class="card-body">
-              <div id="cfg-vk-fields"><p class="text-muted small mb-0">Loading...</p></div>
+              <div id="cfg-vk-fields"><p class="text-muted small mb-0">Загрузка...</p></div>
             </div>
           </div>
           <div class="card mb-3">
             <div class="card-body d-flex gap-2 flex-wrap py-2">
               <button class="btn btn-sm btn-outline-secondary" onclick="testVk()">
-                <i class="bi bi-send me-1"></i>Test API access
+                <i class="bi bi-send me-1"></i>Проверить доступ к API
               </button>
               <button class="btn btn-sm btn-primary" onclick="saveSection('vk')">
-                <i class="bi bi-check-lg me-1"></i>Save
+                <i class="bi bi-check-lg me-1"></i>Сохранить
               </button>
             </div>
           </div>
@@ -326,34 +326,34 @@
         <div class="tab-sa" id="tab-auth" style="display:none">
           <div class="card mb-3">
             <div class="card-header bg-primary text-white">
-              <h6 class="mb-0"><i class="bi bi-key-fill me-2"></i>JWT / Session keys</h6>
+              <h6 class="mb-0"><i class="bi bi-key-fill me-2"></i>JWT / Ключи сессий</h6>
             </div>
             <div class="card-body">
-              <div id="cfg-auth-fields"><p class="text-muted small mb-0">Loading...</p></div>
+              <div id="cfg-auth-fields"><p class="text-muted small mb-0">Загрузка...</p></div>
             </div>
           </div>
           <div class="card mb-3">
             <div class="card-header">
-              <h6 class="mb-0"><i class="bi bi-arrow-repeat me-2"></i>Rotate keys</h6>
+              <h6 class="mb-0"><i class="bi bi-arrow-repeat me-2"></i>Ротация ключей</h6>
             </div>
             <div class="card-body">
               <div class="d-flex gap-2 flex-wrap mb-3">
                 <button class="btn btn-sm btn-outline-warning" onclick="rotateKey('SECRET_KEY')">
-                  <i class="bi bi-arrow-repeat me-1"></i>Rotate SECRET_KEY
+                  <i class="bi bi-arrow-repeat me-1"></i>Ротировать SECRET_KEY
                 </button>
                 <button class="btn btn-sm btn-outline-warning" onclick="rotateKey('JWT_SECRET_KEY')">
-                  <i class="bi bi-arrow-repeat me-1"></i>Rotate JWT_SECRET_KEY
+                  <i class="bi bi-arrow-repeat me-1"></i>Ротировать JWT_SECRET_KEY
                 </button>
               </div>
               <div class="alert alert-warning py-2 mb-0 small">
                 <i class="bi bi-exclamation-triangle me-1"></i>
-                Rotating keys will <strong>invalidate all active user sessions</strong>.
+                Ротация ключей <strong>аннулирует все активные сессии пользователей</strong>.
               </div>
             </div>
           </div>
           <div class="d-flex justify-content-end">
             <button class="btn btn-sm btn-primary" onclick="saveSection('auth')">
-              <i class="bi bi-check-lg me-1"></i>Save &amp; apply
+              <i class="bi bi-check-lg me-1"></i>Сохранить и применить
             </button>
           </div>
         </div>
@@ -364,11 +364,11 @@
         <div class="tab-sa" id="tab-api" style="display:none">
           <div class="card mb-3">
             <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
-              <h6 class="mb-0"><i class="bi bi-hdd-network-fill me-2"></i>API endpoint health check</h6>
+              <h6 class="mb-0"><i class="bi bi-hdd-network-fill me-2"></i>Проверка состояния API эндпоинтов</h6>
               <div class="d-flex align-items-center gap-2">
                 <span class="text-white-50 small" id="apiLastCheck"></span>
                 <button class="btn btn-sm btn-outline-light" onclick="checkAllEndpoints()">
-                  <i class="bi bi-arrow-clockwise"></i> Check all
+                  <i class="bi bi-arrow-clockwise"></i> Проверить все
                 </button>
               </div>
             </div>
@@ -381,12 +381,12 @@
               </div>
 
               <!-- AUTH group -->
-              <div class="api-group-header">Authentication</div>
+              <div class="api-group-header">Аутентификация</div>
               <div id="ep-auth-login" class="api-endpoint-row">
                 <div class="api-endpoint-header" onclick="toggleDetail('auth-login')">
                   <span class="method-badge method-POST">POST</span>
                   <span class="api-path">/api/auth/login</span>
-                  <span class="api-desc d-none d-md-inline">User authentication, JWT issue</span>
+                  <span class="api-desc d-none d-md-inline">Аутентификация пользователя, выдача JWT</span>
                   <span class="api-status-dot ms-auto" id="dot-auth-login"></span>
                   <span class="api-status-text" id="txt-auth-login">—</span>
                   <i class="bi bi-chevron-down text-muted" style="font-size:11px" id="chev-auth-login"></i>
@@ -394,21 +394,21 @@
                 <div class="api-detail" id="detail-auth-login">
                   <div class="d-flex gap-2 mb-2 flex-wrap">
                     <button class="btn btn-sm btn-outline-primary" onclick="pingEndpoint('auth-login')">
-                      <i class="bi bi-play-fill me-1"></i>Run check
+                      <i class="bi bi-play-fill me-1"></i>Запустить проверку
                     </button>
                   </div>
-                  <div class="text-muted small mb-1">Test: POST with demo credentials (will return 401 — that means the endpoint is alive)</div>
-                  <div class="api-response-box" id="resp-auth-login"><span style="color:#6c757d">No data yet</span></div>
+                  <div class="text-muted small mb-1">Тест: POST с тестовыми данными (401 = эндпоинт работает)</div>
+                  <div class="api-response-box" id="resp-auth-login"><span style="color:#6c757d">Нет данных</span></div>
                 </div>
               </div>
 
               <!-- CLIENTS group -->
-              <div class="api-group-header mt-3">Clients</div>
+              <div class="api-group-header mt-3">Клиенты</div>
               <div id="ep-clients-list" class="api-endpoint-row">
                 <div class="api-endpoint-header" onclick="toggleDetail('clients-list')">
                   <span class="method-badge method-GET">GET</span>
                   <span class="api-path">/api/clients</span>
-                  <span class="api-desc d-none d-md-inline">List all clients</span>
+                  <span class="api-desc d-none d-md-inline">Список всех клиентов</span>
                   <span class="api-status-dot ms-auto" id="dot-clients-list"></span>
                   <span class="api-status-text" id="txt-clients-list">—</span>
                   <i class="bi bi-chevron-down text-muted" style="font-size:11px" id="chev-clients-list"></i>
@@ -416,20 +416,20 @@
                 <div class="api-detail" id="detail-clients-list">
                   <div class="d-flex gap-2 mb-2">
                     <button class="btn btn-sm btn-outline-primary" onclick="pingEndpoint('clients-list')">
-                      <i class="bi bi-play-fill me-1"></i>Run check
+                      <i class="bi bi-play-fill me-1"></i>Запустить проверку
                     </button>
                   </div>
-                  <div class="api-response-box" id="resp-clients-list"><span style="color:#6c757d">No data yet</span></div>
+                  <div class="api-response-box" id="resp-clients-list"><span style="color:#6c757d">Нет данных</span></div>
                 </div>
               </div>
 
               <!-- CARS group -->
-              <div class="api-group-header mt-3">Cars</div>
+              <div class="api-group-header mt-3">Автомобили</div>
               <div id="ep-cars-list" class="api-endpoint-row">
                 <div class="api-endpoint-header" onclick="toggleDetail('cars-list')">
                   <span class="method-badge method-GET">GET</span>
                   <span class="api-path">/api/cars</span>
-                  <span class="api-desc d-none d-md-inline">List all cars</span>
+                  <span class="api-desc d-none d-md-inline">Список всех автомобилей</span>
                   <span class="api-status-dot ms-auto" id="dot-cars-list"></span>
                   <span class="api-status-text" id="txt-cars-list">—</span>
                   <i class="bi bi-chevron-down text-muted" style="font-size:11px" id="chev-cars-list"></i>
@@ -437,20 +437,20 @@
                 <div class="api-detail" id="detail-cars-list">
                   <div class="d-flex gap-2 mb-2">
                     <button class="btn btn-sm btn-outline-primary" onclick="pingEndpoint('cars-list')">
-                      <i class="bi bi-play-fill me-1"></i>Run check
+                      <i class="bi bi-play-fill me-1"></i>Запустить проверку
                     </button>
                   </div>
-                  <div class="api-response-box" id="resp-cars-list"><span style="color:#6c757d">No data yet</span></div>
+                  <div class="api-response-box" id="resp-cars-list"><span style="color:#6c757d">Нет данных</span></div>
                 </div>
               </div>
 
               <!-- ORDERS group -->
-              <div class="api-group-header mt-3">Work orders</div>
+              <div class="api-group-header mt-3">Заказ-наряды</div>
               <div id="ep-orders-list" class="api-endpoint-row">
                 <div class="api-endpoint-header" onclick="toggleDetail('orders-list')">
                   <span class="method-badge method-GET">GET</span>
                   <span class="api-path">/api/orders</span>
-                  <span class="api-desc d-none d-md-inline">Active work orders</span>
+                  <span class="api-desc d-none d-md-inline">Активные заказ-наряды</span>
                   <span class="api-status-dot ms-auto" id="dot-orders-list"></span>
                   <span class="api-status-text" id="txt-orders-list">—</span>
                   <i class="bi bi-chevron-down text-muted" style="font-size:11px" id="chev-orders-list"></i>
@@ -458,17 +458,17 @@
                 <div class="api-detail" id="detail-orders-list">
                   <div class="d-flex gap-2 mb-2">
                     <button class="btn btn-sm btn-outline-primary" onclick="pingEndpoint('orders-list')">
-                      <i class="bi bi-play-fill me-1"></i>Run check
+                      <i class="bi bi-play-fill me-1"></i>Запустить проверку
                     </button>
                   </div>
-                  <div class="api-response-box" id="resp-orders-list"><span style="color:#6c757d">No data yet</span></div>
+                  <div class="api-response-box" id="resp-orders-list"><span style="color:#6c757d">Нет данных</span></div>
                 </div>
               </div>
               <div id="ep-orders-archive" class="api-endpoint-row">
                 <div class="api-endpoint-header" onclick="toggleDetail('orders-archive')">
                   <span class="method-badge method-GET">GET</span>
                   <span class="api-path">/api/orders/archive</span>
-                  <span class="api-desc d-none d-md-inline">Completed orders archive</span>
+                  <span class="api-desc d-none d-md-inline">Архив выполненных заказов</span>
                   <span class="api-status-dot ms-auto" id="dot-orders-archive"></span>
                   <span class="api-status-text" id="txt-orders-archive">—</span>
                   <i class="bi bi-chevron-down text-muted" style="font-size:11px" id="chev-orders-archive"></i>
@@ -476,20 +476,20 @@
                 <div class="api-detail" id="detail-orders-archive">
                   <div class="d-flex gap-2 mb-2">
                     <button class="btn btn-sm btn-outline-primary" onclick="pingEndpoint('orders-archive')">
-                      <i class="bi bi-play-fill me-1"></i>Run check
+                      <i class="bi bi-play-fill me-1"></i>Запустить проверку
                     </button>
                   </div>
-                  <div class="api-response-box" id="resp-orders-archive"><span style="color:#6c757d">No data yet</span></div>
+                  <div class="api-response-box" id="resp-orders-archive"><span style="color:#6c757d">Нет данных</span></div>
                 </div>
               </div>
 
               <!-- MECHANICS group -->
-              <div class="api-group-header mt-3">Mechanics</div>
+              <div class="api-group-header mt-3">Механики</div>
               <div id="ep-mechanics-list" class="api-endpoint-row">
                 <div class="api-endpoint-header" onclick="toggleDetail('mechanics-list')">
                   <span class="method-badge method-GET">GET</span>
                   <span class="api-path">/api/mechanics</span>
-                  <span class="api-desc d-none d-md-inline">Mechanics list</span>
+                  <span class="api-desc d-none d-md-inline">Список механиков</span>
                   <span class="api-status-dot ms-auto" id="dot-mechanics-list"></span>
                   <span class="api-status-text" id="txt-mechanics-list">—</span>
                   <i class="bi bi-chevron-down text-muted" style="font-size:11px" id="chev-mechanics-list"></i>
@@ -497,15 +497,15 @@
                 <div class="api-detail" id="detail-mechanics-list">
                   <div class="d-flex gap-2 mb-2">
                     <button class="btn btn-sm btn-outline-primary" onclick="pingEndpoint('mechanics-list')">
-                      <i class="bi bi-play-fill me-1"></i>Run check
+                      <i class="bi bi-play-fill me-1"></i>Запустить проверку
                     </button>
                   </div>
-                  <div class="api-response-box" id="resp-mechanics-list"><span style="color:#6c757d">No data yet</span></div>
+                  <div class="api-response-box" id="resp-mechanics-list"><span style="color:#6c757d">Нет данных</span></div>
                 </div>
               </div>
 
               <!-- VK group -->
-              <div class="api-group-header mt-3">VK Bot</div>
+              <div class="api-group-header mt-3">VK Бот</div>
               <div id="ep-vk-webhook" class="api-endpoint-row">
                 <div class="api-endpoint-header" onclick="toggleDetail('vk-webhook')">
                   <span class="method-badge method-POST">POST</span>
@@ -518,11 +518,11 @@
                 <div class="api-detail" id="detail-vk-webhook">
                   <div class="d-flex gap-2 mb-2">
                     <button class="btn btn-sm btn-outline-primary" onclick="pingEndpoint('vk-webhook')">
-                      <i class="bi bi-play-fill me-1"></i>Run check
+                      <i class="bi bi-play-fill me-1"></i>Запустить проверку
                     </button>
                   </div>
-                  <div class="text-muted small mb-1">Test: GET request (405 = route registered, 404 = blueprint not mounted — check VK blueprint registration in app.py)</div>
-                  <div class="api-response-box" id="resp-vk-webhook"><span style="color:#6c757d">No data yet</span></div>
+                  <div class="text-muted small mb-1">Тест: GET запрос (405 = маршрут зарегистрирован, 404 = blueprint не подключён — проверьте регистрацию в app.py)</div>
+                  <div class="api-response-box" id="resp-vk-webhook"><span style="color:#6c757d">Нет данных</span></div>
                 </div>
               </div>
 
@@ -534,18 +534,18 @@
         <div class="tab-sa" id="tab-status" style="display:none">
           <div class="card mb-3">
             <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
-              <h6 class="mb-0"><i class="bi bi-activity me-2"></i>Services</h6>
+              <h6 class="mb-0"><i class="bi bi-activity me-2"></i>Сервисы</h6>
               <button class="btn btn-sm btn-outline-light" onclick="loadStatus()">
-                <i class="bi bi-arrow-clockwise"></i> Refresh
+                <i class="bi bi-arrow-clockwise"></i> Обновить
               </button>
             </div>
             <div class="card-body">
-              <div id="status-list"><p class="text-muted small mb-0">Loading...</p></div>
+              <div id="status-list"><p class="text-muted small mb-0">Загрузка...</p></div>
             </div>
           </div>
           <div class="card">
             <div class="card-header">
-              <h6 class="mb-0"><i class="bi bi-terminal me-2"></i>Application log</h6>
+              <h6 class="mb-0"><i class="bi bi-terminal me-2"></i>Логгирование приложения</h6>
             </div>
             <div class="card-body p-0">
               <div class="log-box" id="app-log" style="max-height:200px;border-radius:0 0 .25rem .25rem">
@@ -561,15 +561,10 @@
         <div class="tab-sa" id="tab-templates" style="display:none">
           <div class="card">
             <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
-              <h6 class="mb-0"><i class="bi bi-file-earmark-text-fill me-2"></i>Document templates (Jinja2 HTML)</h6>
-              <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-outline-light" onclick="tplToggleView()" id="tplViewBtn">
-                  <i class="bi bi-eye me-1"></i>Preview
-                </button>
-                <button class="btn btn-sm btn-light text-primary fw-semibold" onclick="saveTpl()">
-                  <i class="bi bi-floppy me-1"></i>Save
-                </button>
-              </div>
+              <h6 class="mb-0"><i class="bi bi-file-earmark-text-fill me-2"></i>Шаблоны документов (Jinja2 HTML)</h6>
+              <button class="btn btn-sm btn-outline-light" onclick="tplToggleView()" id="tplViewBtn">
+                <i class="bi bi-eye me-1"></i>Предпросмотр
+              </button>
             </div>
 
             <!-- Template selector tabs -->
@@ -587,7 +582,7 @@
 
             <!-- Variable hints -->
             <div class="tpl-toolbar">
-              <span class="text-muted" style="font-size:11px;flex-shrink:0">Available variables:</span>
+              <span class="text-muted" style="font-size:11px;flex-shrink:0">Доступные переменные:</span>
               <div class="tpl-var-hint">
                 <span>{{ order.* }}</span>
                 <span>{{ client.* }}</span>
@@ -607,19 +602,19 @@
             <div id="tplPreviewWrap" style="display:none">
               <div class="alert alert-info py-2 mx-3 mt-2 small mb-2">
                 <i class="bi bi-info-circle me-1"></i>
-                Preview renders the raw template — Jinja2 variables like <code>{{ order.order_id }}</code> will show as-is (server renders the final PDF).
+                Предварительный просмотр отображает исходный шаблон — переменные Jinja2, такие как  <code>{{ order.order_id }}</code> будут отображаться как есть (сервер отображает окончательный PDF-файл).
               </div>
               <iframe class="tpl-preview-frame" id="tplPreview"></iframe>
             </div>
 
             <div class="card-footer bg-white d-flex align-items-center justify-content-between">
-              <span class="text-muted small" id="tplSaveStatus">Not saved</span>
+              <span class="text-muted small" id="tplSaveStatus">Не сохранено</span>
               <div class="d-flex gap-2">
                 <button class="btn btn-sm btn-outline-secondary" onclick="resetTpl()">
-                  <i class="bi bi-arrow-counterclockwise me-1"></i>Reset changes
+                  <i class="bi bi-arrow-counterclockwise me-1"></i>Сбросить изменения
                 </button>
                 <button class="btn btn-sm btn-primary" onclick="saveTpl()">
-                  <i class="bi bi-floppy me-1"></i>Save template
+                  <i class="bi bi-floppy me-1"></i>Сохранить шаблон
                 </button>
               </div>
             </div>
@@ -630,15 +625,15 @@
         <div class="tab-sa" id="tab-backup" style="display:none">
           <div class="card mb-3">
             <div class="card-header bg-primary text-white">
-              <h6 class="mb-0"><i class="bi bi-device-hdd-fill me-2"></i>Create backup</h6>
+              <h6 class="mb-0"><i class="bi bi-device-hdd-fill me-2"></i>Создать бэкап</h6>
             </div>
             <div class="card-body">
               <div class="d-flex gap-2 flex-wrap mb-3">
                 <button class="btn btn-sm btn-outline-primary" onclick="runBackup('quick')">
-                  <i class="bi bi-lightning me-1"></i>Quick (main tables)
+                  <i class="bi bi-lightning me-1"></i>Быстрый бэкап (структура таблиц)
                 </button>
                 <button class="btn btn-sm btn-outline-primary" onclick="runBackup('full')">
-                  <i class="bi bi-database me-1"></i>Full dump
+                  <i class="bi bi-database me-1"></i>Полный бэкап
                 </button>
               </div>
               <div id="backup-progress" style="display:none">
@@ -654,13 +649,13 @@
           </div>
           <div class="card">
             <div class="card-header d-flex align-items-center justify-content-between">
-              <h6 class="mb-0"><i class="bi bi-folder2-open me-2"></i>Backup files</h6>
+              <h6 class="mb-0"><i class="bi bi-folder2-open me-2"></i>Backup файлы</h6>
               <button class="btn btn-sm btn-outline-secondary" onclick="loadBackups()">
-                <i class="bi bi-arrow-clockwise"></i> Refresh
+                <i class="bi bi-arrow-clockwise"></i> Обновить
               </button>
             </div>
             <div class="card-body">
-              <div id="backup-list"><p class="text-muted small mb-0">Loading...</p></div>
+              <div id="backup-list"><p class="text-muted small mb-0">Загрузка...</p></div>
             </div>
           </div>
         </div>
@@ -669,22 +664,22 @@
         <div class="tab-sa" id="tab-users" style="display:none">
           <div class="card mb-3">
             <div class="card-header bg-primary text-white">
-              <h6 class="mb-0"><i class="bi bi-people-fill me-2"></i>System accounts</h6>
+              <h6 class="mb-0"><i class="bi bi-people-fill me-2"></i>Аккаунты в системе</h6>
             </div>
             <div class="card-body">
-              <div id="users-table-wrap"><p class="text-muted small mb-0">Loading...</p></div>
+              <div id="users-table-wrap"><p class="text-muted small mb-0">Загрузка...</p></div>
             </div>
           </div>
           <div class="card">
             <div class="card-header">
-              <h6 class="mb-0"><i class="bi bi-shield-lock me-2"></i>Superuser account</h6>
+              <h6 class="mb-0"><i class="bi bi-shield-lock me-2"></i>Аккаунт суперпользователя</h6>
             </div>
             <div class="card-body">
               <p class="small text-muted mb-1">
-                Superuser credentials are stored in <code>.env</code> and cannot be changed from the panel.
+                Учетные данные суперпользователя хранятся в <code>.env</code> и не могут быть изменены с помощью данной панели.
               </p>
               <p class="small text-muted mb-0">
-                Edit <code>SUPERADMIN_LOGIN</code> and <code>SUPERADMIN_PASSWORD</code> directly in the file, then restart Flask.
+                Измените <code>SUPERADMIN_LOGIN</code> и <code>SUPERADMIN_PASSWORD</code> непосредственно в файле, затем перезапустите Flask.
               </p>
             </div>
           </div>
@@ -695,14 +690,9 @@
           <div class="card">
             <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
               <h6 class="mb-0"><i class="bi bi-shield-lock-fill me-2"></i>Соглашение о персональных данных (privacy.html)</h6>
-              <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-outline-light" onclick="privacyToggleView()" id="privacyViewBtn">
-                  <i class="bi bi-eye me-1"></i>Preview
-                </button>
-                <button class="btn btn-sm btn-light text-primary fw-semibold" onclick="savePrivacy()">
-                  <i class="bi bi-floppy me-1"></i>Save
-                </button>
-              </div>
+              <button class="btn btn-sm btn-outline-light" onclick="privacyToggleView()" id="privacyViewBtn">
+                <i class="bi bi-eye me-1"></i>Предпросмотр
+              </button>
             </div>
 
             <!-- Toolbar with hints -->
@@ -726,13 +716,13 @@
             </div>
 
             <div class="card-footer bg-white d-flex align-items-center justify-content-between">
-              <span class="text-muted small" id="privacySaveStatus">Not saved</span>
+              <span class="text-muted small" id="privacySaveStatus">Не сохранено</span>
               <div class="d-flex gap-2">
                 <button class="btn btn-sm btn-outline-secondary" onclick="resetPrivacy()">
-                  <i class="bi bi-arrow-counterclockwise me-1"></i>Reset changes
+                  <i class="bi bi-arrow-counterclockwise me-1"></i>Сброс изменений
                 </button>
                 <button class="btn btn-sm btn-primary" onclick="savePrivacy()">
-                  <i class="bi bi-floppy me-1"></i>Save document
+                  <i class="bi bi-floppy me-1"></i>Сохранить документ
                 </button>
               </div>
             </div>
@@ -982,58 +972,91 @@
     });
   }
 
+  const FIELD_VALIDATORS = {
+    VK_CONFIRMATION_CODE: {
+      pattern: /^[0-9a-f]{6,12}$/i,
+      message: 'VK_CONFIRMATION_CODE должен быть hex-строкой 6–12 символов (например: be47c894)'
+    },
+    VK_GROUP_ID: {
+      pattern: /^\d+$/,
+      message: 'VK_GROUP_ID должен содержать только цифры'
+    },
+    VK_ACCESS_TOKEN: {
+      pattern: /^vk1\./,
+      message: 'VK_ACCESS_TOKEN должен начинаться с "vk1." — проверьте токен'
+    },
+    DATABASE_URL: {
+      pattern: /^postgresql:\/\//,
+      message: 'DATABASE_URL должен начинаться с "postgresql://"'
+    },
+  };
+
   async function saveSection(section) {
     const inputs = document.querySelectorAll(`#cfg-${section}-fields .cfg-input`);
     const tasks  = [];
     inputs.forEach(input => {
       if (input.value.trim()) tasks.push({ key: input.dataset.key, value: input.value.trim() });
     });
-    if (!tasks.length) { showToast('Nothing changed — no fields were filled in.', 'secondary'); return; }
+    if (!tasks.length) { showToast('Нет заполненных полей для сохранения.', 'secondary'); return; }
+
+    for (const { key, value } of tasks) {
+      const v = FIELD_VALIDATORS[key];
+      if (v && !v.pattern.test(value)) {
+        showToast(v.message, 'danger');
+        return;
+      }
+    }
+
     let saved = 0;
     for (const { key, value } of tasks) {
       try {
         const res = await api('/config', { method: 'POST', body: JSON.stringify({ key, value }) });
         if (res.ok) saved++;
-        else { const err = await res.json(); showToast(`Error saving ${key}: ${err.error}`, 'danger'); }
-      } catch (e) { showToast('Network error: ' + e.message, 'danger'); }
+        else { const err = await res.json(); showToast(`Ошибка сохранения ${key}: ${err.error}`, 'danger'); }
+      } catch (e) { showToast('Ошибка сети: ' + e.message, 'danger'); }
     }
-    if (saved > 0) { showToast(`Saved ${saved} key(s). Restart Flask to apply.`, 'success'); loadConfig(section); }
+    if (saved > 0) { showToast(`Сохранено ${saved} поле(й). Перезапустите Flask для применения.`, 'success'); loadConfig(section); }
   }
 
   async function testDb() {
     const log = document.getElementById('db-log');
     log.style.display = 'block';
-    log.innerHTML = '<span class="log-dim">Connecting to database...</span>';
+    log.innerHTML = '<span class="log-dim">Подключение к базе данных...</span>';
     try {
-      const res  = await api('/status');
+      const res  = await api('/check/db', { method: 'POST' });
       const data = await res.json();
-      log.innerHTML = data.database?.ok
-        ? '<span class="log-ok">✓ Connection OK — PostgreSQL is responding</span>'
-        : '<span class="log-err">✗ Connection failed — check DATABASE_URL in .env</span>';
+      log.innerHTML = data.ok
+        ? `<span class="log-ok">✓ ${data.message}</span>`
+        : `<span class="log-err">✗ ${data.message}</span>`;
     } catch (e) { log.innerHTML = `<span class="log-err">✗ Error: ${e.message}</span>`; }
   }
 
   async function testVk() {
     const log = document.getElementById('vk-log');
     log.style.display = 'block';
-    log.innerHTML = '<span class="log-dim">Checking VK API credentials...</span>';
+    log.innerHTML = '<span class="log-dim">Проверка доступа к VK API...</span>';
     try {
-      const res  = await api('/status');
+      const res  = await api('/check/vk', { method: 'POST' });
       const data = await res.json();
-      log.innerHTML = data.vk?.ok
-        ? '<span class="log-ok">✓ VK credentials are configured</span>'
-        : '<span class="log-err">✗ VK not configured — set VK_GROUP_ID and VK_ACCESS_TOKEN</span>';
+      log.innerHTML = data.ok
+        ? `<span class="log-ok">✓ ${data.message}</span>`
+        : `<span class="log-err">✗ ${data.message}</span>`;
     } catch (e) { log.innerHTML = `<span class="log-err">✗ Error: ${e.message}</span>`; }
   }
 
   function rotateKey(key) {
-    if (!confirm(`Rotate ${key}?\n\nThis will invalidate all active user sessions after you save and restart Flask.`)) return;
+    const warnings = {
+      SECRET_KEY:     'SECRET_KEY используется Flask для подписи сессий.\nПосле смены все пользователи будут выброшены из системы.',
+      JWT_SECRET_KEY: 'JWT_SECRET_KEY используется для подписи токенов авторизации.\nПосле смены все пользователи получат ошибку 401 и должны будут войти заново.',
+    };
+    const warn = warnings[key] || '';
+    if (!confirm(`Сгенерировать новый ${key}?\n\n⚠️ ${warn}\n\nПосле сохранения потребуется перезапуск Flask.`)) return;
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let val = '';
     for (let i = 0; i < 48; i++) val += chars[Math.floor(Math.random() * chars.length)];
     const input = document.querySelector(`[data-key="${key}"]`);
     if (input) { input.value = val; input.type = 'text'; }
-    showToast(`New ${key} generated — click "Save & apply" to write to .env`, 'warning');
+    showToast(`Новый ${key} сгенерирован — нажмите "Сохранить" чтобы записать в .env, затем перезапустите Flask`, 'warning');
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -1270,7 +1293,7 @@
       if (res.ok) {
         originalTplContent = content;
         document.getElementById('tplSaveStatus').textContent = `Saved at ${new Date().toLocaleTimeString('ru')}`;
-        showToast('Template saved successfully', 'success');
+        showToast('Шаблон документа успешно сохранен', 'success');
       } else {
         const err = await res.json();
         document.getElementById('tplSaveStatus').textContent = 'Save failed';
@@ -1283,7 +1306,7 @@
   }
 
   function resetTpl() {
-    if (!confirm('Reset all unsaved changes?')) return;
+    if (!confirm('Сбросить все несохраненные изменения?')) return;
     document.getElementById('tplEditor').value = originalTplContent;
     document.getElementById('tplSaveStatus').textContent = 'Changes reset';
   }
@@ -1296,12 +1319,12 @@
     if (tplPreviewMode) {
       editorWrap.style.display  = 'none';
       previewWrap.style.display = 'block';
-      btn.innerHTML = '<i class="bi bi-pencil me-1"></i>Edit';
+      btn.innerHTML = '<i class="bi bi-pencil me-1"></i>Изменить';
       renderTplPreview();
     } else {
       editorWrap.style.display  = 'block';
       previewWrap.style.display = 'none';
-      btn.innerHTML = '<i class="bi bi-eye me-1"></i>Preview';
+      btn.innerHTML = '<i class="bi bi-eye me-1"></i>Предпросмотр';
     }
   }
 
@@ -1558,19 +1581,19 @@
       const data = await res.json();
       originalPrivacyContent = data.content;
       editor.value = data.content;
-      statusSpan.textContent = 'Loaded from server';
+      statusSpan.textContent = 'Загружено с сервера';
       if (privacyPreviewMode) renderPrivacyPreview();
     } catch (e) {
       console.error(e);
-      editor.value = `<!-- Error loading privacy.html: ${e.message} -->`;
-      statusSpan.textContent = 'Load failed';
+      editor.value = `<!-- Ошибка загрузки privacy.html: ${e.message} -->`;
+      statusSpan.textContent = 'Ошибка загрузки';
     }
   }
 
   async function savePrivacy() {
     const content = document.getElementById('privacyEditor').value;
     const statusSpan = document.getElementById('privacySaveStatus');
-    statusSpan.textContent = 'Saving...';
+    statusSpan.textContent = 'Сохранение...';
     try {
       const res = await api('/privacy', {
         method: 'POST',
@@ -1578,23 +1601,23 @@
       });
       if (res.ok) {
         originalPrivacyContent = content;
-        statusSpan.textContent = `Saved at ${new Date().toLocaleTimeString('ru')}`;
-        showToast('Privacy policy saved successfully', 'success');
+        statusSpan.textContent = `Сохранено ${new Date().toLocaleTimeString('ru')}`;
+        showToast('Политика конфиденциальности успешно сохранена', 'success');
       } else {
         const err = await res.json();
-        statusSpan.textContent = 'Save failed';
-        showToast('Save error: ' + (err.error || 'unknown'), 'danger');
+        statusSpan.textContent = 'Ошибка сохранения';
+        showToast('Ошибка сохранения: ' + (err.error || 'unknown'), 'danger');
       }
     } catch (e) {
-      statusSpan.textContent = 'Network error';
+      statusSpan.textContent = 'Ошибка соединения (network)';
       showToast('Network error: ' + e.message, 'danger');
     }
   }
 
   function resetPrivacy() {
-    if (!confirm('Reset all unsaved changes for privacy.html?')) return;
+    if (!confirm('Сбросить все не сохраненные изменения privacy.html?')) return;
     document.getElementById('privacyEditor').value = originalPrivacyContent;
-    document.getElementById('privacySaveStatus').textContent = 'Changes reset';
+    document.getElementById('privacySaveStatus').textContent = 'Изменения сброшены';
     if (privacyPreviewMode) renderPrivacyPreview();
   }
 
@@ -1606,12 +1629,12 @@
     if (privacyPreviewMode) {
       editorWrap.style.display  = 'none';
       previewWrap.style.display = 'block';
-      btn.innerHTML = '<i class="bi bi-pencil me-1"></i>Edit';
+      btn.innerHTML = '<i class="bi bi-pencil me-1"></i>Изменить';
       renderPrivacyPreview();
     } else {
       editorWrap.style.display  = 'block';
       previewWrap.style.display = 'none';
-      btn.innerHTML = '<i class="bi bi-eye me-1"></i>Preview';
+      btn.innerHTML = '<i class="bi bi-eye me-1"></i>Предпросмотр';
     }
   }
 

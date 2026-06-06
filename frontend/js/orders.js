@@ -149,7 +149,20 @@ async function createOrder() {
     }
 
     const selectedStatus = document.getElementById('orderStatus').value;
+    
+    const appointmentDate = document.getElementById('orderAppointmentDate')?.value || null;
     const appointmentDatetime = document.getElementById('orderAppointmentTime').value || null;
+
+    // Если дата выбрана, но время не выбрано — значит либо воскресенье, либо не кликнули на слот
+    if (appointmentDate && !appointmentDatetime) {
+        const selected = new Date(appointmentDate + 'T00:00:00');
+        if (selected.getDay() === 0) {
+            showError('Запись невозможна: воскресенье — выходной.');
+        } else {
+            showError('Выберите время записи из сетки слотов.');
+        }
+        return;
+    }
 
     const estimatedHoursInput = document.getElementById('orderEstimatedHours');
     let estimatedHours = null;

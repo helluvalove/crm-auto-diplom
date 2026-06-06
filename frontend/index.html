@@ -926,13 +926,11 @@
     <script>
 
     function ordersFilterClick(btn, filter) {
-        // Передаём фиктивный event, чтобы filterOrders мог определить цель
-        if (tabName === 'mechanicHistory' && typeof loadMechanicHistory === 'function') {
-            loadMechanicHistory();
-        }
-        if (typeof filterOrders === 'function') {
-            filterOrders(filter, { target: btn });
-        }
+        document.querySelectorAll('#ordersFilterGroup .orders-filter-btn').forEach(b => {
+            b.classList.remove('active');
+        });
+        btn.classList.add('active');
+        loadOrders(filter);
     }
 
     // Обновление отображения статуса пользователя в navbar

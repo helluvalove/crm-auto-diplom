@@ -104,8 +104,7 @@ def download_backup(filename):
     return send_from_directory(backup_dir, filename, as_attachment=True)
 
 
-# ── Удалить бэкап ─────────────────────────────────────────────────
-@superadmin_bp.route('/api/backups/<filename>', methods=['DELETE'])
+@superadmin_bp.route('/api/backups/delete/<filename>', methods=['DELETE'])
 @require_superadmin
 def delete_backup(filename):
     backup_dir = Path(__file__).parent / '..' / 'backups'
@@ -116,6 +115,12 @@ def delete_backup(filename):
         return jsonify({'error': 'File not found'}), 404
     fpath.unlink()
     return jsonify({'ok': True})
+
+# Старый маршрут (без /delete/) – для совместимости с фронтендом
+@superadmin_bp.route('/api/backups/<filename>', methods=['DELETE'])
+@require_superadmin
+def delete_backup_legacy(filename):
+    return delete_backup(filename)
 
 
 # ── Статус системы ────────────────────────────────────────────────
@@ -132,7 +137,7 @@ def system_status():
     except Exception:
         pass
 
-    vk_configured = bool(env.get('VK_ACCESS_TOKEN')) and env.get('VK_GROUP_ID', '0') != '0'
+    vk_configured = bool(env.get('VK_ACCESS_TOKEN', '').strip()) and env.get('VK_GROUP_ID', '0').strip() not in ('', '0')
 
     backup_dir = Path(__file__).parent / '..' / 'backups'
     backup_count = len(list(backup_dir.glob('*.sql*'))) if backup_dir.exists() else 0
@@ -142,6 +147,79 @@ def system_status():
         'vk': {'ok': vk_configured, 'label': 'VK Bot'},
         'backup_count': backup_count
     })
+
+# ── Проверка соединения с БД ─────────────────────────────────────
+@superadmin_bp.route('/api/check/db', methods=['POST'])
+@require_superadmin
+def test_db_connection():
+    try:
+        import psycopg2
+    except ImportError:
+        return jsonify({'ok': False, 'message': 'psycopg2 не установлен'}), 200
+    env = read_env()
+    db_url = env.get('DATABASE_URL', '')
+    if not db_url:
+        return jsonify({'ok': False, 'message': 'DATABASE_URL не задан в .env'}), 200
+    try:
+        conn = psycopg2.connect(db_url, connect_timeout=5)
+        conn.close()
+        return jsonify({'ok': True, 'message': 'Соединение с базой данных установлено'})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': f'Ошибка подключения: {e}'}), 200
+
+
+# ── Проверка VK credentials ───────────────────────────────────────
+@superadmin_bp.route('/api/check/vk', methods=['POST'])
+@require_superadmin
+def test_vk_connection():
+    import urllib.request
+    import json as _json
+
+    env = read_env()
+    token = env.get('VK_ACCESS_TOKEN', '').strip()
+    group_id = env.get('VK_GROUP_ID', '').strip()
+
+    if not token:
+        return jsonify({'ok': False, 'message': 'VK_ACCESS_TOKEN не задан в .env'})
+    if not group_id or group_id == '0':
+        return jsonify({'ok': False, 'message': 'VK_GROUP_ID не задан в .env'})
+
+    try:
+        url = (
+            f'https://api.vk.com/method/groups.getById'
+            f'?group_id={group_id}&access_token={token}&v=5.131'
+        )
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            data = _json.loads(resp.read().decode())
+
+        if 'error' in data:
+            code = data['error'].get('error_code')
+            msg  = data['error'].get('error_msg', 'Unknown error')
+            if code == 100:
+                return jsonify({'ok': False, 'message': f'Группа с ID {group_id} не найдена — проверьте VK_GROUP_ID'})
+            if code in (5, 27, 28):
+                return jsonify({'ok': False, 'message': 'Неверный токен — проверьте VK_ACCESS_TOKEN'})
+            return jsonify({'ok': False, 'message': f'Ошибка VK API ({code}): {msg}'})
+
+        groups = data.get('response', [])
+        if not groups:
+            return jsonify({'ok': False, 'message': f'Группа с ID {group_id} не найдена — проверьте VK_GROUP_ID'})
+
+        group = groups[0]
+        group_name = group.get('name', '').strip()
+        returned_id = str(group.get('id', ''))
+
+        if not group_name:
+            return jsonify({'ok': False, 'message': f'Группа с ID {group_id} не найдена — проверьте VK_GROUP_ID'})
+
+        # Проверяем что вернулась именно запрошенная группа
+        if returned_id != group_id.lstrip('-'):
+            return jsonify({'ok': False, 'message': f'Найдена чужая группа (ID {returned_id}) — проверьте VK_GROUP_ID'})
+
+        return jsonify({'ok': True, 'message': f'Подключено к группе: {group_name} (ID: {returned_id})'})
+
+    except Exception as e:
+        return jsonify({'ok': False, 'message': f'Ошибка запроса к VK API: {e}'})
 
 
 # ── Запустить бэкап ───────────────────────────────────────────────
@@ -165,12 +243,20 @@ def run_backup():
     # --- Поиск pg_dump в системе (кроссплатформенно) ---
     pg_dump_path = shutil.which('pg_dump')
     if not pg_dump_path:
-        # fallback для Windows, если pg_dump не в PATH
         common_paths = [
+            # Windows
             r'C:\Program Files\PostgreSQL\17\bin\pg_dump.exe',
             r'C:\Program Files\PostgreSQL\16\bin\pg_dump.exe',
             r'C:\Program Files\PostgreSQL\15\bin\pg_dump.exe',
             r'C:\Program Files\PostgreSQL\14\bin\pg_dump.exe',
+            r'Z:\PostgreSQL\17\bin\pg_dump.exe',
+            # Linux (Ubuntu/Debian)
+            '/usr/bin/pg_dump',
+            '/usr/lib/postgresql/17/bin/pg_dump',
+            '/usr/lib/postgresql/16/bin/pg_dump',
+            '/usr/lib/postgresql/15/bin/pg_dump',
+            '/usr/lib/postgresql/14/bin/pg_dump',
+            '/usr/local/bin/pg_dump',
         ]
         for p in common_paths:
             if os.path.exists(p):

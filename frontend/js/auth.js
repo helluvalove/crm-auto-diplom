@@ -54,6 +54,10 @@ async function login() {
 function logout() {
     setAuthData(null, null);
 
+    // Очищаем только пароль
+    const passwordField = document.getElementById('passwordInput');
+    if (passwordField) passwordField.value = '';
+
     const authPanel = document.getElementById('authPanel');
     authPanel.style.cssText = '';
     authPanel.className = 'row mb-4';

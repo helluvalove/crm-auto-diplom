@@ -355,6 +355,11 @@ async function editClient(clientId) {
         
         document.getElementById('editClientVkId').value = client.vk_user_id || '';
         
+        // БЛОКИРОВКА РЕДАКТИРОВАНИЯ ПОЛЯ VK USER ID
+        const vkIdField = document.getElementById('editClientVkId');
+        vkIdField.readOnly = true;
+        vkIdField.classList.add('bg-light'); // визуальный намёк, что поле недоступно
+
         clearEditFormErrors();
         
         const modal = new bootstrap.Modal(document.getElementById('editClientModal'));

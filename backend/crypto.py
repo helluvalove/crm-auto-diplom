@@ -2,19 +2,28 @@ import os
 import base64
 import hashlib
 from cryptography.fernet import Fernet, InvalidToken
-from config_base import Config
 
-# Инициализация Fernet с ключом из конфига
+_ENV_PATH = os.path.join(os.path.dirname(__file__), '.env')
+
+def _read_encryption_key() -> str:
+    """Читаем ENCRYPTION_KEY напрямую из .env при каждом вызове."""
+    try:
+        with open(_ENV_PATH, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith('ENCRYPTION_KEY='):
+                    return line.partition('=')[2].strip()
+    except Exception:
+        pass
+    return os.environ.get('ENCRYPTION_KEY', 'change-me-in-production-32bytes!')
+
 def _get_fernet() -> Fernet:
-    key = Config.ENCRYPTION_KEY
+    key = _read_encryption_key()
     if isinstance(key, str):
         key = key.encode()
-    # Fernet требует ключ в формате base64-urlsafe 32 байта
-    # Если ключ передан как строка-пароль, можно привести к нужному формату
     try:
         return Fernet(key)
     except Exception:
-        # Автоматически преобразуем произвольный пароль в Fernet-ключ
         key = base64.urlsafe_b64encode(hashlib.sha256(key).digest())
         return Fernet(key)
 
@@ -35,7 +44,6 @@ def decrypt_data(ciphertext: str | None) -> str | None:
     try:
         return f.decrypt(ciphertext.encode()).decode()
     except (InvalidToken, Exception):
-        # Считаем, что это старые открытые данные
         return ciphertext
 
 

@@ -625,7 +625,15 @@ function renderAvailability(mechanics, date) {
     for (let h = 10; h <= 20; h++) hourMarks.push(`${h}:00`);
 
     let html = `
-        <h6 class="mb-2"><i class="bi bi-calendar-week"></i> Занятость на ${date}</h6>
+        <div class="d-flex align-items-center justify-content-between mb-2">
+            <h6 class="mb-0"><i class="bi bi-calendar-week"></i> Занятость на ${date}</h6>
+            <button class="btn btn-sm btn-outline-secondary" id="availabilityToggleBtn"
+                onclick="toggleAvailabilityChart()"
+                title="Свернуть / развернуть график">
+                <i class="bi bi-chevron-up" id="availabilityToggleIcon"></i>
+            </button>
+        </div>
+        <div id="availabilityChartBody">
         <div class="timeline-header-row">
             <div class="mechanic-name-placeholder">placeholder</div>
             <div class="timeline-marks">
@@ -718,6 +726,8 @@ function renderAvailability(mechanics, date) {
         `;
     });
 
+    html += `</div>`; // закрываем #availabilityChartBody
+
     container.innerHTML = html;
 
     // Делегированный обработчик двойного клика на занятые полоски
@@ -734,4 +744,15 @@ function renderAvailability(mechanics, date) {
 // Вспомогательная функция форматирования времени (часы:минуты)
 function formatTime(date) {
     return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+}
+
+// Свернуть / развернуть график занятости
+function toggleAvailabilityChart() {
+    const body = document.getElementById('availabilityChartBody');
+    const icon = document.getElementById('availabilityToggleIcon');
+    if (!body || !icon) return;
+
+    const isCollapsed = body.style.display === 'none';
+    body.style.display = isCollapsed ? '' : 'none';
+    icon.className = isCollapsed ? 'bi bi-chevron-up' : 'bi bi-chevron-down';
 }
