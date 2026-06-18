@@ -10,7 +10,7 @@ async function loadMechanicsList() {
         } else {
             // Fallback для демо/теста
             mechanics = [
-                { user_id: 2, full_name: 'Петров Алексей', phone: '+79991234567', login: 'mechanic' }
+                { user_id: 2, full_name: 'Петров Алексей Владимирович', phone: '+79991234567', login: 'mechanic' }
             ];
         }
 
