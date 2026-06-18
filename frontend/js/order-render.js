@@ -1,5 +1,12 @@
 // ==================== ЗАКАЗЫ (ОТРИСОВКА)====================
 
+function extractProblemText(desc) {
+    if (!desc) return '';
+    const match = desc.match(/VK ID \d+:\s*([^\n]*)/);
+    if (match) return match[1].trim() || 'Без описания';
+    return desc;
+}
+
 /**
  * Загрузка и отображение заказов
  * @param {string} filter - 'active', 'archive', 'all' или конкретный статус
@@ -254,7 +261,7 @@ async function showOrderDetails(orderId) {
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Описание проблемы</label>
-                                <textarea class="form-control" rows="3" disabled>${order.problem_description || ''}</textarea>
+                                <textarea class="form-control" rows="3" disabled>${extractProblemText(order.problem_description)}</textarea>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Описание работ</label>
@@ -407,11 +414,11 @@ async function editOrder(orderId) {
 
                             <div class="mb-3">
                                 <label class="form-label">Описание проблемы</label>
-                                <textarea class="form-control" id="editOrderProblem" rows="3">${order.problem_description || ''}</textarea>
+                                <textarea class="form-control" id="editOrderProblem" rows="3" maxlength="700">${extractProblemText(order.problem_description)}</textarea>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Описание работ</label>
-                                <textarea class="form-control" id="editOrderWork" rows="3">${order.work_description || ''}</textarea>
+                                <textarea class="form-control" id="editOrderWork" rows="3" maxlength="700">${order.work_description || ''}</textarea>
                             </div>
                         </div>
                         <div class="modal-footer">

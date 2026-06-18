@@ -14,6 +14,8 @@ function validateCarData(data, checkClientId = false, clientId = null) {
 
     if (!model) {
         errors.push('Поле "Модель автомобиля" обязательно');
+    } else if (model.length > 50) {
+        errors.push('Модель автомобиля не должна превышать 50 символов');
     }
 
     if (!vin) {
@@ -509,7 +511,7 @@ async function editCar(carId) {
 
                             <div class="mb-3">
                                 <label class="form-label">Модель автомобиля *</label>
-                                <input type="text" class="form-control" id="editCarModel" value="${car.model || ''}" required>
+                                <input type="text" class="form-control" id="editCarModel" value="${car.model || ''}" maxlength="50"required>
                                 <div class="form-text">Обязательное поле</div>
                             </div>
 
@@ -558,7 +560,7 @@ async function editCar(carId) {
                                     <div class="mb-3">
                                         <label class="form-label">Пробег (км) *</label>
                                         <input type="number" class="form-control" id="editCarMileage" value="${car.mileage || ''}"
-                                               min="0" max="1000000" required>
+                                               min="0" max="1000000" maxlength="7" required>
                                         <div class="form-text">
                                             <span class="text-danger"><i class="bi bi-exclamation-circle"></i> Обязательное поле</span><br>
                                             От 0 до 1,000,000 км

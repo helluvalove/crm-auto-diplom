@@ -23,23 +23,40 @@ async function loadMechanicsList() {
     }
 }
 
+// Лимиты полей механика (используются и при создании, и при редактировании)
+const MECHANIC_LIMITS = {
+    name:     { min: 2,  max: 40 },
+    login:    { min: 6,  max: 15  },
+    password: { min: 6,  max: 15  }
+};
+
 async function createMechanic() {
-    const fullName = document.getElementById('newMechanicName').value.trim();
-    const phone = document.getElementById('newMechanicPhone').value.trim();
-    // const employeeNumber = document.getElementById('newMechanicEmployeeNumber').value.trim(); ← УДАЛИТЬ
-    const login = document.getElementById('newMechanicLogin').value.trim();
-    const password = document.getElementById('newMechanicPassword').value;
+    const fullName = (document.getElementById('newMechanicName')?.value || '').trim();
+    const phone    = (document.getElementById('newMechanicPhone')?.value || '').trim();
+    const login    = (document.getElementById('newMechanicLogin')?.value || '').trim();
+    const password = (document.getElementById('newMechanicPassword')?.value || '');
 
     // === Валидация ===
     let isValid = true;
 
+    // ФИО
     if (!fullName) {
         showFieldError('newMechanicName', 'Введите ФИО механика');
+        isValid = false;
+    } else if (/\d/.test(fullName)) {
+        showFieldError('newMechanicName', 'ФИО не должно содержать цифры');
+        isValid = false;
+    } else if (fullName.length < MECHANIC_LIMITS.name.min) {
+        showFieldError('newMechanicName', `ФИО должно содержать минимум ${MECHANIC_LIMITS.name.min} символа`);
+        isValid = false;
+    } else if (fullName.length > MECHANIC_LIMITS.name.max) {
+        showFieldError('newMechanicName', `ФИО не должно превышать ${MECHANIC_LIMITS.name.max} символов`);
         isValid = false;
     } else {
         showFieldError('newMechanicName', null);
     }
 
+    // Телефон
     const phoneValidation = validateRussianPhone(phone);
     if (!phoneValidation.isValid) {
         showFieldError('newMechanicPhone', phoneValidation.message);
@@ -48,18 +65,23 @@ async function createMechanic() {
         showFieldError('newMechanicPhone', null);
     }
 
+    // Логин
     if (!login) {
         showFieldError('newMechanicLogin', 'Введите логин');
+        isValid = false;
+    } else if (login.length < MECHANIC_LIMITS.login.min || login.length > MECHANIC_LIMITS.login.max) {
+        showFieldError('newMechanicLogin', `Логин: от ${MECHANIC_LIMITS.login.min} до ${MECHANIC_LIMITS.login.max} символов`);
         isValid = false;
     } else {
         showFieldError('newMechanicLogin', null);
     }
 
+    // Пароль
     if (!password) {
         showFieldError('newMechanicPassword', 'Введите пароль');
         isValid = false;
-    } else if (password.length < 6) {
-        showFieldError('newMechanicPassword', 'Пароль должен содержать минимум 6 символов');
+    } else if (password.length < MECHANIC_LIMITS.password.min || password.length > MECHANIC_LIMITS.password.max) {
+        showFieldError('newMechanicPassword', `Пароль: от ${MECHANIC_LIMITS.password.min} до ${MECHANIC_LIMITS.password.max} символов`);
         isValid = false;
     } else {
         showFieldError('newMechanicPassword', null);
@@ -162,7 +184,6 @@ function renderMechanicsList(mechanics) {
 
     let html = '<div class="list-group">';
     mechanics.forEach(mechanic => {
-        // Бейдж занятости убран, теперь просто карточка с ФИО и действиями
         html += `
             <div class="list-group-item" id="mechanic-${mechanic.user_id}">
                 <div class="d-flex w-100 justify-content-between align-items-center">
@@ -206,7 +227,6 @@ function clearMechanicCreationErrors() {
     fields.forEach(fieldId => {
         showFieldError(fieldId, null);
     });
-    // Дополнительно сбрасываем жёлтую подсветку дубликата
     showFieldDuplicate('newMechanicPhone', null);
 }
 
@@ -224,7 +244,6 @@ async function loadMechanics() {
 // Функция редактирования механика
 async function editMechanic(mechanicId) {
     try {
-        // Загружаем информацию о механике
         const response = await fetch(`${API_URL}/mechanics/${mechanicId}`);
         if (!response.ok) {
             throw new Error(`Ошибка загрузки механика: ${response.status}`);
@@ -232,7 +251,6 @@ async function editMechanic(mechanicId) {
         
         const mechanic = await response.json();
         
-        // Создаем модальное окно для редактирования
         const modalHtml = `
             <div class="modal fade" id="editMechanicModal" tabindex="-1" aria-labelledby="editMechanicModalLabel" aria-hidden="true">
                 <div class="modal-dialog">
@@ -246,8 +264,12 @@ async function editMechanic(mechanicId) {
                                 <div class="mb-3">
                                     <label class="form-label">ФИО *</label>
                                     <input type="text" class="form-control" id="editMechanicName" 
-                                           value="${mechanic.full_name}" required>
+                                           value="${mechanic.full_name}" maxlength="40" required>
                                     <div class="invalid-feedback" id="editMechanicNameError"></div>
+                                    <div class="form-text d-flex justify-content-between">
+                                        <span>От 2 до 40 символов</span>
+                                        <span id="editMechanicNameCounter" class="text-muted">${mechanic.full_name.length}/40</span>
+                                    </div>
                                 </div>
                                 
                                 <div class="mb-3">
@@ -261,15 +283,24 @@ async function editMechanic(mechanicId) {
                                 <div class="mb-3">
                                     <label class="form-label">Логин *</label>
                                     <input type="text" class="form-control" id="editMechanicLogin" 
-                                           value="${mechanic.login}" required>
+                                           value="${mechanic.login}" minlength="6" maxlength="15" required>
                                     <div class="invalid-feedback" id="editMechanicLoginError"></div>
+                                    <div class="form-text d-flex justify-content-between">
+                                        <span>От 6 до 15 символов</span>
+                                        <span id="editMechanicLoginCounter" class="text-muted">${mechanic.login.length}/15</span>
+                                    </div>
                                 </div>
                                 
                                 <div class="mb-3">
                                     <label class="form-label">Пароль</label>
                                     <input type="password" class="form-control" id="editMechanicPassword" 
-                                           placeholder="Оставьте пустым, если не нужно менять">
-                                    <div class="form-text">Минимум 6 символов</div>
+                                           placeholder="Оставьте пустым, если не нужно менять"
+                                           minlength="6" maxlength="15">
+                                    <div class="invalid-feedback" id="editMechanicPasswordError"></div>
+                                    <div class="form-text d-flex justify-content-between">
+                                        <span>От 6 до 15 символов (оставьте пустым, чтобы не менять)</span>
+                                        <span id="editMechanicPasswordCounter" class="text-muted">0/15</span>
+                                    </div>
                                 </div>
                                 
                                 <div class="alert alert-warning mt-3">
@@ -289,14 +320,44 @@ async function editMechanic(mechanicId) {
             </div>
         `;
         
-        // Удаляем старые модальные окна если есть
         const oldModal = document.getElementById('editMechanicModal');
         if (oldModal) oldModal.remove();
         
-        // Добавляем модальное окно в DOM
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         
-        // Инициализируем валидацию телефона
+        // Счётчики символов в модалке редактирования
+        const nameInput = document.getElementById('editMechanicName');
+        if (nameInput) {
+            // Фильтрация цифр
+            nameInput.addEventListener('input', function() {
+                sanitizeNameInput(this);
+                const nameCounter = document.getElementById('editMechanicNameCounter');
+                if (nameCounter) nameCounter.textContent = `${this.value.length}/${MECHANIC_LIMITS.name.max}`;
+                if (this.value.trim().length >= MECHANIC_LIMITS.name.min) {
+                    this.classList.remove('is-invalid');
+                    const err = document.getElementById('editMechanicNameError');
+                    if (err) { err.textContent = ''; err.style.display = 'none'; }
+                }
+            });
+        }
+
+        const loginInput = document.getElementById('editMechanicLogin');
+        if (loginInput) {
+            const loginCounter = document.getElementById('editMechanicLoginCounter');
+            loginInput.addEventListener('input', function() {
+                if (loginCounter) loginCounter.textContent = `${this.value.length}/${MECHANIC_LIMITS.login.max}`;
+            });
+        }
+
+        const passwordInput = document.getElementById('editMechanicPassword');
+        if (passwordInput) {
+            const passwordCounter = document.getElementById('editMechanicPasswordCounter');
+            passwordInput.addEventListener('input', function() {
+                if (passwordCounter) passwordCounter.textContent = `${this.value.length}/${MECHANIC_LIMITS.password.max}`;
+            });
+        }
+        
+        // Инициализация телефона
         const phoneInput = document.getElementById('editMechanicPhone');
         if (phoneInput) {
             phoneInput.addEventListener('input', function(e) {
@@ -306,30 +367,15 @@ async function editMechanic(mechanicId) {
             
             phoneInput.addEventListener('keydown', function(e) {
                 const allowedKeys = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
-                
-                if (e.ctrlKey && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) {
-                    return;
-                }
-                
-                if (e.key >= '0' && e.key <= '9') {
-                    return;
-                }
-                
-                if (e.key === '+' && (this.selectionStart === 0 || this.value === '')) {
-                    return;
-                }
-                
-                if (allowedKeys.includes(e.key)) {
-                    return;
-                }
-                
+                if (e.ctrlKey && ['a', 'c', 'v', 'x'].includes(e.key.toLowerCase())) return;
+                if (e.key >= '0' && e.key <= '9') return;
+                if (e.key === '+' && (this.selectionStart === 0 || this.value === '')) return;
+                if (allowedKeys.includes(e.key)) return;
                 e.preventDefault();
             });
             
             phoneInput.addEventListener('focus', function() {
-                if (!this.value) {
-                    this.value = '+7 ';
-                }
+                if (!this.value) this.value = '+7 ';
             });
             
             phoneInput.addEventListener('blur', function() {
@@ -343,7 +389,6 @@ async function editMechanic(mechanicId) {
             });
         }
         
-        // Показываем модальное окно
         const modal = new bootstrap.Modal(document.getElementById('editMechanicModal'));
         modal.show();
         
@@ -355,71 +400,71 @@ async function editMechanic(mechanicId) {
 
 // Валидация и обновление механика
 async function validateAndUpdateMechanic(mechanicId) {
-    const name = document.getElementById('editMechanicName').value.trim();
-    const phone = document.getElementById('editMechanicPhone').value.trim();
-    const login = document.getElementById('editMechanicLogin').value.trim();
-    const password = document.getElementById('editMechanicPassword').value;
+    const name  = (document.getElementById('editMechanicName')?.value || '').trim();
+    const phone = (document.getElementById('editMechanicPhone')?.value || '').trim();
+    const login = (document.getElementById('editMechanicLogin')?.value || '').trim();
+    const password = (document.getElementById('editMechanicPassword')?.value || '');
     
-    // Сбрасываем ошибки
     clearMechanicValidationErrors();
     
-    // Валидация
     let isValid = true;
     const errors = {};
     
-    // Валидация имени
+    // ФИО
     if (!name) {
         errors.name = 'Введите ФИО механика';
         isValid = false;
-    } else if (name.length < 2) {
-        errors.name = 'ФИО должно содержать минимум 2 символа';
+    } else if (/\d/.test(name)) {
+        errors.name = 'ФИО не должно содержать цифры';
+        isValid = false;
+    } else if (name.length < MECHANIC_LIMITS.name.min) {
+        errors.name = `ФИО должно содержать минимум ${MECHANIC_LIMITS.name.min} символа`;
+        isValid = false;
+    } else if (name.length > MECHANIC_LIMITS.name.max) {
+        errors.name = `ФИО не должно превышать ${MECHANIC_LIMITS.name.max} символов`;
         isValid = false;
     }
     
-    // Валидация телефона
+    // Телефон
     const phoneValidation = validateRussianPhone(phone);
     if (!phoneValidation.isValid) {
         errors.phone = phoneValidation.message;
         isValid = false;
     }
     
-    // Валидация логина
+    // Логин
     if (!login) {
         errors.login = 'Введите логин';
         isValid = false;
-    } else if (login.length < 3) {
-        errors.login = 'Логин должен содержать минимум 3 символа';
+    } else if (login.length < MECHANIC_LIMITS.login.min || login.length > MECHANIC_LIMITS.login.max) {
+        errors.login = `Логин: от ${MECHANIC_LIMITS.login.min} до ${MECHANIC_LIMITS.login.max} символов`;
         isValid = false;
     }
     
-    // Валидация пароля (если указан)
-    if (password && password.length < 6) {
-        errors.password = 'Пароль должен содержать минимум 6 символов';
+    // Пароль (если указан)
+    if (password && (password.length < MECHANIC_LIMITS.password.min || password.length > MECHANIC_LIMITS.password.max)) {
+        errors.password = `Пароль: от ${MECHANIC_LIMITS.password.min} до ${MECHANIC_LIMITS.password.max} символов`;
         isValid = false;
     }
     
-    // Показываем ошибки валидации клиента
     if (!isValid) {
         showMechanicValidationErrors(errors);
         showError('Исправьте ошибки в форме');
         return;
     }
     
-    // Подготовка данных
     const mechanicData = {
         full_name: name,
         phone: phoneValidation.isValid ? phoneValidation.phone : phone,
         login: login
     };
     
-    // Добавляем пароль только если он указан
     if (password) {
         mechanicData.password = password;
     }
     
     console.log("Sending update request:", mechanicData);
     
-    // Отправка данных на сервер
     try {
         const response = await fetch(`${API_URL}/mechanics/${mechanicId}`, {
             method: 'PUT',
@@ -428,8 +473,6 @@ async function validateAndUpdateMechanic(mechanicId) {
         });
         
         console.log("Response status:", response.status);
-        
-        // Получаем текст ответа для отладки
         const responseText = await response.text();
         console.log("Response text:", responseText);
         
@@ -446,24 +489,19 @@ async function validateAndUpdateMechanic(mechanicId) {
             console.log("Update successful:", data);
             showSuccess('Данные механика обновлены!');
             
-            // Закрываем модальное окно
             const modalElement = document.getElementById('editMechanicModal');
             if (modalElement) {
                 const modal = bootstrap.Modal.getInstance(modalElement);
                 if (modal) modal.hide();
             }
             
-            // Обновляем список механиков
             setTimeout(() => {
                 loadMechanicsList();
             }, 300);
             
         } else {
-            // Специальная обработка для ошибок валидации с сервера
             if (errorData) {
                 console.log("Server error details:", errorData);
-                
-                // Показываем конкретные ошибки от сервера
                 if (errorData.duplicate_phone) {
                     showFieldDuplicate('editMechanicPhone', 'Механик с таким номером телефона уже существует');
                     showError('Механик с таким номером телефона уже существует');
@@ -494,20 +532,19 @@ function clearMechanicValidationErrors() {
         const input = document.getElementById(`editMechanic${field.charAt(0).toUpperCase() + field.slice(1)}`);
         const errorElement = document.getElementById(`editMechanic${field.charAt(0).toUpperCase() + field.slice(1)}Error`);
         if (input) {
-            input.classList.remove('is-invalid', 'is-valid', 'is-duplicate'); // добавлен is-duplicate
+            input.classList.remove('is-invalid', 'is-valid', 'is-duplicate');
         }
         if (errorElement) {
             errorElement.textContent = '';
             errorElement.style.display = 'none';
         }
     });
-    // Дополнительно сбрасываем дубликат телефона
     showFieldDuplicate('editMechanicPhone', null);
 }
 
 // Показ ошибок валидации
 function showMechanicValidationErrors(errors) {
-    console.log("Validation errors:", errors); // Debug
+    console.log("Validation errors:", errors);
     
     for (const [field, message] of Object.entries(errors)) {
         const input = document.getElementById(`editMechanic${field.charAt(0).toUpperCase() + field.slice(1)}`);
@@ -517,13 +554,10 @@ function showMechanicValidationErrors(errors) {
             input.classList.add('is-invalid');
             errorElement.textContent = message;
             errorElement.style.display = 'block';
-            
-            // Прокрутка к ошибке
             errorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     }
     
-    // Показываем общее уведомление
     if (Object.keys(errors).length > 0) {
         showError('Исправьте ошибки в форме');
     }
@@ -531,37 +565,65 @@ function showMechanicValidationErrors(errors) {
 
 // Подтверждение удаления механика
 function confirmDeleteMechanic(mechanicId) {
-    // Закрываем модальное окно редактирования
     const modal = bootstrap.Modal.getInstance(document.getElementById('editMechanicModal'));
     if (modal) modal.hide();
     
-    // Показываем подтверждение
     setTimeout(() => {
         if (confirm('Вы уверены, что хотите удалить механика? Это действие нельзя отменить.')) {
             deleteMechanic(mechanicId);
         } else {
-            // Если отмена, показываем модальное окно снова
             setTimeout(() => editMechanic(mechanicId), 300);
         }
     }, 300);
 }
 
-// Сброс жёлтого дубликата при вводе в поле телефона (форма создания)
+// Счётчики символов и сброс дублей при вводе в форме создания
 document.addEventListener('DOMContentLoaded', () => {
+    // Телефон — сброс дубликата
     const newPhone = document.getElementById('newMechanicPhone');
     if (newPhone) {
         newPhone.addEventListener('input', () => {
             showFieldDuplicate('newMechanicPhone', null);
         });
     }
+
+    // Счётчик ФИО + запрет цифр
+    const newName = document.getElementById('newMechanicName');
+    if (newName) {
+        const counter = document.getElementById('newMechanicNameCounter');
+        newName.addEventListener('input', function() {
+            sanitizeNameInput(this);  // удаляем цифры
+            if (counter) counter.textContent = `${this.value.length}/${MECHANIC_LIMITS.name.max}`;
+            if (this.value.length > 0) showFieldError('newMechanicName', null);
+        });
+    }
+
+    // Счётчик логина
+    const newLogin = document.getElementById('newMechanicLogin');
+    if (newLogin) {
+        const counter = document.getElementById('newMechanicLoginCounter');
+        newLogin.addEventListener('input', function() {
+            if (counter) counter.textContent = `${this.value.length}/${MECHANIC_LIMITS.login.max}`;
+            if (this.value.length >= MECHANIC_LIMITS.login.min) showFieldError('newMechanicLogin', null);
+        });
+    }
+
+    // Счётчик пароля
+    const newPassword = document.getElementById('newMechanicPassword');
+    if (newPassword) {
+        const counter = document.getElementById('newMechanicPasswordCounter');
+        newPassword.addEventListener('input', function() {
+            if (counter) counter.textContent = `${this.value.length}/${MECHANIC_LIMITS.password.max}`;
+            if (this.value.length >= MECHANIC_LIMITS.password.min) showFieldError('newMechanicPassword', null);
+        });
+    }
 });
 
 function setDefaultAvailabilityDate() {
     const dateInput = document.getElementById('availabilityDate');
-    if (!dateInput || dateInput.value) return; // если уже выбрано – не трогаем
+    if (!dateInput || dateInput.value) return;
 
     let d = new Date();
-    // Если сегодня воскресенье (0), перескочим на понедельник
     if (d.getDay() === 0) {
         d.setDate(d.getDate() + 1);
     }
@@ -580,7 +642,6 @@ async function loadAvailability() {
 
     const d = new Date(date);
     if (d.getDay() === 0) {
-        // Воскресенье – выходной
         const container = document.getElementById('availabilityContainer');
         if (container) {
             container.innerHTML = `<div class="alert alert-warning"><i class="bi bi-calendar-x"></i> Воскресенье — выходной. Записи не принимаются.</div>`;
@@ -607,20 +668,17 @@ function renderAvailability(mechanics, date) {
         return;
     }
 
-    // Параметры рабочего дня
     const dayStartHour = 10, dayEndHour = 20;
-    const dayStartMin = dayStartHour * 60;   // 600
-    const dayEndMin   = dayEndHour * 60;     // 1200
-    const totalMin    = dayEndMin - dayStartMin; // 600
+    const dayStartMin = dayStartHour * 60;
+    const dayEndMin   = dayEndHour * 60;
+    const totalMin    = dayEndMin - dayStartMin;
 
-    // Преобразуем выбранную дату в объекты начала и конца рабочего дня
-    const selectedDate = new Date(date + 'T00:00:00'); // YYYY-MM-DD
+    const selectedDate = new Date(date + 'T00:00:00');
     const dayBegin = new Date(selectedDate);
     dayBegin.setHours(dayStartHour, 0, 0, 0);
     const dayFinish = new Date(selectedDate);
     dayFinish.setHours(dayEndHour, 0, 0, 0);
 
-    // Часовые метки для шапки
     const hourMarks = [];
     for (let h = 10; h <= 20; h++) hourMarks.push(`${h}:00`);
 
@@ -643,7 +701,6 @@ function renderAvailability(mechanics, date) {
     `;
 
     mechanics.forEach(m => {
-        // Фильтруем слоты: пересечение с рабочим днём (dayBegin, dayFinish)
         const relevantSlots = (m.busy_slots || [])
             .map(slot => ({
                 start: new Date(slot.start),
@@ -654,7 +711,6 @@ function renderAvailability(mechanics, date) {
             }))
             .filter(s => s.start < dayFinish && s.end > dayBegin)
             .map(s => {
-                // Обрезаем до границ дня
                 const clippedStart = s.start < dayBegin ? dayBegin : s.start;
                 const clippedEnd   = s.end   > dayFinish ? dayFinish : s.end;
                 return {
@@ -665,12 +721,11 @@ function renderAvailability(mechanics, date) {
                     endMin:   (clippedEnd.getHours()   * 60 + clippedEnd.getMinutes())   - dayStartMin
                 };
             })
-            .filter(s => s.startMin < s.endMin)  // исключаем нулевые интервалы
+            .filter(s => s.startMin < s.endMin)
             .sort((a, b) => a.startMin - b.startMin);
 
-        // Строим интервалы (занятые / свободные)
         const intervals = [];
-        let cursor = 0; // минуты от начала дня (0..600)
+        let cursor = 0;
 
         relevantSlots.forEach(s => {
             if (s.startMin > cursor) {
@@ -703,7 +758,6 @@ function renderAvailability(mechanics, date) {
             });
         }
 
-        // Генерация блоков на временной шкале
         let blocksHtml = '';
         intervals.forEach(int => {
             const left = (int.start / totalMin) * 100;
@@ -726,11 +780,10 @@ function renderAvailability(mechanics, date) {
         `;
     });
 
-    html += `</div>`; // закрываем #availabilityChartBody
+    html += `</div>`;
 
     container.innerHTML = html;
 
-    // Делегированный обработчик двойного клика на занятые полоски
     container.querySelectorAll('.timeline-busy').forEach(el => {
         el.addEventListener('dblclick', function(e) {
             const orderId = this.dataset.orderId;
@@ -741,12 +794,10 @@ function renderAvailability(mechanics, date) {
     });
 }
 
-// Вспомогательная функция форматирования времени (часы:минуты)
 function formatTime(date) {
     return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 }
 
-// Свернуть / развернуть график занятости
 function toggleAvailabilityChart() {
     const body = document.getElementById('availabilityChartBody');
     const icon = document.getElementById('availabilityToggleIcon');

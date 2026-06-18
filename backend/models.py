@@ -89,12 +89,12 @@ class Client(db.Model):
     __tablename__ = 'clients'
 
     client_id = db.Column(db.Integer, primary_key=True)
-    _name = db.Column('name', db.String(255), nullable=True)          # было nullable=False
-    _phone = db.Column('phone', db.String(255), nullable=True)        # было nullable=False
-    phone_hash = db.Column(db.String(64), unique=True, nullable=True) # было nullable=False
+    _name = db.Column('name', db.String(255), nullable=True)          
+    _phone = db.Column('phone', db.String(255), nullable=True)       
+    phone_hash = db.Column(db.String(64), unique=True, nullable=True) 
     vk_user_id = db.Column(db.BigInteger)
     date_reg = db.Column(db.DateTime, nullable=False, default=datetime.now)
-    accepted_rules = db.Column(db.DateTime, nullable=True)            # уже было True
+    accepted_rules = db.Column(db.DateTime, nullable=True)            
     declined_rules = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # ------- шифрованные свойства -------

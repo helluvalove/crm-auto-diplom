@@ -33,7 +33,7 @@
 
     <table class="work-table">
         <tr><td colspan="2"><strong>Предварительный перечень работ и услуг</strong></td></tr>
-        <tr><td style="width:50%;"><em>Описание проблемы (со слов клиента)</em></td><td>{{ order.problem_description or '' }}</td></tr>
+        <tr><td style="width:50%;"><em>Описание проблемы (со слов клиента)</em></td><td>{{ problem_text or '—' }}</td></tr>
         <tr><td><em>Планируемые работы</em> (будут уточнены после диагностики)</td><td>{{ order.work_description or '' }}</td></tr>
         <tr><td><strong>Ориентировочная стоимость</strong></td><td>{% if order.total_price %}{{ "%.2f"|format(order.total_price) }} руб.{% else %}Будет определена после диагностики{% endif %}</td></tr>
     </table>

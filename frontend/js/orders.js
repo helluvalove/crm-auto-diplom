@@ -10,7 +10,7 @@ async function updateOrder(orderId) {
         return;
     }
 
-    // Проверка максимальной суммы перед отправкой
+    // --- 1. Проверка максимальной суммы ---
     const priceInput = document.getElementById('editOrderPrice');
     const priceVal = parseFloat(priceInput.value);
     if (!isNaN(priceVal) && priceVal > 99999999.99) {
@@ -18,21 +18,53 @@ async function updateOrder(orderId) {
         return;
     }
     
-    // Читаем дату записи
+    // --- 2. Валидация даты и времени записи ---
     const appointmentInput = document.getElementById('editOrderAppointment');
     const appointmentDatetime = appointmentInput?.value || null;
 
     if (appointmentDatetime) {
-        const check = isWorkingTime(appointmentDatetime);
-        if (!check.valid) {
-            showError(check.message);
+        const d = new Date(appointmentDatetime);
+        // Проверка на валидность даты
+        if (isNaN(d.getTime())) {
+            showError('Некорректная дата и время. Укажите существующую дату.');
+            return;
+        }
+        // Год в разумных пределах (чтобы не было "date value out of range")
+        const year = d.getFullYear();
+        if (year < 2020 || year > 2100) {
+            showError('Год даты должен быть в диапазоне от 2020 до 2100');
+            return;
+        }
+        // Рабочие часы: с 10:00 до 19:30
+        const hours = d.getHours();
+        const minutes = d.getMinutes();
+        if (hours < 10 || hours > 19 || (hours === 19 && minutes > 30)) {
+            showError('Рабочие часы: с 10:00 до 19:30. Выберите другое время.');
+            return;
+        }
+        // Воскресенье — выходной
+        if (d.getDay() === 0) {
+            showError('Воскресенье — выходной, запись невозможна.');
             return;
         }
     }
-    
-    const estimatedHoursInput = document.getElementById('editOrderEstimatedHours');
-    const estimatedHours = estimatedHoursInput?.value || null;
 
+    // --- 3. Валидация примерного времени (estimated_hours) ---
+    const estimatedHoursInput = document.getElementById('editOrderEstimatedHours');
+    let estimatedHours = null;
+    if (estimatedHoursInput) {
+        const raw = estimatedHoursInput.value.trim();
+        if (raw !== '') {
+            const parsed = parseFloat(raw);
+            if (isNaN(parsed) || parsed < 0 || parsed > 24) {
+                showError('Примерное время должно быть числом от 0 до 24');
+                return;
+            }
+            estimatedHours = parsed;
+        }
+    }
+
+    // --- 4. Подготовка данных для отправки ---
     const orderData = {
         client_id: parseInt(clientId),
         status: status,
@@ -41,7 +73,7 @@ async function updateOrder(orderId) {
         mechanic_id: document.getElementById('editOrderMechanicSelect').value || null,
         total_price: priceInput.value || null,
         appointment_datetime: appointmentDatetime,
-        estimated_hours: estimatedHours ? parseFloat(estimatedHours) : null
+        estimated_hours: estimatedHours
     };
 
     try {
@@ -55,11 +87,9 @@ async function updateOrder(orderId) {
             const data = await response.json();
             showSuccess('Заказ-наряд обновлен!');
 
-            // --- Предупреждение ---
             if (data.warning) {
                 setTimeout(() => showInfo(data.warning), 300);
             }
-            // --------------------
 
             const modal = bootstrap.Modal.getInstance(document.getElementById('editOrderModal'));
             modal.hide();
@@ -164,18 +194,17 @@ async function createOrder() {
         return;
     }
 
-    const estimatedHoursInput = document.getElementById('orderEstimatedHours');
+    const estimatedHoursInput = document.getElementById('orderEstimatedHours') || document.getElementById('editOrderEstimatedHours');
     let estimatedHours = null;
     if (estimatedHoursInput) {
         const raw = estimatedHoursInput.value.trim();
         if (raw !== '') {
             const parsed = parseFloat(raw);
-            if (!isNaN(parsed) && parsed >= 0) {
-                estimatedHours = parsed;
-            } else {
-                showError('Примерное время должно быть положительным числом (например 2 или 1.5)');
+            if (isNaN(parsed) || parsed < 0 || parsed > 24) {
+                showError('Примерное время должно быть числом от 0 до 24');
                 return;
             }
+            estimatedHours = parsed;
         }
     }
 

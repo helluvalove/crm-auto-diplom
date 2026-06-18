@@ -127,3 +127,13 @@ function isWorkingTime(datetimeStr) {
     }
     return { valid: true };
 }
+
+function sanitizeNameInput(input) {
+    if (!input) return;
+    const cleaned = input.value.replace(/\d/g, '');
+    if (cleaned !== input.value) {
+        input.value = cleaned;
+        // Можно вызвать событие input для обновления счётчика, если есть
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+}

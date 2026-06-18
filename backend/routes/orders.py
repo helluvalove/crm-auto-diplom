@@ -42,6 +42,9 @@ def save_order_pdf(order_id, template_name, suffix):
                 if len(parts) == 2:
                     problem_text = parts[1].strip()
                 break
+        # Если блока "VK ID" нет — описание уже чистое, берём как есть
+        if not problem_text:
+            problem_text = order.problem_description.strip()
 
     html = render_template(template_name,
                            order=order, client=client, car=car,
@@ -784,12 +787,24 @@ def preliminary_pdf(order_id):
     client = Client.query.get(order.client_id)
     car = Car.query.get(order.car_id)
     manager = User.query.get(order.manager_id) if order.manager_id else User.query.first()
-    ### ДОБАВЛЕНО
     mechanic = User.query.get(order.mechanic_id) if order.mechanic_id else None
+
+    problem_text = ''
+    if order.problem_description:
+        for line in order.problem_description.splitlines():
+            line = line.strip()
+            if line.startswith('VK ID'):
+                parts = line.split(':', 1)
+                if len(parts) == 2:
+                    problem_text = parts[1].strip()
+                break
+        if not problem_text:
+            problem_text = order.problem_description.strip()
 
     html = render_template('predv_zakaznaryad.html',
                            order=order, client=client, car=car,
-                           manager=manager, mechanic=mechanic)
+                           manager=manager, mechanic=mechanic,
+                           problem_text=problem_text)
     options = {'enable-local-file-access': True, 'page-size': 'A4'}
     pdf = pdfkit.from_string(html, False, options=options, configuration=PDFKIT_CONFIG)
     response = make_response(pdf)
@@ -799,14 +814,9 @@ def preliminary_pdf(order_id):
 
 @orders_bp.route('/<int:order_id>/pdf/final')
 def final_pdf(order_id):
-    order = WorkOrder.query.get_or_404(order_id)
-    # Ищем файл на диске
-    pdf_path = os.path.join(current_app.root_path, 'static', 'pdf', f'order_{order_id}_final.pdf')
-    if not os.path.exists(pdf_path):
-        # Генерируем на лету (механик уже будет передан через save_order_pdf)
-        pdf_path = save_order_pdf(order_id, 'itogoviy_zakaznaryad.html', 'final')
-        if not pdf_path:
-            return "PDF file not found", 404
+    pdf_path = save_order_pdf(order_id, 'itogoviy_zakaznaryad.html', 'final')
+    if not pdf_path:
+        return "PDF file not found", 404
     return send_file(pdf_path, mimetype='application/pdf')
 
 @orders_bp.route('/<int:order_id>/pdf/acceptance')

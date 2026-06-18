@@ -10,6 +10,12 @@ async function login() {
         return;
     }
 
+    // Проверка длины (до 20 символов)
+    if (loginInput.length > 20 || passwordInput.length > 20) {
+        showError('Логин и пароль не должны превышать 20 символов');
+        return;
+    }
+
     try {
         const response = await fetch(`${API_URL}/auth/login`, {
             method: 'POST',
@@ -164,3 +170,25 @@ function applyRoleUI(user) {
         loadMechanicsList();
     }
 }
+
+// ==================== ИНИЦИАЛИЗАЦИЯ СЧЁТЧИКОВ ДЛЯ ЛОГИНА И ПАРОЛЯ ====================
+document.addEventListener('DOMContentLoaded', function() {
+    const loginInput = document.getElementById('loginInput');
+    const passwordInput = document.getElementById('passwordInput');
+    const loginCounter = document.getElementById('loginCounter');
+    const passwordCounter = document.getElementById('passwordCounter');
+
+    if (loginInput && loginCounter) {
+        loginInput.addEventListener('input', function() {
+            loginCounter.textContent = `${this.value.length}/20`;
+        });
+        // Инициализация счётчика при загрузке
+        loginCounter.textContent = `${loginInput.value.length}/20`;
+    }
+    if (passwordInput && passwordCounter) {
+        passwordInput.addEventListener('input', function() {
+            passwordCounter.textContent = `${this.value.length}/20`;
+        });
+        passwordCounter.textContent = `${passwordInput.value.length}/20`;
+    }
+});

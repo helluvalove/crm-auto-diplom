@@ -189,6 +189,12 @@ async function createClient() {
     const name = nameInput.value.trim();
     const phone = phoneInput.value.trim();
 
+    // === Проверка, что имя не содержит цифр ===
+    if (/\d/.test(name)) {
+        showError('Имя не должно содержать цифры');
+        return;
+    }
+
     const validation = validateClientOnClient(name, phone);
     if (!validation.isValid) {
         showError('Исправьте ошибки в форме клиента');
@@ -342,6 +348,19 @@ async function editClient(clientId) {
         document.getElementById('editClientId').value = client.client_id;
         document.getElementById('editClientName').value = client.name || '';
         
+        // --- Добавляем обработчик для удаления цифр в поле имени (в модалке) ---
+        const editNameField = document.getElementById('editClientName');
+        if (editNameField) {
+            editNameField.removeEventListener('input', sanitizeNameInput);
+            editNameField.addEventListener('input', function() {
+                sanitizeNameInput(this);
+                // Сброс ошибки при вводе
+                this.classList.remove('is-invalid');
+                const errorEl = document.getElementById('editNameError');
+                if (errorEl) errorEl.textContent = '';
+            });
+        }
+        
         const phoneField = document.getElementById('editClientPhone');
         // Устанавливаем отформатированное значение, даже если phone = null
         phoneField.value = formatPhone(client.phone || '') || '+7 ';
@@ -407,6 +426,10 @@ async function saveEditedClient() {
     if (!name || name.length < 2) {
         nameInput.classList.add('is-invalid');
         document.getElementById('editNameError').textContent = 'Имя должно содержать минимум 2 символа';
+        hasErrors = true;
+    } else if (/\d/.test(name)) {
+        nameInput.classList.add('is-invalid');
+        document.getElementById('editNameError').textContent = 'Имя не должно содержать цифры';
         hasErrors = true;
     }
     
@@ -496,8 +519,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     if (nameInput) {
-        nameInput.addEventListener('input', () => {
-            showFieldError('newClientName', null);
+        nameInput.addEventListener('input', function() {
+            sanitizeNameInput(this);          // удаляем цифры
+            showFieldError('newClientName', null); // сброс ошибки
         });
     }
     if (vinInput) {
