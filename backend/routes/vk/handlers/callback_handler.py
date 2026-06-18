@@ -1,4 +1,3 @@
-# backend/routes/vk/handlers/callback_handler.py
 import json
 import logging
 
@@ -18,7 +17,9 @@ from ..services import (
     has_accepted_rules,
     decline_rules,
     cancel_order,
-    get_active_order_for_car
+    get_active_order_for_car,
+    is_gos_number_taken,
+    is_vin_taken
 )
 from .message_handler import process_message, show_orders, _create_order
 
@@ -115,7 +116,6 @@ def process_event(event):
                 preferred_dt = data.get('date')
             else:
                 preferred_dt = None
-            # Сбрасываем состояние В ЛЮБОМ случае — и при успехе, и при ошибке
             _AWAITING_PREFERRED_TIME.pop(user_id, None)
             _create_order(user_id, client, data['car_id'], data['desc'], preferred_dt=preferred_dt)
 
@@ -135,11 +135,23 @@ def process_event(event):
     elif command == 'skip_vin':
         data = _CAR_DATA.get(user_id, {})
         if _AWAITING_CAR_STEP.get(user_id) == 'vin':
+            # Глобальная проверка госномера
+            gos_number = data.get('gos_number')
+            if gos_number and is_gos_number_taken(gos_number):
+                send_message(
+                    user_id,
+                    f"❌ Госномер {gos_number} уже используется в системе. Начните добавление заново.",
+                    keyboard=kb_main_menu()
+                )
+                _AWAITING_CAR_STEP.pop(user_id, None)
+                _CAR_DATA.pop(user_id, None)
+                return
+
             try:
                 car = Car(
                     client_id=client.client_id,
                     model=data.get('model', 'Не указана'),
-                    gos_number=data.get('gos_number'),
+                    gos_number=gos_number,
                     year=data.get('year'),
                     mileage=data.get('mileage', 0),
                     vin=None
@@ -218,16 +230,13 @@ def process_event(event):
             return 'ok'
 
         try:
-            # Удаляем все заявки по этому авто
             WorkOrder.query.filter_by(car_id=car_id, client_id=client.client_id).delete()
             db.session.delete(car)
             db.session.commit()
 
-            # Формируем итоговое сообщение
             message = f"✅ Автомобиль {car_model} ({car_gos}) успешно удалён из профиля."
 
-            # Если остались другие машины, покажем их краткий список
-            remaining_cars = client.cars  # связь обновлена
+            remaining_cars = client.cars
             if remaining_cars:
                 lines = []
                 for i, c in enumerate(remaining_cars, 1):
@@ -244,12 +253,10 @@ def process_event(event):
             send_message(user_id, "⚠ Ошибка при удалении автомобиля.", keyboard=kb_main_menu())
 
     elif command == 'cancel_process':
-        # Проверяем, есть ли только что созданная машина без заявки
         car_id = _AWAITING_PROBLEM_DESC.get(user_id)
         if car_id:
             car = Car.query.filter_by(car_id=car_id, client_id=client.client_id).first()
             if car:
-                # Если на эту машину ещё нет ни одной заявки — удаляем её
                 has_orders = WorkOrder.query.filter_by(car_id=car_id).first()
                 if not has_orders:
                     try:
@@ -259,7 +266,6 @@ def process_event(event):
                         logger.warning(f"Не удалось удалить машину {car_id} при отмене: {e}")
                         db.session.rollback()
 
-        # Сброс всех состояний пользователя
         for d in (_AWAITING_NAME, _AWAITING_PHONE, _AWAITING_CAR_SELECTION,
                   _CAR_DATA, _AWAITING_CAR_STEP, _AWAITING_PROBLEM_DESC,
                   _AWAITING_CONTACT_DATA, _AWAITING_PREFERRED_TIME, _AWAITING_REVOKE_CONFIRMATION):

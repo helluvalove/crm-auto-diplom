@@ -1,4 +1,4 @@
-# backend/routes/vk/handlers/message_handler.py
+import hashlib
 import logging
 import re
 from datetime import datetime, timezone
@@ -15,23 +15,23 @@ from ..keyboards import (
 from ..state import (
     _AWAITING_NAME, _AWAITING_PHONE, _AWAITING_CAR_SELECTION,
     _CAR_DATA, _AWAITING_CAR_STEP, _AWAITING_PROBLEM_DESC,
-    _AWAITING_CONTACT_DATA, _AWAITING_PREFERRED_TIME, 
+    _AWAITING_CONTACT_DATA, _AWAITING_PREFERRED_TIME,
     _AWAITING_REVOKE_CONFIRMATION
 )
 from ..services import (
     is_valid_gos_number,
     has_contact_info,
     update_client_info,
-    get_active_order_for_car
+    get_active_order_for_car,
+    is_gos_number_taken,
+    is_vin_taken   # <-- импорт новой функции
 )
-from models import db, WorkOrder, Car
+from models import db, WorkOrder, Car, Client
 
 logger = logging.getLogger(__name__)
 
 
 def _create_order(user_id, client, car_id, desc, preferred_dt=None):
-    """Создаёт заявку в БД и отправляет подтверждение пользователю.
-    Возвращает True, если заявка успешно создана, иначе False."""
     if get_active_order_for_car(car_id):
         send_message(user_id, "❌ На этот автомобиль кто-то уже создал заявку. Операция отменена.", keyboard=kb_main_menu())
         return False
@@ -74,21 +74,21 @@ def process_message(user_id, text, client):
 
         if len(words) != 3:
             send_message(user_id,
-                        "❌ Введите ФИО полностью (три слова через пробел): Фамилия Имя Отчество.",
-                        keyboard=kb_inline_cancel_process())
+                         "❌ Введите ФИО полностью (три слова через пробел): Фамилия Имя Отчество.",
+                         keyboard=kb_inline_cancel_process())
             return
 
         valid_pattern = re.compile(r'^[а-яё-]+$', re.IGNORECASE)
         for word in words:
             if not valid_pattern.match(word):
                 send_message(user_id,
-                            "❌ ФИО должно содержать только русские буквы и дефисы. Например: Иванов-Петров Иван Иванович.",
-                            keyboard=kb_inline_cancel_process())
+                             "❌ ФИО должно содержать только русские буквы и дефисы. Например: Иванов-Петров Иван Иванович.",
+                             keyboard=kb_inline_cancel_process())
                 return
             if word.startswith('-') or word.endswith('-') or '--' in word:
                 send_message(user_id,
-                            "❌ Дефис в фамилии/имени/отчестве используется некорректно.",
-                            keyboard=kb_inline_cancel_process())
+                             "❌ Дефис в фамилии/имени/отчестве используется некорректно.",
+                             keyboard=kb_inline_cancel_process())
                 return
 
         formatted_name = raw_name.title()
@@ -112,6 +112,18 @@ def process_message(user_id, text, client):
                 keyboard=kb_inline_cancel_process()
             )
             return
+
+        # Глобальная проверка телефона
+        phone_hash = hashlib.sha256(clean_phone.encode()).hexdigest()
+        existing_client = Client.query.filter_by(phone_hash=phone_hash).first()
+        if existing_client and existing_client.client_id != client.client_id:
+            send_message(
+                user_id,
+                "❌ Этот номер телефона уже зарегистрирован в системе. Пожалуйста, введите другой номер.",
+                keyboard=kb_inline_cancel_process()
+            )
+            return
+
         _AWAITING_PHONE.pop(user_id)
         contact_data = _AWAITING_CONTACT_DATA.pop(user_id, {})
         name = contact_data.get('name', client.name)
@@ -182,6 +194,14 @@ def process_message(user_id, text, client):
             if not is_valid_gos_number(gos_number):
                 send_message(user_id, "❌ Неверный формат госномера.\nПример: А123ВВ77", keyboard=kb_inline_cancel_process())
                 return
+            # Глобальная проверка госномера
+            if is_gos_number_taken(gos_number):
+                send_message(
+                    user_id,
+                    f"❌ Госномер {gos_number} уже используется в системе. Введите другой номер.",
+                    keyboard=kb_inline_cancel_process()
+                )
+                return
             data['gos_number'] = gos_number
             _AWAITING_CAR_STEP[user_id] = 'year'
             send_message(user_id, "📅 Введите год выпуска (например, 2020):", keyboard=kb_inline_cancel_process())
@@ -229,16 +249,37 @@ def process_message(user_id, text, client):
             return
 
         elif step == 'vin':
-            vin = text.strip()
+            vin = text.strip().upper()   # <-- приведение к верхнему регистру
             if vin and len(vin) != 17:
                 send_message(user_id, "❌ VIN должен содержать ровно 17 символов. Попробуйте ещё раз или нажмите «Пропустить».", keyboard=kb_inline_skip_vin())
+                return
+
+            # Проверка на занятость VIN (глобально)
+            if vin and is_vin_taken(vin):
+                send_message(
+                    user_id,
+                    f"❌ VIN-номер {vin} уже используется в системе. Введите другой VIN или нажмите «Пропустить».",
+                    keyboard=kb_inline_skip_vin()
+                )
+                return
+
+            # Дополнительная проверка госномера (на случай, если пользователь вернулся)
+            gos_number = data.get('gos_number')
+            if gos_number and is_gos_number_taken(gos_number):
+                send_message(
+                    user_id,
+                    f"❌ Госномер {gos_number} уже используется в системе. Начните добавление заново.",
+                    keyboard=kb_main_menu()
+                )
+                _AWAITING_CAR_STEP.pop(user_id, None)
+                _CAR_DATA.pop(user_id, None)
                 return
 
             try:
                 car = Car(
                     client_id=client.client_id,
                     model=data.get('model', 'Не указана'),
-                    gos_number=data.get('gos_number'),
+                    gos_number=gos_number,
                     year=data.get('year'),
                     mileage=data.get('mileage', 0),
                     vin=vin
@@ -278,8 +319,6 @@ def process_message(user_id, text, client):
     if user_id in _AWAITING_PROBLEM_DESC:
         car_id = _AWAITING_PROBLEM_DESC.pop(user_id)
         desc = text.strip()
-
-        # Переходим к шагу выбора даты
         _AWAITING_PREFERRED_TIME[user_id] = {'car_id': car_id, 'desc': desc, 'step': 'date'}
         send_message(
             user_id,
@@ -300,7 +339,6 @@ def process_message(user_id, text, client):
             raw = text.strip()
             try:
                 parsed_date = datetime.strptime(raw, '%d.%m.%Y')
-                # Проверка на прошлое
                 if parsed_date.date() < datetime.now().date():
                     send_message(
                         user_id,
@@ -308,8 +346,6 @@ def process_message(user_id, text, client):
                         keyboard=kb_inline_skip_or_cancel()
                     )
                     return
-                
-                # Проверка на слишком далёкое будущее
                 if parsed_date.year > 2027:
                     send_message(
                         user_id,
@@ -317,7 +353,6 @@ def process_message(user_id, text, client):
                         keyboard=kb_inline_skip_or_cancel()
                     )
                     return
-                # Проверка на воскресенье (weekday: понедельник=0, воскресенье=6)
                 if parsed_date.weekday() == 6:
                     send_message(
                         user_id,
@@ -352,10 +387,9 @@ def process_message(user_id, text, client):
                 )
                 return
             h, m = map(int, raw.split(':'))
-            # Проверка на допустимое рабочее время: 10:00 - 20:00 (последняя запись в 19:00)
             if h < 10 or h > 19 or (h == 19 and m > 0):
                 send_message(
-                    user_id, 
+                    user_id,
                     "❌ Автосервис работает с 10:00 до 20:00 (последняя запись в 19:00). Пожалуйста, выберите время в этом промежутке.",
                     keyboard=kb_inline_skip_or_cancel()
                 )
@@ -366,7 +400,7 @@ def process_message(user_id, text, client):
             _create_order(user_id, client, data['car_id'], data['desc'], preferred_dt=preferred_dt)
             return
 
-        # -------- подтверждение отзыва согласия --------
+    # -------- подтверждение отзыва согласия --------
     if user_id in _AWAITING_REVOKE_CONFIRMATION:
         phone_input = text.strip()
         clean_input = phone_input.replace(' ', '').replace('(', '').replace(')', '').replace('-', '')
@@ -378,7 +412,6 @@ def process_message(user_id, text, client):
             _AWAITING_REVOKE_CONFIRMATION.pop(user_id, None)
             return
 
-        # Удаление всех данных клиента
         try:
             WorkOrder.query.filter_by(client_id=client.client_id).delete()
             Car.query.filter_by(client_id=client.client_id).delete()
@@ -391,7 +424,6 @@ def process_message(user_id, text, client):
             _AWAITING_REVOKE_CONFIRMATION.pop(user_id, None)
             return
 
-        # Сброс всех состояний
         for d in (_AWAITING_NAME, _AWAITING_PHONE, _AWAITING_CAR_SELECTION,
                   _CAR_DATA, _AWAITING_CAR_STEP, _AWAITING_PROBLEM_DESC,
                   _AWAITING_CONTACT_DATA, _AWAITING_PREFERRED_TIME,
@@ -542,7 +574,6 @@ def show_orders(user_id, client):
             gos = o.car.gos_number or 'без номера'
             car_info = f"\n   🚘 {model} ({gos})"
 
-        # Извлекаем желаемую дату и время из описания
         desc = o.problem_description or ''
         preferred_dt = None
         if 'Желаемая дата и время:' in desc:
