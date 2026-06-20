@@ -189,11 +189,11 @@
         <p class="text-muted small mb-4">AutoCRM · Только для суперпользователя</p>
         <div class="mb-3">
           <label class="form-label">Логин</label>
-          <input type="text" class="form-control" id="saLogin" placeholder="" autocomplete="username">
+          <input type="text" class="form-control" id="saLogin" placeholder="" autocomplete="username" maxlength="30">
         </div>
         <div class="mb-3">
           <label class="form-label">Пароль</label>
-          <input type="password" class="form-control" id="saPassword" placeholder="" autocomplete="current-password">
+          <input type="password" class="form-control" id="saPassword" placeholder="" autocomplete="current-password" maxlength="30">
         </div>
         <button class="btn btn-primary w-100" id="loginBtn" onclick="doLogin()">
           <i class="bi bi-box-arrow-in-right"></i> Войти
@@ -763,11 +763,11 @@
 
           <div class="mb-3">
             <label class="form-label small fw-semibold">Логин</label>
-            <input type="text" class="form-control form-control-sm" id="editUserLogin" autocomplete="off">
+            <input type="text" class="form-control form-control-sm" id="editUserLogin" autocomplete="off" maxlength="20">
           </div>
           <div class="mb-3">
             <label class="form-label small fw-semibold">Полное имя</label>
-            <input type="text" class="form-control form-control-sm" id="editUserName">
+            <input type="text" class="form-control form-control-sm" id="editUserName" maxlength="40">
           </div>
           <div class="row g-2 mb-3">
             <div class="col">
@@ -779,17 +779,17 @@
             </div>
             <div class="col">
               <label class="form-label small fw-semibold">Телефон</label>
-              <input type="text" class="form-control form-control-sm" id="editUserPhone" placeholder="+7...">
+              <input type="text" class="form-control form-control-sm" id="editUserPhone" placeholder="+7..." maxlength="12">
             </div>
           </div>
           <hr class="my-2">
           <p class="small text-muted mb-2"><i class="bi bi-key me-1"></i>Новый пароль (оставьте пустым, чтобы не менять)</p>
           <div class="row g-2 mb-2">
             <div class="col">
-              <input type="password" class="form-control form-control-sm" id="editUserPass" placeholder="Новый пароль" autocomplete="new-password">
+              <input type="password" class="form-control form-control-sm" id="editUserPass" placeholder="Новый пароль" autocomplete="new-password" maxlength="20">
             </div>
             <div class="col">
-              <input type="password" class="form-control form-control-sm" id="editUserPass2" placeholder="Повторите пароль">
+              <input type="password" class="form-control form-control-sm" id="editUserPass2" placeholder="Повторите пароль" maxlength="20">
             </div>
           </div>
           <div class="text-danger small" id="editUserErr" style="min-height:18px"></div>

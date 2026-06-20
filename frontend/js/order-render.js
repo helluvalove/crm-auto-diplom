@@ -1,11 +1,58 @@
 // ==================== ЗАКАЗЫ (ОТРИСОВКА)====================
 
+// Текущий применённый фильтр — запоминаем, чтобы автообновление и кнопка «Обновить»
+// перерисовывали список с тем же фильтром, что выбрал менеджер
+let _currentOrdersFilter = 'active';
+let _lastOrdersSnapshot = null;
+const ORDERS_POLL_INTERVAL_MS = 20000; // опрос изменений каждые 20 секунд
+
 function extractProblemText(desc) {
     if (!desc) return '';
     const match = desc.match(/VK ID \d+:\s*([^\n]*)/);
     if (match) return match[1].trim() || 'Без описания';
     return desc;
 }
+
+/** Видна ли менеджеру сейчас область со списком заказов */
+function isOrdersListVisible() {
+    const el = document.getElementById('ordersList');
+    return !!el && el.offsetParent !== null;
+}
+
+/** Компактная "подпись" состояния всех заказов — чтобы дешево сравнивать, изменилось что-то или нет */
+function snapshotOrders(orders) {
+    return orders.map(o => `${o.order_id}:${o.status}:${o.mechanic_id || ''}`).sort().join('|');
+}
+
+/** Лёгкий фоновый опрос: если что-то изменилось (например, механик поставил «Готов к выдаче»)
+ *  и вкладка «Заказы» сейчас открыта — перерисовываем список */
+async function pollOrdersChanges() {
+    try {
+        const response = await fetch(`${API_URL}/orders`);
+        if (!response.ok) return;
+        const orders = await response.json();
+        const snapshot = snapshotOrders(orders);
+
+        if (_lastOrdersSnapshot === null) {
+            _lastOrdersSnapshot = snapshot; // первый запуск — просто запоминаем текущее состояние
+            return;
+        }
+
+        if (snapshot !== _lastOrdersSnapshot) {
+            _lastOrdersSnapshot = snapshot;
+            if (isOrdersListVisible()) {
+                loadOrders(_currentOrdersFilter);
+            }
+        }
+    } catch (e) {
+        console.warn('Опрос изменений заказов не удался:', e);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    pollOrdersChanges(); // запоминаем начальное состояние
+    setInterval(pollOrdersChanges, ORDERS_POLL_INTERVAL_MS);
+});
 
 /**
  * Загрузка и отображение заказов
@@ -14,10 +61,14 @@ function extractProblemText(desc) {
 
 async function loadOrders(filter = 'active') {
     try {
+        _currentOrdersFilter = filter;
+
         const response = await fetch(`${API_URL}/orders`);
         if (!response.ok) throw new Error(`HTTP error ${response.status}`);
 
         ordersData = await response.json();
+        _lastOrdersSnapshot = snapshotOrders(ordersData);
+
         const ordersList = document.getElementById('ordersList');
 
         if (!ordersData || ordersData.length === 0) {

@@ -302,6 +302,9 @@ def get_orders():
         query = WorkOrder.query
         if status_filter:
             query = query.filter(WorkOrder.status == status_filter)
+        # Для заявок (статус "Заявка") важна честная очередь — сначала те, что пришли раньше.
+        # Остальные статусы сортируем так же по дате создания, это не мешает их логике.
+        query = query.order_by(WorkOrder.created_date.asc())
         orders = query.all()
 
         mechanic_ids = list(set(o.mechanic_id for o in orders if o.mechanic_id))

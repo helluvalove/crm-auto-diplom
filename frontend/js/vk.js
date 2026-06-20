@@ -1,3 +1,133 @@
+// ==================== АВТООБНОВЛЕНИЕ И УВЕДОМЛЕНИЯ О НОВЫХ ЗАЯВКАХ ====================
+//
+// Без изменений на backend: периодический опрос уже существующего
+// GET /orders?status=Заявка. Список «увиденных» ID храним в localStorage,
+// поэтому счётчик переживает перезагрузку страницы.
+//
+// ВАЖНО: видимость вкладки «Заявки» определяется напрямую по элементу #requestsList
+// (он гарантированно существует — его использует loadRequests() ниже).
+// А вот бейдж-счётчик всё ещё ищет ссылку вкладки по onclick="showTab('requests'...)" —
+// если бейдж у вас не появляется на вкладке, пришлите кусок HTML с навигацией (<nav>/<ul>),
+// и я подправлю селектор под вашу реальную разметку.
+
+const VK_POLL_INTERVAL_MS = 20000;       // опрос каждые 20 секунд
+const VK_SEEN_KEY = 'vkSeenRequestIds';  // localStorage: какие заявки уже видели
+let _vkNotifiedIds = new Set();          // чтобы не дублировать уведомления в рамках одной сессии
+
+function getSeenVkIds() {
+    try {
+        return new Set(JSON.parse(localStorage.getItem(VK_SEEN_KEY) || '[]'));
+    } catch (e) {
+        return new Set();
+    }
+}
+
+function saveSeenVkIds(idsSet) {
+    localStorage.setItem(VK_SEEN_KEY, JSON.stringify([...idsSet]));
+}
+
+function isRequestsTabActive() {
+    // Проверяем видимость самого #requestsList (он точно существует — его использует loadRequests()),
+    // а не угаданный id вкладки-обёртки. offsetParent === null означает, что элемент
+    // (или один из родителей) скрыт через display:none / не отрендерен.
+    const listEl = document.getElementById('requestsList');
+    return !!listEl && listEl.offsetParent !== null;
+}
+
+/** Лёгкий фоновый опрос: получаем список заявок, но НЕ перерисовываем DOM без необходимости */
+async function pollVkRequests() {
+    try {
+        const token = localStorage.getItem('access_token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const response = await fetch(`${API_URL}/orders?status=Заявка`, { headers });
+        if (!response.ok) return;
+        const orders = await response.json();
+        const currentIds = orders.map(o => o.order_id);
+
+        const seen = getSeenVkIds();
+        const unread = currentIds.filter(id => !seen.has(id));
+        updateVkRequestsBadge(unread.length);
+
+        const freshlyArrived = unread.filter(id => !_vkNotifiedIds.has(id));
+        if (freshlyArrived.length > 0) {
+            freshlyArrived.forEach(id => _vkNotifiedIds.add(id));
+            notifyNewVkRequests(freshlyArrived.length, orders.filter(o => freshlyArrived.includes(o.order_id)));
+
+            // Если вкладка «Заявки» уже открыта — сразу подгружаем новые заявки в список
+            if (isRequestsTabActive()) {
+                loadRequests();
+            }
+        }
+    } catch (e) {
+        console.warn('Опрос новых заявок ВК не удался:', e);
+    }
+}
+
+/** Создаёт/обновляет красный счётчик на вкладке «Заявки» */
+function updateVkRequestsBadge(count) {
+    let badge = document.getElementById('vkRequestsBadge');
+    const navLink = document.querySelector(
+        '[onclick*="showTab(\'requests\'"], [onclick*=\'showTab("requests"\']' // <-- проверь это имя вкладки
+    );
+    if (!badge && navLink) {
+        badge = document.createElement('span');
+        badge.id = 'vkRequestsBadge';
+        badge.className = 'badge rounded-pill bg-danger ms-1';
+        badge.style.fontSize = '0.7rem';
+        navLink.appendChild(badge);
+    }
+    if (!badge) return;
+
+    if (count > 0) {
+        badge.textContent = count > 99 ? '99+' : String(count);
+        badge.style.display = '';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+/** Браузерное уведомление + всплывающее сообщение внутри интерфейса */
+function notifyNewVkRequests(count, orders) {
+    const label = count === 1
+        ? `Новая заявка №${orders[0].order_id} из ВКонтакте`
+        : `${count} новых заявок из ВКонтакте`;
+
+    if (window.Notification && Notification.permission === 'granted') {
+        try {
+            new Notification('Автосервис CRM', {
+                body: label,
+                tag: 'vk-new-request'
+            });
+        } catch (e) { /* не критично */ }
+    }
+
+    if (typeof showInfo === 'function') {
+        showInfo(label);
+    } else if (typeof showSuccess === 'function') {
+        showSuccess(label);
+    }
+}
+
+/** Запрашиваем разрешение на уведомления при первом клике пользователя по странице */
+function requestVkNotificationPermission() {
+    if (window.Notification && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+}
+document.addEventListener('click', requestVkNotificationPermission, { once: true });
+
+/** Помечает все переданные заявки как просмотренные и гасит счётчик */
+function markVkRequestsSeen(orders) {
+    const seen = getSeenVkIds();
+    orders.forEach(o => seen.add(o.order_id));
+    saveSeenVkIds(seen);
+    updateVkRequestsBadge(0);
+}
+
+// Запускаем периодический опрос сразу после загрузки скрипта и далее по таймеру
+pollVkRequests();
+setInterval(pollVkRequests, VK_POLL_INTERVAL_MS);
+
 // ==================== ЗАЯВКИ ИЗ ВК ====================
 
 async function loadRequests() {
@@ -10,6 +140,7 @@ async function loadRequests() {
         const response = await fetch(`${API_URL}/orders?status=Заявка`, { headers });
         if (!response.ok) throw new Error(`Ошибка ${response.status}`);
         const orders = await response.json();
+        markVkRequestsSeen(orders); // открыли вкладку — все текущие заявки считаются просмотренными
 
         if (orders.length === 0) {
             container.innerHTML = '<div class="alert alert-info"><i class="bi bi-inbox me-2"></i>Нет новых заявок</div>';

@@ -70,6 +70,15 @@ def process_message(user_id, text, client):
     # -------- waiting name --------
     if user_id in _AWAITING_NAME:
         raw_name = text.strip()
+
+        MAX_NAME_LENGTH = 40
+        if len(raw_name) > MAX_NAME_LENGTH:
+            send_message(user_id,
+                         f"❌ ФИО слишком длинное ({len(raw_name)} символов). "
+                         f"Пожалуйста, введите не более {MAX_NAME_LENGTH} символов.",
+                         keyboard=kb_inline_cancel_process())
+            return
+
         words = raw_name.split()
 
         if len(words) != 3:
@@ -184,6 +193,15 @@ def process_message(user_id, text, client):
 
         if step == 'model':
             model = text.strip()
+            MAX_MODEL_LENGTH = 50
+            if len(model) > MAX_MODEL_LENGTH:
+                send_message(
+                    user_id,
+                    f"❌ Название модели слишком длинное ({len(model)} символов). "
+                    f"Пожалуйста, введите не более {MAX_MODEL_LENGTH} символов.",
+                    keyboard=kb_inline_cancel_process()
+                )
+                return
             data['model'] = model
             _AWAITING_CAR_STEP[user_id] = 'gos_number'
             send_message(user_id, "🚘 Введите госномер автомобиля (например, А123ВВ77):", keyboard=kb_inline_cancel_process())
@@ -317,8 +335,17 @@ def process_message(user_id, text, client):
 
     # -------- waiting problem description --------
     if user_id in _AWAITING_PROBLEM_DESC:
-        car_id = _AWAITING_PROBLEM_DESC.pop(user_id)
         desc = text.strip()
+        MAX_PROBLEM_DESC_LENGTH = 700
+        if len(desc) > MAX_PROBLEM_DESC_LENGTH:
+            send_message(
+                user_id,
+                f"❌ Описание слишком длинное ({len(desc)} символов). "
+                f"Пожалуйста, сократите его до {MAX_PROBLEM_DESC_LENGTH} символов и отправьте снова.",
+                keyboard=kb_inline_skip_problem()
+            )
+            return
+        car_id = _AWAITING_PROBLEM_DESC.pop(user_id)
         _AWAITING_PREFERRED_TIME[user_id] = {'car_id': car_id, 'desc': desc, 'step': 'date'}
         send_message(
             user_id,

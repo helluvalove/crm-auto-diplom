@@ -5,6 +5,10 @@ const PHOTO_ACCEPT = ['image/jpeg','image/jpg','image/png','image/webp','image/h
 
 let currentSelectedFiles = [];
 
+// Счётчик "поколений" загрузки — нужен, чтобы устаревший ответ fetch (если параллельно
+// прилетел более новый запрос) не перезатёр свежий результат и не вызывал дублирующую отрисовку
+let _myWorkLoadSeq = 0;
+
 async function loadMyWork() {
     const container = document.getElementById('myWorkContent');
     if (!container) return;
@@ -13,6 +17,8 @@ async function loadMyWork() {
         container.innerHTML = '<p class="text-muted text-center">Нет данных пользователя.</p>';
         return;
     }
+
+    const mySeq = ++_myWorkLoadSeq; // помечаем этот вызов как самый свежий
 
     // Показываем индикатор загрузки
     container.innerHTML = `
@@ -26,6 +32,11 @@ async function loadMyWork() {
         if (!response.ok) throw new Error('Ошибка загрузки');
 
         const allOrders = await response.json();
+
+        // Если за время ожидания fetch успел стартовать более новый вызов loadMyWork() —
+        // этот результат уже неактуален, не трогаем DOM, чтобы избежать "прыжков" интерфейса
+        if (mySeq !== _myWorkLoadSeq) return;
+
         const activeStatuses = ['В работе', 'На диагностике', 'Создан'];
         const myOrder = allOrders.find(o =>
             o.mechanic_id === currentUser.user_id &&
@@ -43,11 +54,23 @@ async function loadMyWork() {
         }
 
         container.innerHTML = renderMyWorkCard(myOrder);
+
+        // Инициализация счётчика для комментария
+        const commentInput = document.getElementById('photoComment');
+        const counter = document.getElementById('photoCommentCounter');
+        if (commentInput && counter) {
+            commentInput.addEventListener('input', function() {
+                counter.textContent = `${this.value.length}/500`;
+            });
+            counter.textContent = `${commentInput.value.length}/500`;
+        }
+
         // Сбрасываем массив фото и превью
         currentSelectedFiles = [];
         updatePhotoPreview();
 
     } catch (e) {
+        if (mySeq !== _myWorkLoadSeq) return; // и здесь тоже не показываем устаревшую ошибку
         console.error('loadMyWork error:', e);
         container.innerHTML = `
             <div class="alert alert-danger">
@@ -63,11 +86,9 @@ async function refreshMyWork() {
 }
 
 // Функция парсинга problem_description — показывает только суть проблемы.
-// Клиент и телефон уже отображены в карточке выше; дата записи — в зелёном блоке.
 function formatProblemDescription(rawText) {
     if (!rawText) return '<div class="text-muted">—</div>';
 
-    // Вырезаем служебные строки
     let problem = rawText
         .replace(/Клиент:[^\n]+/g, '')
         .replace(/VK ID\s*\d+:\s*/g, '')
@@ -138,34 +159,41 @@ function renderMyWorkCard(order) {
                     <span class="small">Запись: <strong>${appointment}</strong></span>
                 </div>` : ''}
 
-                <!-- Отображение деталей заявки (клиент, телефон, VK, дата, проблема) -->
+                <!-- Отображение деталей заявки -->
                 <div class="mb-3">
                     <div class="bg-light rounded p-2 small">
                         ${formatProblemDescription(order.problem_description)}
                     </div>
                 </div>
 
-                <!-- Смена статуса -->
+                <!-- ========== КНОПКИ СМЕНЫ СТАТУСА ========== -->
                 <div class="mb-3">
                     <div class="text-muted small mb-2">Изменить статус</div>
-                    <div class="d-flex gap-2 flex-wrap">
-                        <button class="btn btn-sm btn-outline-info ${order.status==='На диагностике'?'active':''}"
+                    <div style="display:grid; grid-template-columns:1fr; gap:0.6rem;">
+                        <button class="btn btn-lg btn-outline-info ${order.status==='На диагностике'?'active':''}"
+                                style="min-height:56px; display:flex; align-items:center; justify-content:center; gap:0.5rem; white-space:nowrap; font-size:1.05rem;"
                                 ${order.status==='На диагностике'?'disabled':''}
                                 onclick="updateMyOrderStatus(${order.order_id}, 'На диагностике')">
-                            🔍 Диагностика
+                            <i class="bi bi-search" style="font-size:1.3rem;"></i>
+                            Диагностика
                         </button>
-                        <button class="btn btn-sm btn-outline-warning ${order.status==='В работе'?'active':''}"
+                        <button class="btn btn-lg btn-outline-warning ${order.status==='В работе'?'active':''}"
+                                style="min-height:56px; display:flex; align-items:center; justify-content:center; gap:0.5rem; white-space:nowrap; font-size:1.05rem;"
                                 ${order.status==='В работе'?'disabled':''}
                                 onclick="updateMyOrderStatus(${order.order_id}, 'В работе')">
-                            🔧 В работе
+                            <i class="bi bi-wrench-adjustable" style="font-size:1.3rem;"></i>
+                            В работе
                         </button>
-                        <button class="btn btn-sm btn-outline-success ${order.status==='Готов к выдаче'?'active':''}"
+                        <button class="btn btn-lg btn-outline-success ${order.status==='Готов к выдаче'?'active':''}"
+                                style="min-height:56px; display:flex; align-items:center; justify-content:center; gap:0.5rem; white-space:nowrap; font-size:1.05rem;"
                                 ${order.status==='Готов к выдаче'?'disabled':''}
                                 onclick="updateMyOrderStatus(${order.order_id}, 'Готов к выдаче')">
-                            ✅ Готов
+                            <i class="bi bi-check2-circle" style="font-size:1.3rem;"></i>
+                            Готов
                         </button>
                     </div>
                 </div>
+                <!-- ========================================================= -->
 
                 <hr class="my-3">
 
@@ -214,11 +242,17 @@ function renderMyWorkCard(order) {
                         </div>
                     </div>
 
+                    <!-- Поле комментария -->
                     <div class="mb-3">
                         <input type="text"
                                class="form-control form-control-sm"
                                id="photoComment"
-                               placeholder="Комментарий (необязательно)">
+                               placeholder="Комментарий (необязательно)"
+                               maxlength="500">
+                        <div class="form-text d-flex justify-content-between">
+                            <span>Максимум 500 символов</span>
+                            <span id="photoCommentCounter" class="text-muted">0/500</span>
+                        </div>
                     </div>
 
                     <button class="btn btn-primary w-100"
@@ -232,7 +266,6 @@ function renderMyWorkCard(order) {
             </div>
         </div>`;
 }
-
 // ── Вспомогательные функции для фото ────────────────────────────────────────
 
 function onPhotoSelected(input) {
@@ -300,12 +333,15 @@ function updatePhotoPreview() {
     if (clearAllBtn) clearAllBtn.style.display = 'inline-block';
 
     currentSelectedFiles.forEach((file, idx) => {
-        const reader = new FileReader();
-        reader.onload = e => {
-            const wrap = document.createElement('div');
-            wrap.style.cssText = 'position:relative;width:70px;height:70px;flex-shrink:0;';
+        // Создаём контейнер сразу — порядок превью сохраняется независимо от того,
+        // готова ли картинка мгновенно (из кэша) или ещё читается с диска
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'position:relative;width:70px;height:70px;flex-shrink:0;';
+        previewsDiv.appendChild(wrap);
+
+        const renderPreview = (dataUrl) => {
             wrap.innerHTML = `
-                <img src="${e.target.result}"
+                <img src="${dataUrl}"
                     style="width:70px;height:70px;object-fit:cover;border-radius:8px;border:2px solid #dee2e6;">
                 <button type="button"
                         class="btn btn-sm btn-danger rounded-circle"
@@ -314,7 +350,19 @@ function updatePhotoPreview() {
                     <i class="bi bi-x" style="font-size:16px;line-height:1;"></i>
                 </button>
                 <span style="position:absolute;bottom:2px;right:4px;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;padding:1px 4px;border-radius:10px;">${idx+1}</span>`;
-            previewsDiv.appendChild(wrap);
+        };
+
+        // Если файл уже читали раньше (например, до удаления другого фото) —
+        // показываем сразу сохранённый data URL, без повторного FileReader
+        if (file._previewDataUrl) {
+            renderPreview(file._previewDataUrl);
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = e => {
+            file._previewDataUrl = e.target.result; // кэшируем на будущее
+            renderPreview(file._previewDataUrl);
         };
         reader.readAsDataURL(file);
     });
@@ -449,6 +497,9 @@ async function uploadOrderPhotos(orderId) {
             currentSelectedFiles = [];
             updatePhotoPreview();
             commentInput.value = '';
+            // Обновляем счётчик после очистки
+            const counter = document.getElementById('photoCommentCounter');
+            if (counter) counter.textContent = '0/500';
             const fileInput = document.getElementById('photoFileInput');
             if (fileInput) fileInput.value = '';
             const label = document.getElementById('photoDropLabel');
@@ -473,6 +524,12 @@ async function uploadOrderPhotos(orderId) {
 }
 
 async function updateMyOrderStatus(orderId, newStatus) {
+    // Сразу блокируем все кнопки смены статуса — чтобы повторный тап/клик
+    // (например, дребезг сенсорного экрана) не отправил второй запрос
+    // пока первый ещё не завершился
+    document.querySelectorAll('#myWorkContent button[onclick^="updateMyOrderStatus"]')
+        .forEach(btn => btn.disabled = true);
+
     try {
         const response = await fetch(`${API_URL}/orders/${orderId}`, {
             method: 'PUT',
@@ -485,8 +542,13 @@ async function updateMyOrderStatus(orderId, newStatus) {
             loadMyWork(); // перезагружаем вкладку после смены статуса
         } else {
             showError(data.error || 'Не удалось изменить статус');
+            // Разблокируем кнопки обратно, раз обновления не будет
+            document.querySelectorAll('#myWorkContent button[onclick^="updateMyOrderStatus"]')
+                .forEach(btn => btn.disabled = false);
         }
     } catch (e) {
         showError('Ошибка соединения');
+        document.querySelectorAll('#myWorkContent button[onclick^="updateMyOrderStatus"]')
+            .forEach(btn => btn.disabled = false);
     }
 }
