@@ -408,7 +408,10 @@ async function editOrder(orderId) {
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label">Стоимость (руб)</label>
-                                        <input type="number" class="form-control" id="editOrderPrice" value="${order.total_price || ''}" step="0.01" min="0" max="99999999.99">
+                                        <div class="input-group">
+                                            <input type="number" class="form-control" id="editOrderPrice" value="${order.total_price || ''}" step="0.01" min="0" max="99999999.99">
+                                            <span class="input-group-text">руб.</span>
+                                        </div>
                                         <div class="form-text text-success" id="editOrderPriceFormatted">${order.total_price ? formatMoney(order.total_price) : ''}</div>
                                     </div>
                                 </div>
@@ -467,9 +470,54 @@ async function editOrder(orderId) {
                                 <label class="form-label">Описание проблемы</label>
                                 <textarea class="form-control" id="editOrderProblem" rows="3" maxlength="700">${extractProblemText(order.problem_description)}</textarea>
                             </div>
+
+                            <!-- ===== ОПИСАНИЕ РАБОТ + ТАБЛИЦА ПОЗИЦИЙ ===== -->
                             <div class="mb-3">
-                                <label class="form-label">Описание работ</label>
-                                <textarea class="form-control" id="editOrderWork" rows="3" maxlength="700">${order.work_description || ''}</textarea>
+                                <label class="form-label fw-semibold">
+                                    <i class="bi bi-tools text-secondary me-1"></i> Выполненные работы и запчасти
+                                </label>
+                                <div style="border:1px solid #dee2e6; border-radius:6px; overflow:hidden;">
+                                    <table class="table table-sm mb-0" id="orderLineItemsTable" style="table-layout:fixed;">
+                                        <colgroup>
+                                            <col style="width:auto">
+                                            <col style="width:148px">
+                                            <col style="width:76px">
+                                            <col style="width:115px">
+                                            <col style="width:36px">
+                                        </colgroup>
+                                        <thead style="background:#f8f9fa; border-bottom:1px solid #dee2e6;">
+                                            <tr>
+                                                <th class="ps-3 py-2 text-muted fw-semibold" style="font-size:0.78rem;">Наименование</th>
+                                                <th class="py-2 text-muted fw-semibold text-center" style="font-size:0.78rem;">Цена, руб.</th>
+                                                <th class="py-2 text-muted fw-semibold text-center" style="font-size:0.78rem;">Кол-во</th>
+                                                <th class="py-2 text-muted fw-semibold text-end pe-3" style="font-size:0.78rem;">Сумма</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="orderLineItemsBody"></tbody>
+                                        <tfoot>
+                                            <tr style="background:#f8f9fa; border-top:1px solid #dee2e6;">
+                                                <td colspan="3" class="text-end pe-3 py-2 fw-semibold text-secondary" style="font-size:0.875rem;">Итого:</td>
+                                                <td class="py-2 fw-bold text-end pe-3" id="lineItemsTotal" style="color:#198754; font-size:0.95rem;">0,00 руб.</td>
+                                                <td></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                    <div id="lineItemsEmpty" class="text-center text-muted py-3" style="font-size:0.875rem; display:block;">
+                                        <i class="bi bi-dash-circle me-1"></i> Позиции не добавлены
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2 mt-2 align-items-center flex-wrap">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="addLineItem()">
+                                        <i class="bi bi-plus-lg"></i> Добавить позицию
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="applyLineItemsTotal()" title="Перенести итог в поле Стоимость">
+                                        <i class="bi bi-calculator"></i> В стоимость
+                                    </button>
+                                    <span id="workDescCounter" class="form-text text-muted ms-auto mb-0"></span>
+                                </div>
+                                <!-- скрытый textarea — хранит сериализованные позиции как work_description -->
+                                <textarea id="editOrderWork" style="display:none">${order.work_description || ''}</textarea>
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -506,7 +554,11 @@ async function editOrder(orderId) {
         
         const modal = new bootstrap.Modal(document.getElementById('editOrderModal'));
         modal.show();
-        
+
+        // Загружаем позиции из work_description в таблицу
+        _lineItemCounter = 0;
+        loadLineItemsFromWorkDescription();
+
         document.getElementById('editOrderClientSelect').addEventListener('change', async function() {
             const clientId = this.value;
             if (!clientId) return;
@@ -643,4 +695,260 @@ function setupSlotListeners() {
     if (mechanicSelect) {
         mechanicSelect.addEventListener('change', renderTimeSlots);
     }
+}
+// ==================== ПОЗИЦИИ ЗАКАЗА (сохраняются в work_description) ====================
+
+let _lineItemCounter = 0;
+
+/**
+ * Парсит строку work_description и загружает позиции в таблицу.
+ * Формат строки: "Наименование | 1500 руб. x 4 = 6000 руб.\nИТОГО: 6000 руб."
+ * Если строка не в этом формате — подставляет её как одну текстовую позицию.
+ */
+function loadLineItemsFromWorkDescription() {
+    const textarea = document.getElementById('editOrderWork');
+    if (!textarea) return;
+
+    const raw = textarea.value.trim();
+    if (!raw) return;
+
+    // Пробуем распарсить позиции построчно
+    // Поддерживаем ' ;; ' (новый) и '\n' (старый)
+    const lines = raw.split(/ ;; |\n/).map(l => l.trim()).filter(Boolean);
+    let parsedAny = false;
+
+    for (const line of lines) {
+        // Пропускаем строку итога
+        if (/^ИТОГО:/i.test(line)) continue;
+
+        // Формат: "Название | 1500 руб. x 4 = 6000 руб."
+        const m = line.match(/^(.+?)\s*\|\s*([\d\s.,]+?)\s*[\u00a0\s]*руб\.[\u00a0\s]*x\s*([\d.,]+)\s*=/i);
+        if (m) {
+            const name  = m[1].trim();
+            const price = parseFloat(m[2].replace(/\s/g, '').replace(',', '.')) || 0;
+            const qty   = parseFloat(m[3].replace(/\s/g, '').replace(',', '.')) || 1;
+            addLineItem(name, price, qty);
+            parsedAny = true;
+        }
+    }
+
+    // Если ничего не распарсилось — старый свободный текст, добавляем одну строку с именем
+    if (!parsedAny && raw) {
+        addLineItem(raw, '', 1);
+    }
+}
+
+// Максимальное количество позиций в заказ-наряде (практическое ограничение интерфейса)
+const MAX_LINE_ITEMS = 15;
+// Максимальная цена за одну позицию (руб.)
+const MAX_LINE_PRICE = 1000000;
+// Максимальное количество (шт.) на одну позицию
+const MAX_LINE_QTY = 99;
+
+/**
+ * Сериализует таблицу позиций в строку и записывает в скрытый textarea editOrderWork.
+ * Вызывается перед каждым сохранением (updateOrder перехватывает это автоматически).
+ */
+function serializeLineItemsToWork() {
+    const tbody = document.getElementById('orderLineItemsBody');
+    const textarea = document.getElementById('editOrderWork');
+    if (!tbody || !textarea) return;
+
+    const rows = tbody.querySelectorAll('tr');
+    if (rows.length === 0) {
+        textarea.value = '';
+        updateLineItemsCounter();
+        return;
+    }
+
+    let lines = [];
+    let grandTotal = 0;
+
+    rows.forEach(row => {
+        const nameInput  = row.querySelector('.line-name');
+        const priceInput = row.querySelector('.line-price');
+        const qtyInput   = row.querySelector('.line-qty');
+        if (!nameInput || !priceInput || !qtyInput) return;
+
+        const name  = nameInput.value.trim() || 'Позиция';
+        const price = parseFloat(priceInput.value.replace(',', '.')) || 0;
+        const qty   = parseFloat(qtyInput.value) || 1;
+        const sum   = price * qty;
+        grandTotal += sum;
+
+        lines.push(`${name} | ${formatRub(price)} x ${qty} = ${formatRub(sum)}`);
+    });
+
+    // ИТОГО не сохраняем — в PDF есть отдельное поле стоимости
+    const result = lines.join(' ;; ');
+    textarea.value = result;
+    updateLineItemsCounter();
+}
+
+/** Обновляет счётчик позиций под таблицей (X / MAX_LINE_ITEMS позиций) */
+function updateLineItemsCounter() {
+    const counter = document.getElementById('workDescCounter');
+    const tbody = document.getElementById('orderLineItemsBody');
+    if (!counter || !tbody) return;
+
+    const count = tbody.querySelectorAll('tr').length;
+    counter.textContent = `${count} / ${MAX_LINE_ITEMS} позиций`;
+    if (count >= MAX_LINE_ITEMS) {
+        counter.className = 'form-text text-danger fw-semibold';
+    } else if (count >= MAX_LINE_ITEMS * 0.8) {
+        counter.className = 'form-text text-warning fw-semibold';
+    } else {
+        counter.className = 'form-text text-muted';
+    }
+}
+
+/**
+ * Добавить новую строку в таблицу позиций
+ */
+function addLineItem(name = '', price = '', qty = 1) {
+    const tbody  = document.getElementById('orderLineItemsBody');
+    const empty  = document.getElementById('lineItemsEmpty');
+    if (!tbody) return;
+
+    // Ограничение количества позиций в заказ-наряде
+    if (tbody.querySelectorAll('tr').length >= MAX_LINE_ITEMS) {
+        alert(`Максимум ${MAX_LINE_ITEMS} позиций в одном заказ-наряде.`);
+        return;
+    }
+
+    const id = ++_lineItemCounter;
+    const safeVal = v => String(v).replace(/"/g, '&quot;');
+    const row = document.createElement('tr');
+    row.id = `line-item-${id}`;
+    row.style.borderBottom = '1px solid #f0f0f0';
+    row.innerHTML = `
+        <td class="ps-2 py-1 align-middle">
+            <input type="text"
+                   class="form-control form-control-sm border-0 bg-transparent line-name"
+                   placeholder="Наименование работы или запчасти"
+                   maxlength="90"
+                   value="${safeVal(name)}"
+                   oninput="recalcLineItems()"
+                   style="font-size:0.875rem;">
+            <div class="text-muted" style="font-size:0.7rem; text-align:right; padding-right:4px;">
+                <span class="line-name-count">0</span>/90
+            </div>
+        </td>
+        <td class="py-1 align-middle px-1">
+            <input type="text" inputmode="decimal"
+                   class="form-control form-control-sm border-0 bg-transparent line-price text-end"
+                   placeholder="0"
+                   maxlength="10"
+                   value="${safeVal(price)}"
+                   oninput="onPriceInput(this)"
+                   style="font-size:0.875rem;">
+        </td>
+        <td class="py-1 align-middle px-1">
+            <input type="text" inputmode="numeric"
+                   class="form-control form-control-sm border-0 bg-transparent line-qty text-center"
+                   placeholder="1"
+                   maxlength="2"
+                   value="${safeVal(qty)}"
+                   oninput="onQtyInput(this)"
+                   style="font-size:0.875rem;">
+        </td>
+        <td class="py-1 align-middle text-end pe-3 line-sum fw-semibold" style="color:#198754; font-size:0.875rem; white-space:nowrap;">
+            0,00 руб.
+        </td>
+        <td class="py-1 align-middle text-center">
+            <button type="button" class="btn btn-sm btn-link text-danger p-0"
+                    onclick="removeLineItem(${id})" title="Удалить">
+                <i class="bi bi-trash3" style="font-size:0.85rem;"></i>
+            </button>
+        </td>
+    `;
+    tbody.appendChild(row);
+
+    // Счётчик символов для наименования
+    const nameInput = row.querySelector('.line-name');
+    const nameCount = row.querySelector('.line-name-count');
+    nameInput.addEventListener('input', () => { nameCount.textContent = nameInput.value.length; });
+    nameCount.textContent = String(name).length;
+
+    if (empty) empty.style.display = 'none';
+    recalcLineItems();
+}
+
+/** Только цифры и точка/запятая для цены, ограничено MAX_LINE_PRICE */
+function onPriceInput(el) {
+    el.value = el.value.replace(/[^\d.,]/g, '');
+    const num = parseFloat(el.value.replace(',', '.'));
+    if (!isNaN(num) && num > MAX_LINE_PRICE) {
+        el.value = String(MAX_LINE_PRICE);
+    }
+    recalcLineItems();
+}
+
+/** Только целые числа для количества, ограничено MAX_LINE_QTY */
+function onQtyInput(el) {
+    el.value = el.value.replace(/[^\d]/g, '');
+    const num = parseInt(el.value, 10);
+    if (!isNaN(num) && num > MAX_LINE_QTY) {
+        el.value = String(MAX_LINE_QTY);
+    }
+    recalcLineItems();
+}
+
+/** Удалить строку */
+function removeLineItem(id) {
+    const row = document.getElementById(`line-item-${id}`);
+    if (row) row.remove();
+    const tbody = document.getElementById('orderLineItemsBody');
+    const empty = document.getElementById('lineItemsEmpty');
+    if (empty && tbody && tbody.querySelectorAll('tr').length === 0) empty.style.display = '';
+    recalcLineItems();
+}
+
+/** Пересчитать суммы по строкам и итог */
+function recalcLineItems() {
+    const tbody   = document.getElementById('orderLineItemsBody');
+    const totalEl = document.getElementById('lineItemsTotal');
+    if (!tbody || !totalEl) return;
+
+    let grandTotal = 0;
+    tbody.querySelectorAll('tr').forEach(row => {
+        const priceInput = row.querySelector('.line-price');
+        const qtyInput   = row.querySelector('.line-qty');
+        const sumCell    = row.querySelector('.line-sum');
+        if (!priceInput || !qtyInput || !sumCell) return;
+
+        const price = parseFloat(priceInput.value.replace(',', '.')) || 0;
+        const qty   = parseFloat(qtyInput.value) || 0;
+        const sum   = price * qty;
+        grandTotal += sum;
+        sumCell.textContent = formatRub(sum);
+    });
+
+    totalEl.textContent = formatRub(grandTotal);
+
+    // Обновляем счётчик позиций
+    updateLineItemsCounter();
+}
+
+/** Применить итог таблицы в поле «Стоимость» */
+function applyLineItemsTotal() {
+    const totalEl        = document.getElementById('lineItemsTotal');
+    const priceInput     = document.getElementById('editOrderPrice');
+    const priceFormatted = document.getElementById('editOrderPriceFormatted');
+    if (!totalEl || !priceInput) return;
+
+    const raw = totalEl.textContent.replace(/[^\d,]/g, '').replace(',', '.');
+    const val = parseFloat(raw) || 0;
+    priceInput.value = val.toFixed(2);
+    if (priceFormatted) {
+        priceFormatted.textContent = val > 0 ? formatMoney(val) : '';
+    }
+}
+
+/** Форматирует число как "1 500,00 руб." */
+function formatRub(value) {
+    return value.toLocaleString('ru-RU', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }) + '\u00a0руб.';
 }

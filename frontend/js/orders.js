@@ -65,6 +65,9 @@ async function updateOrder(orderId) {
     }
 
     // --- 4. Подготовка данных для отправки ---
+    // Сериализуем таблицу позиций в поле work_description
+    if (typeof serializeLineItemsToWork === 'function') serializeLineItemsToWork();
+
     const orderData = {
         client_id: parseInt(clientId),
         status: status,

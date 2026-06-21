@@ -34,7 +34,8 @@
     <table class="work-table">
         <tr><td colspan="2"><strong>Предварительный перечень работ и услуг</strong></td></tr>
         <tr><td style="width:50%;"><em>Описание проблемы (со слов клиента)</em></td><td>{{ problem_text or '—' }}</td></tr>
-        <tr><td><em>Планируемые работы</em> (будут уточнены после диагностики)</td><td>{{ order.work_description or '' }}</td></tr>
+        <tr><td colspan="2" style="padding:2px 6px;font-weight:normal;color:#555;font-size:11px;"><em>Планируемые работы</em> (будут уточнены после диагностики)</td></tr>
+        <tr><td colspan="2" style="padding:4px 6px;" id="workDescCell" data-raw="{{ order.work_description or '' }}"></td></tr>
         <tr><td><strong>Ориентировочная стоимость</strong></td><td>{% if order.total_price %}{{ "%.2f"|format(order.total_price) }} руб.{% else %}Будет определена после диагностики{% endif %}</td></tr>
     </table>
 
@@ -49,7 +50,52 @@
     <div class="stamp">М.П.</div>
 
     <script>
-        window.onload = function() {};
+        window.onload = function() {
+            renderWorkDesc('workDescCell');
+        };
+
+        function renderWorkDesc(cellId) {
+            var cell = document.getElementById(cellId);
+            if (!cell) return;
+            var raw = cell.getAttribute('data-raw') || '';
+            raw = raw.trim();
+            if (!raw) { cell.innerHTML = '&mdash;'; return; }
+
+            var items = raw.split(' ;; ').map(function(s){ return s.trim(); }).filter(Boolean);
+            items = items.filter(function(s){ return !/^ИТОГО:/i.test(s); });
+            if (items.length === 0) { cell.innerHTML = '&mdash;'; return; }
+
+            var html = '<table style="width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed;">';
+            html += '<thead><tr style="background:#f0f0f0;">';
+            html += '<th style="border:1px solid #aaa;padding:4px 6px;text-align:left;width:55%;">Наименование</th>';
+            html += '<th style="border:1px solid #aaa;padding:4px 6px;text-align:right;width:17%;">Цена, руб.</th>';
+            html += '<th style="border:1px solid #aaa;padding:4px 6px;text-align:center;width:9%;">Кол-во</th>';
+            html += '<th style="border:1px solid #aaa;padding:4px 6px;text-align:right;width:19%;">Сумма, руб.</th>';
+            html += '</tr></thead><tbody>';
+
+            items.forEach(function(line, idx) {
+                var m = line.match(/^(.+?)\s*\|\s*([\d\s\u00a0.,]+?)\s*[\u00a0 ]*руб\.\s*x\s*([\d.,]+)\s*=\s*([\d\s\u00a0.,]+?)\s*[\u00a0 ]*руб\.?/i);
+                var bg = idx % 2 === 1 ? '#fafafa' : '#fff';
+                var num = function(s){ return s.replace(/[\s\u00a0]/g,''); };
+                var td  = 'border:1px solid #aaa;padding:4px 6px;line-height:1.4;overflow-wrap:break-word;word-break:break-word;';
+                if (m) {
+                    html += '<tr style="background:' + bg + ';">';
+                    html += '<td style="' + td + '">' + esc(m[1].trim()) + '</td>';
+                    html += '<td style="' + td + 'text-align:right;">' + num(m[2]) + '</td>';
+                    html += '<td style="' + td + 'text-align:center;">' + m[3] + '</td>';
+                    html += '<td style="' + td + 'text-align:right;">' + num(m[4]) + '</td>';
+                    html += '</tr>';
+                } else {
+                    html += '<tr style="background:' + bg + ';"><td colspan="4" style="' + td + '">' + esc(line) + '</td></tr>';
+                }
+            });
+            html += '</tbody></table>';
+            cell.innerHTML = html;
+        }
+
+        function esc(s) {
+            return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
     </script>
 </body>
 </html>
