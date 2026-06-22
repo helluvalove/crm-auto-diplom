@@ -519,7 +519,7 @@ def create_order():
             problem_description=data['problem_description'],
             work_description=data.get('work_description'),
             total_price=total_price_val,
-            created_date=datetime.now(),
+            created_date=datetime.utcnow(),
             appointment_datetime=appointment_dt,
             estimated_hours=est_hours,
             pdf_url=data.get('pdf_url')
@@ -594,7 +594,7 @@ def update_order(order_id):
             order.status = new_status
 
             if new_status == 'Выполнен' and not order.completed_date:
-                order.completed_date = datetime.now()
+                order.completed_date = datetime.utcnow()
                 pdf_path = save_order_pdf(order_id, 'itogoviy_zakaznaryad.html', 'final')
                 if pdf_path:
                     order.pdf_url = f'/api/orders/{order_id}/pdf/final'

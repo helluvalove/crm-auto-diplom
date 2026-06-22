@@ -149,7 +149,7 @@ async function loadRequests() {
 
         let html = '<div class="list-group">';
         orders.forEach(order => {
-            const date = new Date(order.created_date).toLocaleString('ru-RU');
+            const date = new Date(order.created_date + 'Z').toLocaleString('ru-RU');
             const desc = order.problem_description || '';
 
             // Формат из message_handler.py:
