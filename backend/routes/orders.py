@@ -581,6 +581,13 @@ def update_order(order_id):
                 order.appointment_datetime = None
 
         # --- Статус ---
+        # ВАЖНО: здесь только готовим данные (PDF, флаги), но НЕ отправляем
+        # ничего в VK — пока статус не прошёл итоговую проверку доступности
+        # механика и не закоммичен в БД. Иначе при отказе (db.session.rollback())
+        # уведомление в VK всё равно уже будет отправлено.
+        pdf_final_path = None
+        status_changed = False
+        new_status = order.status
         if 'status' in data:
             new_status = data['status']
             status_changed = new_status != order.status
@@ -591,24 +598,7 @@ def update_order(order_id):
                 pdf_path = save_order_pdf(order_id, 'itogoviy_zakaznaryad.html', 'final')
                 if pdf_path:
                     order.pdf_url = f'/api/orders/{order_id}/pdf/final'
-
-                if order.client and order.client.vk_user_id:
-                    _vk_user_id = order.client.vk_user_id
-                    _order_id = order_id
-                    _pdf_final = pdf_path
-                    app = current_app._get_current_object()
-                    def _send_pdf(app, vk_user_id, order_id, pdf_final):
-                        with app.app_context():
-                            from routes.vk.vk_notify import send_pdfs_to_client
-                            send_pdfs_to_client(vk_user_id, order_id, pdf_final)
-                    threading.Thread(
-                        target=_send_pdf,
-                        args=(app, _vk_user_id, _order_id, _pdf_final),
-                        daemon=True
-                    ).start()
-
-            if status_changed and order.client and order.client.vk_user_id:
-                notify_status_change(order.client.vk_user_id, order_id, new_status)
+                    pdf_final_path = pdf_path
 
         # --- Описание ---
         if 'problem_description' in data:
@@ -700,6 +690,28 @@ def update_order(order_id):
                 return jsonify({'error': error_msg, 'busy_mechanic': True}), 409
 
         db.session.commit()
+
+        # --- Уведомления в VK отправляются ТОЛЬКО после успешного commit,
+        # т.е. только если заказ действительно обновился (механик доступен,
+        # конфликтов нет). Если бы мы отправляли уведомление раньше — клиент
+        # получил бы сообщение даже при ошибке/отказе сохранения. ---
+        if status_changed and order.client and order.client.vk_user_id:
+            notify_status_change(order.client.vk_user_id, order_id, new_status)
+
+        if pdf_final_path and order.client and order.client.vk_user_id:
+            _vk_user_id = order.client.vk_user_id
+            _order_id = order_id
+            _pdf_final = pdf_final_path
+            app = current_app._get_current_object()
+            def _send_pdf(app, vk_user_id, order_id, pdf_final):
+                with app.app_context():
+                    from routes.vk.vk_notify import send_pdfs_to_client
+                    send_pdfs_to_client(vk_user_id, order_id, pdf_final)
+            threading.Thread(
+                target=_send_pdf,
+                args=(app, _vk_user_id, _order_id, _pdf_final),
+                daemon=True
+            ).start()
 
         # --- Предупреждение при необходимости ---
         warning_msg = None

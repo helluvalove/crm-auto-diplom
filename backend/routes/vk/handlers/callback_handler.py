@@ -98,6 +98,24 @@ def process_event(event):
     elif command == 'cancel_and_create_new':
         order_id = payload.get('order_id')
         car_id = payload.get('car_id')
+
+        # Защита от прямого вызова payload: самостоятельно отменить через бота
+        # можно только заявку со статусом 'Заявка' (ещё не принята менеджером).
+        # Если заказ уже принят (Забронирован/Создан/На диагностике/В работе/
+        # Готов к выдаче) — отказываем, иначе клиент может отменить заказ,
+        # который механик уже выполняет.
+        order = WorkOrder.query.get(order_id)
+        if not order or order.status != 'Заявка':
+            current_status = order.status if order else 'неизвестен'
+            send_message(
+                user_id,
+                f"❌ Заказ-наряд №{order_id} уже принят в работу (статус: «{current_status}») "
+                "и не может быть отменён самостоятельно через бота.\n"
+                "Свяжитесь с менеджером, если нужно его изменить или отменить.",
+                keyboard=kb_main_menu()
+            )
+            return 'ok'
+
         try:
             cancel_order(order_id, user_id)
             _AWAITING_PROBLEM_DESC[user_id] = car_id

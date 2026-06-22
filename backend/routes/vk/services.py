@@ -49,8 +49,22 @@ def is_valid_gos_number(gos_number: str) -> bool:
     return bool(re.match(pattern, gos_number.upper()))
 
 
+# Заказ считается завершённым/неактивным только в этих статусах.
+# Любой другой статус ('Заявка', 'Забронирован', 'Создан', 'На диагностике',
+# 'В работе', 'Готов к выдаче') означает, что по машине сейчас ведётся
+# работа или она ожидает её начала — значит, новую заявку создавать нельзя.
+# Учитываем оба варианта написания отмены ('Отменена'/'Отменен'), так как
+# в разных местах кода используются разные формы.
+_INACTIVE_ORDER_STATUSES = {'Выполнен', 'Отменена', 'Отменен'}
+
+
 def get_active_order_for_car(car_id):
-    return WorkOrder.query.filter_by(car_id=car_id, status='Заявка').first()
+    return (
+        WorkOrder.query
+        .filter_by(car_id=car_id)
+        .filter(~WorkOrder.status.in_(_INACTIVE_ORDER_STATUSES))
+        .first()
+    )
 
 
 def cancel_order(order_id, user_id):

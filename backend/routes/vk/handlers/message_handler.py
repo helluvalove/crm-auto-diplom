@@ -30,6 +30,14 @@ from models import db, WorkOrder, Car, Client
 
 logger = logging.getLogger(__name__)
 
+# Клиент может самостоятельно отменить заказ через бота только пока заявка
+# ещё не подтверждена менеджером (статус 'Заявка'). Как только менеджер её
+# принял и назначил механика/время — статус меняется на 'Забронирован',
+# 'Создан', 'На диагностике', 'В работе', 'Готов к выдаче' — отменить такой
+# заказ самостоятельно через бота нельзя, это согласуется с show_orders(),
+# где в кнопки отмены попадают только заявки со статусом 'Заявка'.
+_SELF_CANCELLABLE_STATUSES = {'Заявка'}
+
 
 def _create_order(user_id, client, car_id, desc, preferred_dt=None):
     if get_active_order_for_car(car_id):
@@ -162,13 +170,24 @@ def process_message(user_id, text, client):
                 car_id = car_ids[idx]
                 active_order = get_active_order_for_car(car_id)
                 if active_order:
-                    send_message(
-                        user_id,
-                        f"❌ На этот автомобиль уже есть активная заявка №{active_order.order_id}.\n"
-                        "Вы не можете создать новую, пока предыдущая не отменена или завершена.\n\n"
-                        "Что хотите сделать?",
-                        keyboard=kb_inline_cancel_and_new(active_order.order_id, car_id)
-                    )
+                    if active_order.status in _SELF_CANCELLABLE_STATUSES:
+                        send_message(
+                            user_id,
+                            f"❌ На этот автомобиль уже есть активная заявка №{active_order.order_id}.\n"
+                            "Вы не можете создать новую, пока предыдущая не отменена или завершена.\n\n"
+                            "Что хотите сделать?",
+                            keyboard=kb_inline_cancel_and_new(active_order.order_id, car_id)
+                        )
+                    else:
+                        send_message(
+                            user_id,
+                            f"❌ На этот автомобиль уже оформлен заказ-наряд №{active_order.order_id} "
+                            f"(статус: «{active_order.status}»).\n"
+                            "Он уже принят менеджером и находится в работе — самостоятельно отменить "
+                            "его через бота нельзя. Если нужно изменить или отменить заказ, "
+                            "свяжитесь с менеджером напрямую: 67-87-09",
+                            keyboard=kb_main_menu()
+                        )
                     return
                 _AWAITING_PROBLEM_DESC[user_id] = car_id
                 send_message(
@@ -313,12 +332,23 @@ def process_message(user_id, text, client):
                 if context == 'order':
                     active_order = get_active_order_for_car(car.car_id)
                     if active_order:
-                        send_message(
-                            user_id,
-                            f"❌ На этот автомобиль уже есть активная заявка №{active_order.order_id}.\n"
-                            "Вы не можете создать новую.",
-                            keyboard=kb_inline_cancel_and_new(active_order.order_id, car.car_id)
-                        )
+                        if active_order.status in _SELF_CANCELLABLE_STATUSES:
+                            send_message(
+                                user_id,
+                                f"❌ На этот автомобиль уже есть активная заявка №{active_order.order_id}.\n"
+                                "Вы не можете создать новую.",
+                                keyboard=kb_inline_cancel_and_new(active_order.order_id, car.car_id)
+                            )
+                        else:
+                            send_message(
+                                user_id,
+                                f"❌ На этот автомобиль уже оформлен заказ-наряд №{active_order.order_id} "
+                                f"(статус: «{active_order.status}»).\n"
+                                "Он уже принят менеджером и находится в работе — самостоятельно отменить "
+                                "его через бота нельзя. Если нужно изменить или отменить заказ, "
+                                "свяжитесь с менеджером напрямую.",
+                                keyboard=kb_main_menu()
+                            )
                         return
                     _AWAITING_PROBLEM_DESC[user_id] = car.car_id
                     send_message(
